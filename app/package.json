@@ -1,0 +1,39 @@
+{
+  "name": "memory-recall-mobile",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@sonnetstationsolutions/expo-argon2": "^0.1.1",
+    "base64-js": "^1.5.1",
+    "expo": "~57.0.11",
+    "expo-crypto": "~57.0.1",
+    "expo-dev-client": "~57.0.10",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.2",
+    "expo-image-picker": "~57.0.8",
+    "expo-secure-store": "~57.0.1",
+    "expo-sharing": "~57.0.10",
+    "expo-sqlite": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.2",
+    "react": "19.2.3",
+    "react-native": "0.86.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "~19.2.2",
+    "hash-wasm": "^4.12.0",
+    "tsx": "^4.23.11",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/crypto-v1.test.ts",
+    "verify": "npm run typecheck && npm run test && npx expo-doctor"
+  },
+  "private": true
+}

@@ -1,0 +1,487 @@
+import { StatusBar } from 'expo-status-bar';
+import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import {
+  bytesToBase64,
+  createVault,
+  decryptMemory,
+  decryptPhoto,
+  destroyVaultSession,
+  encryptMemory,
+  encryptPhoto,
+  unlockVault,
+  type VaultEnvelopeV1,
+  type VaultSessionV1,
+} from './src/crypto';
+import { nativeCryptoPrimitives } from './src/crypto/nativePrimitives';
+import { pickEncryptedBundle, shareEncryptedBundle } from './src/services/bundleFiles';
+import { runNativeCompatibilityCheck } from './src/services/compatibility';
+import {
+  disableDeviceUnlock,
+  enableDeviceUnlock,
+  hasDeviceUnlock,
+  unlockWithDevice,
+} from './src/services/deviceUnlock';
+import { replaceWithEncryptedBundle } from './src/storage/bundle';
+import {
+  clearEncryptedContent,
+  getEncryptedPhoto,
+  getVaultEnvelope,
+  initializeStorage,
+  listEncryptedMemories,
+  saveEncryptedMemory,
+  saveEncryptedPhoto,
+  saveVaultEnvelope,
+} from './src/storage/database';
+
+interface MemoryRecord {
+  id: string;
+  title: string;
+  body: string;
+  date: string;
+  createdAt: string;
+  photoId?: string;
+}
+
+interface PendingPhoto {
+  uri: string;
+  filename: string;
+  mimeType: string;
+}
+
+type Mode = 'loading' | 'setup' | 'locked' | 'unlocked';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export default function App() {
+  const [mode, setMode] = useState<Mode>('loading');
+  const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
+  const [session, setSession] = useState<VaultSessionV1 | null>(null);
+  const [memories, setMemories] = useState<MemoryRecord[]>([]);
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('正在检查本地密文库……');
+
+  const stateLabel = useMemo(() => ({
+    loading: '启动中',
+    setup: '未创建',
+    locked: '已锁定',
+    unlocked: '已解锁',
+  })[mode], [mode]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        await initializeStorage();
+        const storedVault = await getVaultEnvelope();
+        setVault(storedVault);
+        setDeviceUnlockEnabled(await hasDeviceUnlock());
+        setMode(storedVault ? 'locked' : 'setup');
+        setStatus(storedVault ? '找到本机密文，等待解锁。' : '本机还没有私密空间。');
+      } catch (error) {
+        setStatus(`启动失败：${errorMessage(error)}`);
+        setMode('setup');
+      }
+    })();
+  }, []);
+
+  async function runTask(task: () => Promise<void>): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await task();
+    } catch (error) {
+      setStatus(`失败：${errorMessage(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshMemories(activeSession: VaultSessionV1): Promise<void> {
+    const encrypted = await listEncryptedMemories();
+    const decrypted = await Promise.all(encrypted.map((memory) => (
+      decryptMemory<MemoryRecord>(nativeCryptoPrimitives, activeSession, memory)
+    )));
+    setMemories(decrypted);
+  }
+
+  async function finishUnlock(activeSession: VaultSessionV1, message: string): Promise<void> {
+    setSession(activeSession);
+    setMode('unlocked');
+    setPassword('');
+    await refreshMemories(activeSession);
+    setStatus(message);
+  }
+
+  function lock(): void {
+    if (session) destroyVaultSession(session);
+    setSession(null);
+    setMemories([]);
+    setPreviewUri(null);
+    setPendingPhoto(null);
+    setMode(vault ? 'locked' : 'setup');
+    setStatus('私密空间已经锁定，内存钥匙已清零。');
+  }
+
+  async function createPrivateSpace(): Promise<void> {
+    if (password.length < 8) {
+      throw new Error('测试密码至少输入 8 个字符。');
+    }
+    if (password !== passwordConfirmation) {
+      throw new Error('两次输入的密码不一致。');
+    }
+    setStatus('正在用 64 MiB Argon2id 创建私密空间……');
+    const startedAt = performance.now();
+    const created = await createVault(nativeCryptoPrimitives, password);
+    await saveVaultEnvelope(created.envelope);
+    setVault(created.envelope);
+    setPasswordConfirmation('');
+    await finishUnlock(
+      created.session,
+      `私密空间创建完成，用时 ${Math.round(performance.now() - startedAt)} ms。`,
+    );
+  }
+
+  async function unlockWithPassword(): Promise<void> {
+    if (!vault) throw new Error('本机没有可解锁的私密空间。');
+    setStatus('正在派生解锁钥匙……');
+    const startedAt = performance.now();
+    const activeSession = await unlockVault(nativeCryptoPrimitives, vault, password);
+    await finishUnlock(
+      activeSession,
+      `密码解锁成功，用时 ${Math.round(performance.now() - startedAt)} ms。`,
+    );
+  }
+
+  async function quickUnlock(): Promise<void> {
+    if (!vault) throw new Error('本机没有可解锁的私密空间。');
+    setStatus('等待系统指纹验证……');
+    const startedAt = performance.now();
+    const activeSession = await unlockWithDevice(vault);
+    await finishUnlock(
+      activeSession,
+      `本机指纹解锁成功，用时 ${Math.round(performance.now() - startedAt)} ms。`,
+    );
+  }
+
+  async function rememberThisDevice(): Promise<void> {
+    if (!session) throw new Error('请先解锁。');
+    await enableDeviceUnlock(session);
+    setDeviceUnlockEnabled(true);
+    setStatus('设备钥匙已写入 Android Keystore；VMK 本身没有直接保存。');
+  }
+
+  async function choosePhoto(): Promise<void> {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) throw new Error('没有获得照片访问权限。');
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setPendingPhoto({
+      uri: asset.uri,
+      filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+    });
+    setStatus(`已选择照片：${asset.fileName ?? '未命名照片'}`);
+  }
+
+  async function saveMemory(): Promise<void> {
+    if (!session) throw new Error('请先解锁。');
+    if (!title.trim() && !body.trim()) throw new Error('标题和正文不能同时为空。');
+    setStatus('正在加密并保存……');
+
+    let photoId: string | undefined;
+    let photoMetric = '';
+    if (pendingPhoto) {
+      const plaintextFile = new File(pendingPhoto.uri);
+      const photoBytes = await plaintextFile.bytes();
+      const startedAt = performance.now();
+      try {
+        const encryptedPhoto = await encryptPhoto(
+          nativeCryptoPrimitives,
+          session,
+          photoBytes,
+          { filename: pendingPhoto.filename, mimeType: pendingPhoto.mimeType },
+        );
+        await saveEncryptedPhoto(encryptedPhoto);
+        photoId = encryptedPhoto.id;
+        photoMetric = `；${Math.round(photoBytes.byteLength / 1024)} KiB 照片加密 ${Math.round(performance.now() - startedAt)} ms`;
+      } finally {
+        photoBytes.fill(0);
+      }
+    }
+
+    const memory: MemoryRecord = {
+      id: nativeCryptoPrimitives.randomUUID(),
+      title: title.trim() || '无标题',
+      body: body.trim(),
+      date: new Date().toISOString().slice(0, 10),
+      createdAt: new Date().toISOString(),
+      photoId,
+    };
+    const encryptedMemory = await encryptMemory(
+      nativeCryptoPrimitives,
+      session,
+      memory,
+    );
+    await saveEncryptedMemory(encryptedMemory);
+    setTitle('');
+    setBody('');
+    setPendingPhoto(null);
+    await refreshMemories(session);
+    setStatus(`记忆已加密保存${photoMetric}。`);
+  }
+
+  async function showPhoto(memory: MemoryRecord): Promise<void> {
+    if (!session || !memory.photoId) return;
+    const encrypted = await getEncryptedPhoto(memory.photoId);
+    if (!encrypted) throw new Error('找不到照片密文。');
+    const startedAt = performance.now();
+    const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);
+    setPreviewUri(`data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`);
+    photo.bytes.fill(0);
+    setStatus(`照片只在内存中解密，用时 ${Math.round(performance.now() - startedAt)} ms。`);
+  }
+
+  async function exportBundle(): Promise<void> {
+    if (!vault) throw new Error('没有可导出的私密空间。');
+    await shareEncryptedBundle(vault);
+    setStatus('已调用系统分享导出加密 JSON；文件中不含密码和明文。');
+  }
+
+  async function importBundle(): Promise<void> {
+    const bundle = await pickEncryptedBundle();
+    if (!bundle) return;
+    if (session) destroyVaultSession(session);
+    await disableDeviceUnlock();
+    await replaceWithEncryptedBundle(bundle);
+    setVault(bundle.vault);
+    setSession(null);
+    setMemories([]);
+    setPreviewUri(null);
+    setDeviceUnlockEnabled(false);
+    setMode('locked');
+    setStatus('加密包已导入，请输入它原来的私密空间密码。');
+  }
+
+  async function runCompatibility(): Promise<void> {
+    setStatus('正在运行 Android 原生 64 MiB Argon2id 与网页密文兼容测试……');
+    const result = await runNativeCompatibilityCheck();
+    setStatus(
+      `兼容测试通过：AES-GCM ${Math.round(result.aesMilliseconds)} ms；Argon2id ${Math.round(result.argon2Milliseconds)} ms；网页 VMK/文字/照片解密 ${Math.round(result.webBundleMilliseconds)} ms。`,
+    );
+  }
+
+  function confirmClear(): void {
+    Alert.alert(
+      '清空本机原型？',
+      '这会删除本机密文和设备解锁钥匙。请先导出备份。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '清空',
+          style: 'destructive',
+          onPress: () => void runTask(async () => {
+            if (session) destroyVaultSession(session);
+            await disableDeviceUnlock();
+            await clearEncryptedContent();
+            setVault(null);
+            setSession(null);
+            setMemories([]);
+            setPreviewUri(null);
+            setDeviceUnlockEnabled(false);
+            setMode('setup');
+            setStatus('本机原型数据已经清空。');
+          }),
+        },
+      ],
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <StatusBar style="dark" />
+      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.eyebrow}>VMK V1 · ANDROID TEST</Text>
+            <Text style={styles.heading}>Memory Recall</Text>
+          </View>
+          <Text style={styles.state}>{stateLabel}</Text>
+        </View>
+
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>{busy ? '处理中… ' : ''}{status}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>跨端兼容</Text>
+          <Text style={styles.hint}>运行真实 Android 原生 Argon2id，并解开网页端生成的固定 VMK、文字和照片。</Text>
+          <Button title="运行兼容与性能测试" disabled={busy} onPress={() => void runTask(runCompatibility)} />
+        </View>
+
+        {mode === 'loading' && <Text style={styles.centerText}>正在启动……</Text>}
+
+        {mode === 'setup' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>创建私密空间</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="私密空间密码（至少 8 个字符）"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="再次输入密码"
+              secureTextEntry
+              value={passwordConfirmation}
+              onChangeText={setPasswordConfirmation}
+            />
+            <Button title="创建并解锁" disabled={busy} onPress={() => void runTask(createPrivateSpace)} />
+            <View style={styles.spacer} />
+            <Button title="导入网页端加密备份" disabled={busy} onPress={() => void runTask(importBundle)} />
+          </View>
+        )}
+
+        {mode === 'locked' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>解锁私密空间</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="私密空间密码"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              onSubmitEditing={() => void runTask(unlockWithPassword)}
+            />
+            <Button title="密码解锁" disabled={busy} onPress={() => void runTask(unlockWithPassword)} />
+            {deviceUnlockEnabled && (
+              <>
+                <View style={styles.spacer} />
+                <Button title="使用本机指纹解锁" disabled={busy} onPress={() => void runTask(quickUnlock)} />
+              </>
+            )}
+            <View style={styles.spacer} />
+            <Button title="导入其他加密备份" disabled={busy} onPress={() => void runTask(importBundle)} />
+          </View>
+        )}
+
+        {mode === 'unlocked' && session && (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>新建测试记忆</Text>
+              <TextInput style={styles.input} placeholder="标题" value={title} onChangeText={setTitle} />
+              <TextInput
+                style={[styles.input, styles.bodyInput]}
+                placeholder="正文"
+                multiline
+                value={body}
+                onChangeText={setBody}
+              />
+              <Button title={pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择一张真实照片'} disabled={busy} onPress={() => void runTask(choosePhoto)} />
+              <View style={styles.spacer} />
+              <Button title="加密并保存" disabled={busy} onPress={() => void runTask(saveMemory)} />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>本机解锁</Text>
+              <Text style={styles.hint}>保存随机设备钥匙到 Android Keystore，通过它解开 VMK；不保存密码。</Text>
+              <Button
+                title={deviceUnlockEnabled ? '重新设置指纹解锁' : '启用本机指纹解锁'}
+                disabled={busy}
+                onPress={() => void runTask(rememberThisDevice)}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>已解密记忆（{memories.length}）</Text>
+              {memories.length === 0 && <Text style={styles.hint}>还没有测试记录。</Text>}
+              {memories.map((memory) => (
+                <View key={memory.id} style={styles.memoryCard}>
+                  <Text style={styles.memoryTitle}>{memory.title}</Text>
+                  <Text style={styles.memoryBody}>{memory.body}</Text>
+                  <Text style={styles.memoryMeta}>{memory.date} · {memory.id.slice(0, 8)}</Text>
+                  {memory.photoId && (
+                    <Button title="在内存中解密照片" disabled={busy} onPress={() => void runTask(() => showPhoto(memory))} />
+                  )}
+                </View>
+              ))}
+              {previewUri && (
+                <View style={styles.previewBox}>
+                  <Image source={{ uri: previewUri }} style={styles.preview} resizeMode="contain" />
+                  <Button title="清除内存预览" onPress={() => setPreviewUri(null)} />
+                </View>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>密文操作</Text>
+              <Button title="导出加密 JSON" disabled={busy} onPress={() => void runTask(exportBundle)} />
+              <View style={styles.spacer} />
+              <Button title="锁定并清除内存钥匙" disabled={busy} onPress={lock} />
+            </View>
+          </>
+        )}
+
+        <View style={styles.dangerSection}>
+          <Button title="清空本机原型数据" color="#9d2f2f" disabled={busy} onPress={confirmClear} />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#f3f0e8' },
+  page: { padding: 18, paddingTop: 56, paddingBottom: 64, gap: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  eyebrow: { fontSize: 11, letterSpacing: 1.2, color: '#58634c', fontWeight: '700' },
+  heading: { marginTop: 4, fontSize: 28, fontWeight: '800', color: '#1d251a' },
+  state: { backgroundColor: '#dce6ce', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, color: '#314126', fontWeight: '700' },
+  statusBox: { backgroundColor: '#fff8df', borderWidth: 1, borderColor: '#e5d69d', borderRadius: 12, padding: 12 },
+  statusText: { color: '#534a2c', lineHeight: 20 },
+  section: { backgroundColor: '#ffffff', borderRadius: 14, padding: 15, gap: 10, borderWidth: 1, borderColor: '#ddd9ce' },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#20271e' },
+  hint: { color: '#6b7066', lineHeight: 20 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: '#c8c8be', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fafaf7', color: '#171a16' },
+  bodyInput: { minHeight: 100, textAlignVertical: 'top' },
+  spacer: { height: 2 },
+  centerText: { textAlign: 'center', padding: 24 },
+  memoryCard: { backgroundColor: '#f6f7f2', borderRadius: 10, padding: 12, gap: 6 },
+  memoryTitle: { fontSize: 16, fontWeight: '700', color: '#1e241b' },
+  memoryBody: { color: '#3f473b', lineHeight: 20 },
+  memoryMeta: { color: '#818779', fontSize: 12 },
+  previewBox: { gap: 8, marginTop: 4 },
+  preview: { width: '100%', height: 260, backgroundColor: '#151515', borderRadius: 10 },
+  dangerSection: { paddingTop: 4 },
+});

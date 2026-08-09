@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Memory Recall VMK",
+    "slug": "memory-recall-mobile",
+    "version": "0.1.0",
+    "scheme": "memory-recall-vmk",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.nearnight21.memoryrecall.prototype"
+    },
+    "android": {
+      "package": "com.nearnight21.memoryrecall.prototype",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "允许 Memory Recall 使用面容 ID 解锁本机私密空间。"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允许 Memory Recall 选择照片并在设备端加密。",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-document-picker"
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

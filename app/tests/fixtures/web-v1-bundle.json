@@ -1,0 +1,86 @@
+{
+  "password": "mobile-web-compat-2026",
+  "bundle": {
+    "format": "memory-recall-encrypted-bundle",
+    "bundleVersion": 1,
+    "exportedAt": "2026-08-09T16:23:10.573Z",
+    "vault": {
+      "schema": "memory-recall-vault",
+      "cryptoVersion": 1,
+      "createdAt": "2026-08-09T16:23:10.570Z",
+      "kdf": {
+        "name": "Argon2id",
+        "salt": "8q1xHpE37brA7nc4C+ndzQ==",
+        "memoryKiB": 8192,
+        "iterations": 2,
+        "parallelism": 1,
+        "hashLength": 32
+      },
+      "wrappedVmk": {
+        "algorithm": "AES-256-GCM",
+        "iv": "gP5F0JqhZx/9Ok6A",
+        "ciphertext": "yeK9FKU4nGyGSyBseMYBFVTyXcvQvgva6ZOx/hy6F/+N25+yiGvqsyDWU+jas4CP"
+      },
+      "wrappedKeys": {
+        "text": {
+          "algorithm": "AES-256-GCM",
+          "iv": "b64a2MI7MubxumXI",
+          "ciphertext": "2ucUY/e/PvtaYBiqCwiOcZ4BQF5BAqvAI30VZMAcpsQ1V7f6q+WdQcpSWF9K+K4D"
+        },
+        "photo": {
+          "algorithm": "AES-256-GCM",
+          "iv": "K31hUcRXZJ8BkA6p",
+          "ciphertext": "2zU2ekHAo1kGY95egvipC+X0KkP0MNk+zkyw56/tOFRIpfJDrJTzCDiAB2xIcuOM"
+        }
+      }
+    },
+    "memories": [
+      {
+        "id": "compat-memory-001",
+        "version": 1,
+        "cryptoVersion": 1,
+        "deleted": false,
+        "payload": {
+          "algorithm": "AES-256-GCM",
+          "iv": "5U41NzMMI8+NoAGh",
+          "ciphertext": "nIKsd1dbMPL0S1NQs8h8Eyangs6TjVi7P2GTIfXxPwb0ufuPMh3AAZtTSzyugnMOBypa657lH7McVHydi92QpkY4s563zaAS1k0iCVE1uQ/hLw5IL65dBGfB+c8wofpBkxRKQcs1OeRKzuAMxTJZl6KhYbeHOQNNSQaPFIBzfFOTK3rtVGXfV35aXknPQaakrbiH0xDVyRjdpOvkTGUGlRinxb/35XJ34Ku+0hmDIne16QEVhOxfEEX/G8QrqZGFbDeJRSZ+KDlpGMvobeem7D/yqiYqIP2qYRojR+Uyj7T2pXaeTT/rlo6f9yAf4iCnutLCdOFo3dN1zy8MV0XqKnHmN2CdUNy48ooWxEBup/Mb2kA+CZs5eWiES4zVNVpRbBCVoGQcLvMH4lSC02Kc/gIRXGwoBGAk+sI+fZJFxg=="
+        }
+      }
+    ],
+    "photos": [
+      {
+        "id": "compat-photo-001",
+        "cryptoVersion": 1,
+        "kind": "original",
+        "metadata": {
+          "algorithm": "AES-256-GCM",
+          "iv": "7p/wkFgdVqe2NYVM",
+          "ciphertext": "hF9AMxw6rlKS0cldaVFAqnuApDIvn1ERO6PGxZfPRY2IYEm7K5H0JsD7iqPe2fonxMDiB2gKvLuvqTUH6IbUETb0S7vNAM0jKfLp41HKwCH/"
+        },
+        "content": {
+          "algorithm": "AES-256-GCM",
+          "iv": "vxC9Ohodp7GrVRB6",
+          "ciphertext": "edYaznUVRLn0ric/HX/C4p2kVQ8T2yw/xGk="
+        }
+      }
+    ]
+  },
+  "expected": {
+    "memory": {
+      "id": "compat-memory-001",
+      "title": "网页与安卓兼容测试",
+      "body": "这段文字由网页端加密，移动端必须能够解开。",
+      "date": "2026-08-10",
+      "tags": ["兼容测试"],
+      "location": {
+        "country": "中国",
+        "city": "杭州",
+        "name": "西湖边",
+        "lat": 30.246,
+        "lng": 120.15
+      },
+      "photoId": "compat-photo-001"
+    },
+    "photoBytesBase64": "/9j/4AECAwT/2Q=="
+  }
+}
