@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: memory_recall
+      POSTGRES_USER: memory_recall
+      POSTGRES_PASSWORD: ${MEMORY_RECALL_POSTGRES_PASSWORD:?set MEMORY_RECALL_POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memory_recall -d memory_recall"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - private
+
+  migrate:
+    build:
+      context: ..
+    environment: &server-environment
+      MEMORY_RECALL_DATABASE_URL: ${MEMORY_RECALL_DATABASE_URL:?set MEMORY_RECALL_DATABASE_URL in .env}
+      MEMORY_RECALL_SESSION_TOKEN_PEPPER: ${MEMORY_RECALL_SESSION_TOKEN_PEPPER:?set MEMORY_RECALL_SESSION_TOKEN_PEPPER in .env}
+      MEMORY_RECALL_ALLOWED_ORIGINS: ${MEMORY_RECALL_ALLOWED_ORIGINS:?set MEMORY_RECALL_ALLOWED_ORIGINS in .env}
+      MEMORY_RECALL_COS_BUCKET: ${MEMORY_RECALL_COS_BUCKET-}
+      MEMORY_RECALL_COS_REGION: ${MEMORY_RECALL_COS_REGION-}
+      MEMORY_RECALL_COS_SECRET_ID: ${MEMORY_RECALL_COS_SECRET_ID-}
+      MEMORY_RECALL_COS_SECRET_KEY: ${MEMORY_RECALL_COS_SECRET_KEY-}
+    command: ["npm", "run", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - private
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+    restart: unless-stopped
+    environment:
+      <<: *server-environment
+      MEMORY_RECALL_LISTEN_HOST: 0.0.0.0
+      MEMORY_RECALL_PORT: 8788
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8788:8788"
+    networks:
+      - private
+
+  caddy:
+    image: caddy:2.10.0-alpine
+    restart: unless-stopped
+    profiles: ["public"]
+    environment:
+      MEMORY_RECALL_PUBLIC_DOMAIN: ${MEMORY_RECALL_PUBLIC_DOMAIN-}
+      CADDY_EMAIL: ${CADDY_EMAIL-}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - private
+      - public
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  private:
+    internal: true
+  public:

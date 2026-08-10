@@ -3,9 +3,9 @@
 这是 Android 与 Web 的密文同步后端。它有两种启动模式：本地开发使用 JSON 文件和固定测试令牌；
 试运行使用 PostgreSQL、受邀请账号和短期会话令牌。两种模式的密文 API 协议相同。
 
-它不包含公开注册、手机验证码、密码找回或腾讯云 COS；照片密文目前在 PostgreSQL 的 JSONB
-列中临时保存，不能用于生产级大文件存储。登录密码只负责获得同步 API 权限，不能解开或重置
-私密空间密码。
+它不包含公开注册、手机验证码或密码找回。未配置 COS 时，照片密文临时保存在 PostgreSQL 的
+JSONB 列中；配置私有腾讯云 COS 后，只有已加密的照片 `content` 进入 COS。登录密码只负责获得
+同步 API 权限，不能解开或重置私密空间密码。
 
 ## 本地运行
 
@@ -60,6 +60,21 @@ npm.cmd start
 记忆密文和照片密文都按 `account_id` 隔离。`POST /v1/auth/login` 接受 `loginName`、`password` 和可选
 `deviceId`，成功后返回 `accessToken` 与 `expiresAt`。
 
+要把照片 `content` 迁到私有腾讯云 COS，必须同时配置以下四项；少任何一项服务都会拒绝启动。
+API 生成随机对象路径并保留三次失败清理尝试，客户端不接触长期 COS 密钥：
+
+```powershell
+$env:MEMORY_RECALL_COS_BUCKET = '你的私有桶-APPID'
+$env:MEMORY_RECALL_COS_REGION = 'ap-shanghai'
+$env:MEMORY_RECALL_COS_SECRET_ID = '部署机密钥管理中的SecretId'
+$env:MEMORY_RECALL_COS_SECRET_KEY = '部署机密钥管理中的SecretKey'
+npm.cmd run migrate
+npm.cmd start
+```
+
+桶必须关闭匿名读写和公共 CDN 缓存。没有这四项时服务仍使用 PostgreSQL 的临时照片 JSON 存储，
+方便先完成数据库与登录验收。
+
 ## 接口
 
 - `GET /health`：检查服务是否启动，不需要令牌。
@@ -102,6 +117,6 @@ npm.cmd run test:postgres
 
 - 本地 JSON 模式只有一个固定测试用户和令牌；它只供开发回归。
 - PostgreSQL 模式只允许管理员创建受邀请账号，尚无公开注册或账号管理界面。
-- 照片密文暂存在 PostgreSQL JSONB 中；接入私有 COS 前，不适合大文件或生产使用。
+- 未配置 COS 时照片密文暂存在 PostgreSQL JSONB 中；该回退路径不适合大文件或生产使用。
 - Android 与 Web 验证界面已支持人工同步，但尚无离线上传队列、删除同步和冲突处理界面。
-- 尚无 Docker、反向代理、备份、监控和 COS，因此不得暴露到公网或用于保存真实用户数据。
+- Docker Compose、Caddy 配置和运行手册已提供，但尚无已验证的容器、备份、监控和私有 COS 桶，因此不得暴露到公网或用于保存真实用户数据。详见 [`docs/DEPLOYMENT-RUNBOOK.md`](docs/DEPLOYMENT-RUNBOOK.md)。

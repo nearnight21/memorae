@@ -4,9 +4,29 @@ import { buildApp } from './app';
 import {
   createPostgresPool,
   PostgresCipherStore,
+  PostgresCosCipherStore,
   PostgresPasswordAuthStore,
 } from './postgres';
 import { JsonCipherStore } from './store';
+import {
+  TencentCosObjectStore,
+  type TencentCosObjectStoreOptions,
+} from './tencentCos';
+
+function cosOptionsFromEnvironment(): TencentCosObjectStoreOptions | null {
+  const values = {
+    bucket: process.env.MEMORY_RECALL_COS_BUCKET,
+    region: process.env.MEMORY_RECALL_COS_REGION,
+    secretId: process.env.MEMORY_RECALL_COS_SECRET_ID,
+    secretKey: process.env.MEMORY_RECALL_COS_SECRET_KEY,
+  };
+  const configured = Object.values(values).filter((value) => value?.trim()).length;
+  if (!configured) return null;
+  if (configured !== 4) {
+    throw new Error('腾讯云 COS 配置必须同时设置 bucket、region、secret ID 和 secret key。');
+  }
+  return values as TencentCosObjectStoreOptions;
+}
 
 async function main(): Promise<void> {
   const port = Number(process.env.MEMORY_RECALL_PORT ?? 8788);
@@ -27,8 +47,11 @@ async function main(): Promise<void> {
       throw new Error('使用 PostgreSQL 时必须设置 MEMORY_RECALL_ALLOWED_ORIGINS。');
     }
     const pool = createPostgresPool(databaseUrl);
+    const cosOptions = cosOptionsFromEnvironment();
     const app = await buildApp({
-      store: new PostgresCipherStore(pool),
+      store: cosOptions
+        ? new PostgresCosCipherStore(pool, new TencentCosObjectStore(cosOptions))
+        : new PostgresCipherStore(pool),
       authenticator: new PasswordSessionAuthenticator(new PostgresPasswordAuthStore(pool), {
         tokenPepper,
       }),

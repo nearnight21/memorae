@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { Pool } from 'pg';
 import type {
   NewStoredSession,
@@ -13,6 +14,7 @@ import type {
   EncryptedPhotoV1,
   VaultEnvelopeV1,
 } from './contracts';
+import type { PhotoObjectStore } from './photoObjectStore';
 import { CipherConflictError, type CipherStore } from './store';
 
 type Queryable = Pick<Pool, 'query'>;
@@ -42,6 +44,16 @@ interface MemoryRow {
 
 interface PhotoRow {
   payload_json: unknown;
+}
+
+interface StoredCosPhotoRow {
+  photo_id: string;
+  crypto_version: number;
+  payload_json: unknown;
+  storage_kind: 'cos' | null;
+  object_key: string | null;
+  photo_kind: EncryptedPhotoV1['kind'] | null;
+  metadata_json: unknown;
 }
 
 function normalizeLoginName(value: string): string {
@@ -263,6 +275,128 @@ export class PostgresCipherStore implements CipherStore {
     );
     if (!inserted.rowCount) {
       throw new CipherConflictError('同一照片 ID 对应了不同的密文。');
+    }
+  }
+}
+
+async function deleteUploadedObject(objectStore: PhotoObjectStore, key: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await objectStore.deleteObject(key);
+      return;
+    } catch {
+      // The database transaction has already failed or selected another object.
+      // Do not expose encrypted payloads or object credentials through an error.
+    }
+  }
+}
+
+export class PostgresCosCipherStore implements CipherStore {
+  private readonly postgresStore: PostgresCipherStore;
+
+  constructor(
+    private readonly database: Queryable,
+    private readonly objectStore: PhotoObjectStore,
+  ) {
+    this.postgresStore = new PostgresCipherStore(database);
+  }
+
+  getVault(accountId: string): Promise<VaultEnvelopeV1 | null> {
+    return this.postgresStore.getVault(accountId);
+  }
+
+  putVault(accountId: string, vault: VaultEnvelopeV1): Promise<void> {
+    return this.postgresStore.putVault(accountId, vault);
+  }
+
+  listMemories(accountId: string): Promise<EncryptedMemoryV1[]> {
+    return this.postgresStore.listMemories(accountId);
+  }
+
+  putMemory(accountId: string, memory: EncryptedMemoryV1): Promise<void> {
+    return this.postgresStore.putMemory(accountId, memory);
+  }
+
+  private async existingPhoto(
+    accountId: string,
+    photoId: string,
+  ): Promise<StoredCosPhotoRow | null> {
+    const result = await this.database.query<StoredCosPhotoRow>(
+      `SELECT photo_id, crypto_version, payload_json, storage_kind, object_key, photo_kind, metadata_json
+       FROM photo_ciphers
+       WHERE account_id = $1::uuid AND photo_id = $2`,
+      [accountId, photoId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  private async fromStoredPhoto(row: StoredCosPhotoRow): Promise<EncryptedPhotoV1> {
+    if (row.storage_kind !== 'cos') {
+      return fromJsonColumn<EncryptedPhotoV1>(row.payload_json);
+    }
+    if (!row.object_key || !row.photo_kind || !row.metadata_json) {
+      throw new Error('数据库中的 COS 照片引用无效。');
+    }
+    const content = JSON.parse(await this.objectStore.getObject(row.object_key)) as EncryptedPhotoV1['content'];
+    return {
+      id: row.photo_id,
+      cryptoVersion: row.crypto_version as 1,
+      kind: row.photo_kind,
+      metadata: fromJsonColumn<EncryptedPhotoV1['metadata']>(row.metadata_json),
+      content,
+    };
+  }
+
+  async getPhoto(accountId: string, photoId: string): Promise<EncryptedPhotoV1 | null> {
+    const row = await this.existingPhoto(accountId, photoId);
+    return row ? this.fromStoredPhoto(row) : null;
+  }
+
+  async putPhoto(accountId: string, photo: EncryptedPhotoV1): Promise<void> {
+    const existing = await this.existingPhoto(accountId, photo.id);
+    if (existing) {
+      const existingPhoto = await this.fromStoredPhoto(existing);
+      if (!isDeepStrictEqual(existingPhoto, photo)) {
+        throw new CipherConflictError('同一照片 ID 对应了不同的密文。');
+      }
+      return;
+    }
+
+    const objectKey = `memory-recall/v1/${accountId}/photos/${encodeURIComponent(photo.id)}/${randomUUID()}.json`;
+    const serializedContent = toJsonParameter(photo.content);
+    await this.objectStore.putObject(objectKey, serializedContent);
+    const inserted = await this.database.query<StoredCosPhotoRow>(
+      `INSERT INTO photo_ciphers (
+         account_id, photo_id, crypto_version, payload_json,
+         storage_kind, object_key, photo_kind, metadata_json
+       ) VALUES (
+         $1::uuid, $2, $3, NULL,
+         'cos', $4, $5, $6::jsonb
+       )
+       ON CONFLICT (account_id, photo_id) DO NOTHING
+       RETURNING photo_id, crypto_version, payload_json, storage_kind, object_key, photo_kind, metadata_json`,
+      [
+        accountId,
+        photo.id,
+        photo.cryptoVersion,
+        objectKey,
+        photo.kind,
+        toJsonParameter(photo.metadata),
+      ],
+    );
+    if (inserted.rowCount) return;
+
+    try {
+      const concurrent = await this.existingPhoto(accountId, photo.id);
+      if (!concurrent) {
+        throw new Error('照片密文写入后无法读取。');
+      }
+      const concurrentPhoto = await this.fromStoredPhoto(concurrent);
+      if (!isDeepStrictEqual(concurrentPhoto, photo)) {
+        throw new CipherConflictError('同一照片 ID 对应了不同的密文。');
+      }
+    } finally {
+      await deleteUploadedObject(this.objectStore, objectKey);
     }
   }
 }

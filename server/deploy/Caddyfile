@@ -1,0 +1,12 @@
+{
+  email {$CADDY_EMAIL}
+}
+
+{$MEMORY_RECALL_PUBLIC_DOMAIN} {
+  encode zstd gzip
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000"
+  }
+  reverse_proxy api:8788
+}

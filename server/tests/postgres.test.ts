@@ -8,8 +8,10 @@ import {
 import { buildApp } from '../src/app.ts';
 import type { EncryptedMemoryV1, EncryptedPhotoV1, VaultEnvelopeV1 } from '../src/contracts.ts';
 import { applyMigrations } from '../src/migrations.ts';
+import type { PhotoObjectStore } from '../src/photoObjectStore.ts';
 import {
   PostgresCipherStore,
+  PostgresCosCipherStore,
   PostgresPasswordAuthStore,
 } from '../src/postgres.ts';
 
@@ -65,6 +67,24 @@ const androidPhoto: EncryptedPhotoV1 = {
   metadata: { algorithm: 'AES-256-GCM', iv: 'android-metadata-iv', ciphertext: 'android-metadata-ciphertext' },
   content: { algorithm: 'AES-256-GCM', iv: 'android-content-iv', ciphertext: 'android-content-ciphertext' },
 };
+
+class InMemoryPhotoObjectStore implements PhotoObjectStore {
+  readonly objects = new Map<string, string>();
+
+  async putObject(key: string, content: string): Promise<void> {
+    this.objects.set(key, content);
+  }
+
+  async getObject(key: string): Promise<string> {
+    const content = this.objects.get(key);
+    if (!content) throw new Error('测试对象不存在。');
+    return content;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+}
 
 function bearer(token: string): HeadersInit {
   return { authorization: `Bearer ${token}` };
@@ -195,6 +215,33 @@ if (!databaseUrl) {
       }),
     });
     assert.equal(changedPhoto.status, 409);
+
+    const cosObjectStore = new InMemoryPhotoObjectStore();
+    const cosStore = new PostgresCosCipherStore(pool, cosObjectStore);
+    const cosPhoto: EncryptedPhotoV1 = {
+      ...androidPhoto,
+      id: 'cos-photo-001',
+      content: { ...androidPhoto.content, ciphertext: 'cos-content-ciphertext' },
+    };
+    await cosStore.putPhoto(alice.id, cosPhoto);
+    await cosStore.putPhoto(alice.id, cosPhoto);
+    assert.deepEqual(await cosStore.getPhoto(alice.id, cosPhoto.id), cosPhoto);
+    assert.equal(cosObjectStore.objects.size, 1);
+    assert.equal(await cosStore.getPhoto(bob.id, cosPhoto.id), null);
+    const cosRow = await pool.query<{ payload_json: unknown; metadata_json: unknown }>(
+      `SELECT payload_json, metadata_json
+       FROM photo_ciphers
+       WHERE account_id = $1::uuid AND photo_id = $2`,
+      [alice.id, cosPhoto.id],
+    );
+    assert.equal(JSON.stringify(cosRow.rows[0]).includes(cosPhoto.content.ciphertext), false);
+    await assert.rejects(
+      cosStore.putPhoto(alice.id, {
+        ...cosPhoto,
+        content: { ...cosPhoto.content, ciphertext: 'different-cos-content' },
+      }),
+      /同一照片 ID/,
+    );
 
     now = new Date('2026-08-11T00:00:01.001Z');
     const expired = await fetch(`${baseUrl}/v1/memories`, { headers: bearer(aliceToken) });
