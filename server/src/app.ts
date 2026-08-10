@@ -5,6 +5,10 @@ import Fastify, {
   type FastifyRequest,
 } from 'fastify';
 import {
+  LocalTokenAuthenticator,
+  type RequestAuthenticator,
+} from './auth';
+import {
   encryptedMemorySchema,
   encryptedPhotoSchema,
   idParamsSchema,
@@ -18,8 +22,9 @@ import { CipherConflictError, type CipherStore } from './store';
 
 export interface BuildAppOptions {
   store: CipherStore;
-  localToken: string;
+  localToken?: string;
   localUserId?: string;
+  authenticator?: RequestAuthenticator;
   allowedOrigins?: string[];
 }
 
@@ -27,20 +32,51 @@ interface IdParams {
   id: string;
 }
 
-function requireLocalToken(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  expectedToken: string,
-): void | FastifyReply {
-  if (request.headers.authorization !== `Bearer ${expectedToken}`) {
-    return reply.code(401).send({ error: '本地访问令牌无效。' });
+interface LoginBody {
+  loginName: string;
+  password: string;
+  deviceId?: string;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    accountId?: string;
   }
 }
 
-export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
-  if (options.localToken.length < 16) {
-    throw new Error('本地访问令牌至少需要 16 个字符。');
+const loginSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['loginName', 'password'],
+  properties: {
+    loginName: { type: 'string', minLength: 3, maxLength: 200 },
+    password: { type: 'string', minLength: 8, maxLength: 1024 },
+    deviceId: { type: 'string', minLength: 1, maxLength: 200 },
+  },
+} as const;
+
+function bearerToken(request: FastifyRequest): string | null {
+  const value = request.headers.authorization;
+  if (!value?.startsWith('Bearer ')) return null;
+  const token = value.slice('Bearer '.length).trim();
+  return token || null;
+}
+
+function currentAccountId(request: FastifyRequest): string {
+  if (!request.accountId) {
+    throw new Error('认证钩子没有设置账号。');
   }
+  return request.accountId;
+}
+
+export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
+  if (!options.authenticator && !options.localToken) {
+    throw new Error('必须提供本地令牌或账号认证器。');
+  }
+  const authenticator: RequestAuthenticator = options.authenticator ?? new LocalTokenAuthenticator(
+    options.localToken!,
+    options.localUserId,
+  );
 
   const app = Fastify({
     logger: false,
@@ -51,33 +87,59 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       },
     },
   });
-  const userId = options.localUserId ?? 'local-user';
-
   await app.register(cors, {
     origin: options.allowedOrigins ?? [
       'http://127.0.0.1:3000',
       'http://localhost:3000',
     ],
-    methods: ['GET', 'PUT', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowedHeaders: ['authorization', 'content-type'],
   });
 
   app.get('/health', async () => ({ ok: true }));
 
   app.addHook('onRequest', async (request, reply) => {
-    if (request.url === '/health' || request.method === 'OPTIONS') return;
-    return requireLocalToken(request, reply, options.localToken);
+    const pathname = request.url.split('?', 1)[0];
+    if (
+      pathname === '/health'
+      || request.method === 'OPTIONS'
+      || (pathname === '/v1/auth/login' && request.method === 'POST')
+    ) {
+      return;
+    }
+    const token = bearerToken(request);
+    const identity = token ? await authenticator.authenticate(token) : null;
+    if (!identity) {
+      return reply.code(401).send({ error: '访问令牌无效或已过期。' });
+    }
+    request.accountId = identity.accountId;
   });
+
+  if (authenticator.login) {
+    app.post<{ Body: LoginBody }>('/v1/auth/login', {
+      schema: { body: loginSchema },
+    }, async (request, reply) => {
+      const session = await authenticator.login!({
+        loginName: request.body.loginName,
+        password: request.body.password,
+        deviceId: request.body.deviceId,
+      });
+      if (!session) {
+        return reply.code(401).send({ error: '账号或密码无效。' });
+      }
+      return reply.code(200).send(session);
+    });
+  }
 
   app.put<{ Body: VaultEnvelopeV1 }>('/v1/vault', {
     schema: { body: vaultEnvelopeSchema },
   }, async (request, reply) => {
-    await options.store.putVault(userId, request.body);
+    await options.store.putVault(currentAccountId(request), request.body);
     return reply.code(204).send();
   });
 
-  app.get('/v1/vault', async (_request, reply) => {
-    const vault = await options.store.getVault(userId);
+  app.get('/v1/vault', async (request, reply) => {
+    const vault = await options.store.getVault(currentAccountId(request));
     if (!vault) return reply.code(404).send({ error: '服务器还没有钥匙信封。' });
     return vault;
   });
@@ -92,7 +154,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(400).send({ error: '路径中的记忆 ID 与密文不一致。' });
     }
     try {
-      await options.store.putMemory(userId, request.body);
+      await options.store.putMemory(currentAccountId(request), request.body);
       return reply.code(204).send();
     } catch (error) {
       if (error instanceof CipherConflictError) {
@@ -102,8 +164,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
   });
 
-  app.get('/v1/memories', async (): Promise<MemoryListResponse> => ({
-    items: await options.store.listMemories(userId),
+  app.get('/v1/memories', async (request): Promise<MemoryListResponse> => ({
+    items: await options.store.listMemories(currentAccountId(request)),
   }));
 
   app.put<{ Params: IdParams; Body: EncryptedPhotoV1 }>('/v1/photos/:id', {
@@ -116,7 +178,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(400).send({ error: '路径中的照片 ID 与密文不一致。' });
     }
     try {
-      await options.store.putPhoto(userId, request.body);
+      await options.store.putPhoto(currentAccountId(request), request.body);
       return reply.code(204).send();
     } catch (error) {
       if (error instanceof CipherConflictError) {
@@ -129,7 +191,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   app.get<{ Params: IdParams }>('/v1/photos/:id', {
     schema: { params: idParamsSchema },
   }, async (request, reply) => {
-    const photo = await options.store.getPhoto(userId, request.params.id);
+    const photo = await options.store.getPhoto(currentAccountId(request), request.params.id);
     if (!photo) return reply.code(404).send({ error: '找不到照片密文。' });
     return photo;
   });

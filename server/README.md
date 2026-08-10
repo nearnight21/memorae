@@ -3,8 +3,8 @@
 这是一个只供本机开发验证使用的后端。它模拟未来的国内云服务器，让 Android 与 Web 代码
 双向上传、下载并解密密文。
 
-它不是正式线上服务，不包含手机验证码、真实账号、PostgreSQL 或腾讯云 COS，也没有接入
-现有 ThinkPad 数据。
+它不是正式线上服务，不包含手机验证码、受邀请账号持久化、PostgreSQL 或腾讯云 COS，也没有接入
+现有 ThinkPad 数据。服务端已经有账号密码会话和跨账号隔离的回归测试，但默认本地启动仍使用单一测试令牌；受邀请账号将随 PostgreSQL 存储一起接入。
 
 ## 本地运行
 
@@ -35,6 +35,9 @@ PowerShell 运行前需要像上面一样设置环境变量。
 ```text
 Authorization: Bearer <MEMORY_RECALL_LOCAL_TOKEN>
 ```
+
+部署试运行的账号密码接口和数据模型见
+[`docs/DEPLOYMENT-PILOT.md`](docs/DEPLOYMENT-PILOT.md)。`POST /v1/auth/login` 仅在服务启动时配置账号认证器后可用；它返回访问令牌，不能用于解开或重置私密空间密码。
 
 ## 自动验证
 
