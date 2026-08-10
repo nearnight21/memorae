@@ -34,7 +34,21 @@ const memory: MemoryV1 = {
   updatedAt: '2026-08-10T10:00:00.000Z',
 };
 
-test('Android uploads ciphertext and Web downloads and decrypts it', async (context) => {
+const webMemory: MemoryV1 = {
+  ...memory,
+  id: 'memory-server-sync-002',
+  title: 'A memory written on the Web',
+  text: 'This second private sentence travels from Web to Android.',
+  location: {
+    ...memory.location!,
+    name: 'Leifeng Pagoda by West Lake',
+  },
+  photos: [{ id: 'photo-server-sync-002', mimeType: 'image/png' }],
+  createdAt: '2026-08-10T11:00:00.000Z',
+  updatedAt: '2026-08-10T11:00:00.000Z',
+};
+
+test('Android and Web exchange ciphertext through the server in both directions', async (context) => {
   // Keep client imports runtime-dynamic so each project remains typechecked by
   // its own TypeScript setup while this integration test still runs both.
   const androidCryptoModulePath = '../../memory-recall-mobile/src/crypto/index.ts';
@@ -50,14 +64,19 @@ test('Android uploads ciphertext and Web downloads and decrypts it', async (cont
   const nodePrimitives = nodePrimitivesNamespace.default ?? nodePrimitivesNamespace;
   const {
     createVault: createAndroidVault,
+    decryptMemoryV1: decryptAndroidMemoryV1,
+    decryptPhoto: decryptAndroidPhoto,
     encryptMemoryV1: encryptAndroidMemoryV1,
     encryptPhoto: encryptAndroidPhoto,
+    unlockVault: unlockAndroidVault,
   } = androidCrypto;
   const { MemoryRecallSyncClient: AndroidSyncClient } = androidSync;
   const { nodeCryptoPrimitives } = nodePrimitives;
   const {
     decryptMemoryV1: decryptWebMemoryV1,
     decryptPhoto: decryptWebPhoto,
+    encryptMemoryV1: encryptWebMemoryV1,
+    encryptPhoto: encryptWebPhoto,
     unlockVault: unlockWebVault,
   } = await import(webCryptoModulePath);
   const { MemoryRecallSyncClient: WebSyncClient } = await import(webSyncModulePath);
@@ -120,6 +139,53 @@ test('Android uploads ciphertext and Web downloads and decrypts it', async (cont
     byteLength: photoBytes.byteLength,
   });
 
+  const webPhotoBytes = new Uint8Array([
+    137, 80, 78, 71, 13, 10, 26, 10, 9, 10, 11, 12, 13, 14, 15, 16,
+  ]);
+  const webPhotoFilename = 'private-web-memory-photo.png';
+  const webEncryptedMemory = await encryptWebMemoryV1(webSession, webMemory);
+  const webEncryptedPhoto = await encryptWebPhoto(
+    webSession,
+    webPhotoBytes,
+    { filename: webPhotoFilename, mimeType: 'image/png' },
+    { id: webMemory.photos[0].id },
+  );
+
+  await web.putVault(downloadedVault);
+  await web.putMemory(webEncryptedMemory);
+  await web.putPhoto(webEncryptedPhoto);
+
+  const androidDownloadedVault = await android.getVault();
+  const androidDownloadedMemories = await android.listMemories();
+  const androidDownloadedMemory = androidDownloadedMemories.find(
+    (item: { id: string }) => item.id === webMemory.id,
+  );
+  assert.ok(androidDownloadedMemory);
+  const androidDownloadedPhoto = await android.getPhoto(webEncryptedPhoto.id);
+  const androidSession = await unlockAndroidVault(
+    nodeCryptoPrimitives,
+    androidDownloadedVault,
+    PASSWORD,
+  );
+  const androidDecryptedMemory = await decryptAndroidMemoryV1(
+    nodeCryptoPrimitives,
+    androidSession,
+    androidDownloadedMemory,
+  );
+  const androidDecryptedPhoto = await decryptAndroidPhoto(
+    nodeCryptoPrimitives,
+    androidSession,
+    androidDownloadedPhoto,
+  );
+
+  assert.deepEqual(androidDecryptedMemory.memory, webMemory);
+  assert.deepEqual(androidDecryptedPhoto.bytes, webPhotoBytes);
+  assert.deepEqual(androidDecryptedPhoto.metadata, {
+    filename: webPhotoFilename,
+    mimeType: 'image/png',
+    byteLength: webPhotoBytes.byteLength,
+  });
+
   const persistedCiphertext = await readFile(dataFile, 'utf8');
   for (const plaintext of [
     memory.title,
@@ -127,16 +193,28 @@ test('Android uploads ciphertext and Web downloads and decrypts it', async (cont
     memory.location?.name ?? '',
     photoFilename,
     Buffer.from(photoBytes).toString('base64'),
+    webMemory.title,
+    webMemory.text,
+    webMemory.location?.name ?? '',
+    webPhotoFilename,
+    Buffer.from(webPhotoBytes).toString('base64'),
   ]) {
     assert.equal(persistedCiphertext.includes(plaintext), false);
   }
 
   const reopenedStore = new JsonCipherStore(dataFile);
   assert.deepEqual(await reopenedStore.getVault('local-user'), androidVault.envelope);
-  assert.deepEqual(await reopenedStore.listMemories('local-user'), [encryptedMemory]);
+  assert.deepEqual(await reopenedStore.listMemories('local-user'), [
+    encryptedMemory,
+    webEncryptedMemory,
+  ]);
   assert.deepEqual(
     await reopenedStore.getPhoto('local-user', encryptedPhoto.id),
     encryptedPhoto,
+  );
+  assert.deepEqual(
+    await reopenedStore.getPhoto('local-user', webEncryptedPhoto.id),
+    webEncryptedPhoto,
   );
 
   const unauthorized = await fetch(`${baseUrl}/v1/memories`, {

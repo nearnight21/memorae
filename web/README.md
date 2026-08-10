@@ -16,7 +16,7 @@ npm.cmd run dev
 原 `memories` 界面仍作为后续集成基础，可以通过 `http://127.0.0.1:3000/?legacy=1` 查看；未配置独立测试后端时，登录和上传不会连接线上服务。
 
 `src/sync/` 已提供本地密文测试服务的最小请求客户端，但尚未接入页面。自动测试会让 Android
-代码上传密文，再由 Web 代码下载并解密。运行方法见
+与 Web 双向上传、下载并解密密文。运行方法见
 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
 
 ## 验证
