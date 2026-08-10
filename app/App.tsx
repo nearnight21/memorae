@@ -17,12 +17,13 @@ import {
 import {
   bytesToBase64,
   createVault,
-  decryptMemory,
+  decryptMemoryV1,
   decryptPhoto,
   destroyVaultSession,
-  encryptMemory,
+  encryptMemoryV1,
   encryptPhoto,
   unlockVault,
+  type MemoryV1,
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from './src/crypto';
@@ -47,15 +48,6 @@ import {
   saveVaultEnvelope,
 } from './src/storage/database';
 
-interface MemoryRecord {
-  id: string;
-  title: string;
-  body: string;
-  date: string;
-  createdAt: string;
-  photoId?: string;
-}
-
 interface PendingPhoto {
   uri: string;
   filename: string;
@@ -72,7 +64,7 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
-  const [memories, setMemories] = useState<MemoryRecord[]>([]);
+  const [memories, setMemories] = useState<MemoryV1[]>([]);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [title, setTitle] = useState('');
@@ -118,20 +110,33 @@ export default function App() {
     }
   }
 
-  async function refreshMemories(activeSession: VaultSessionV1): Promise<void> {
+  async function refreshMemories(activeSession: VaultSessionV1): Promise<number> {
     const encrypted = await listEncryptedMemories();
-    const decrypted = await Promise.all(encrypted.map((memory) => (
-      decryptMemory<MemoryRecord>(nativeCryptoPrimitives, activeSession, memory)
-    )));
+    let migratedCount = 0;
+    const decrypted: MemoryV1[] = [];
+    for (const item of encrypted) {
+      const result = await decryptMemoryV1(nativeCryptoPrimitives, activeSession, item);
+      decrypted.push(result.memory);
+      if (result.migrated) {
+        await saveEncryptedMemory(await encryptMemoryV1(
+          nativeCryptoPrimitives,
+          activeSession,
+          result.memory,
+          item.version + 1,
+        ));
+        migratedCount += 1;
+      }
+    }
     setMemories(decrypted);
+    return migratedCount;
   }
 
   async function finishUnlock(activeSession: VaultSessionV1, message: string): Promise<void> {
     setSession(activeSession);
     setMode('unlocked');
     setPassword('');
-    await refreshMemories(activeSession);
-    setStatus(message);
+    const migratedCount = await refreshMemories(activeSession);
+    setStatus(migratedCount > 0 ? `${message} 已将 ${migratedCount} 条旧记忆升级为 MemoryV1。` : message);
   }
 
   function lock(): void {
@@ -236,15 +241,22 @@ export default function App() {
       }
     }
 
-    const memory: MemoryRecord = {
+    const now = new Date().toISOString();
+    const memory: MemoryV1 = {
+      schemaVersion: 1,
       id: nativeCryptoPrimitives.randomUUID(),
       title: title.trim() || '无标题',
-      body: body.trim(),
-      date: new Date().toISOString().slice(0, 10),
-      createdAt: new Date().toISOString(),
-      photoId,
+      text: body.trim(),
+      date: now.slice(0, 10),
+      tags: [],
+      location: null,
+      photos: photoId && pendingPhoto
+        ? [{ id: photoId, mimeType: pendingPhoto.mimeType }]
+        : [],
+      createdAt: now,
+      updatedAt: now,
     };
-    const encryptedMemory = await encryptMemory(
+    const encryptedMemory = await encryptMemoryV1(
       nativeCryptoPrimitives,
       session,
       memory,
@@ -257,9 +269,10 @@ export default function App() {
     setStatus(`记忆已加密保存${photoMetric}。`);
   }
 
-  async function showPhoto(memory: MemoryRecord): Promise<void> {
-    if (!session || !memory.photoId) return;
-    const encrypted = await getEncryptedPhoto(memory.photoId);
+  async function showPhoto(memory: MemoryV1): Promise<void> {
+    const photoId = memory.photos[0]?.id;
+    if (!session || !photoId) return;
+    const encrypted = await getEncryptedPhoto(photoId);
     if (!encrypted) throw new Error('找不到照片密文。');
     const startedAt = performance.now();
     const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);
@@ -429,9 +442,9 @@ export default function App() {
               {memories.map((memory) => (
                 <View key={memory.id} style={styles.memoryCard}>
                   <Text style={styles.memoryTitle}>{memory.title}</Text>
-                  <Text style={styles.memoryBody}>{memory.body}</Text>
+                  <Text style={styles.memoryBody}>{memory.text}</Text>
                   <Text style={styles.memoryMeta}>{memory.date} · {memory.id.slice(0, 8)}</Text>
-                  {memory.photoId && (
+                  {memory.photos.length > 0 && (
                     <Button title="在内存中解密照片" disabled={busy} onPress={() => void runTask(() => showPhoto(memory))} />
                   )}
                 </View>

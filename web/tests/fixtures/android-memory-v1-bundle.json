@@ -1,0 +1,65 @@
+{
+    "format": "memory-recall-encrypted-bundle",
+    "bundleVersion": 1,
+    "exportedAt": "2026-08-10T05:01:00.000Z",
+    "vault": {
+      "schema": "memory-recall-vault",
+      "cryptoVersion": 1,
+      "createdAt": "2026-08-10T06:44:56.180Z",
+      "kdf": {
+        "name": "Argon2id",
+        "salt": "w2lQIr44LjM/2IPUDr6wxg==",
+        "memoryKiB": 8192,
+        "iterations": 2,
+        "parallelism": 1,
+        "hashLength": 32
+      },
+      "wrappedVmk": {
+        "algorithm": "AES-256-GCM",
+        "iv": "Q6mwjQ44HngIdRPo",
+        "ciphertext": "/w4Qs+dGqAQ+5Lsb2ZRItu5Z0oVFNz1jmB2scSQ3l+62FIrpQ/s2AGnQxyIHVUc0"
+      },
+      "wrappedKeys": {
+        "text": {
+          "algorithm": "AES-256-GCM",
+          "iv": "cku3V2saLywNxvZg",
+          "ciphertext": "8Wb8FqImXGecT2SFxLFylqptDn+ahP3gsUobCzn5IsaFw9k8kSfhJAwv8UBd4qno"
+        },
+        "photo": {
+          "algorithm": "AES-256-GCM",
+          "iv": "JJ3q+vX6YEC0oDRN",
+          "ciphertext": "K+OlfFHQjRzawAAqsRW+kD6bIlQ8uF4SZiPtWQJCH7XYco9lDjB66aiOr631CL7o"
+        }
+      }
+    },
+    "memories": [
+      {
+        "id": "android-memory-v1-001",
+        "version": 1,
+        "cryptoVersion": 1,
+        "deleted": false,
+        "payload": {
+          "algorithm": "AES-256-GCM",
+          "iv": "SQuCpHpNGUZOY59w",
+          "ciphertext": "mDHQj87bwCYhQH2QKPfPyhEMpw3MtSJ9lsPplssmDdlqhfify7m4u6qAdBm+RgQ86OgvMiHAzO7Ap2DMEEWFeNQ88XlEFGrq7B7vLv7PDIo8LdnOGylJHRBSQr4g44DyM55+maOWp/cKjonY/EKUG4lySAbFKNeLMyumhmiaWk0i7KtyHtLBzpeRC0sYRjs9iQiWCT/qG/ZIWemMfqaM+hAvc8UgZkEpRaWHnrgJ6rbiAroJsthiN89qZFjl3tFP2MjwyYtlX06W8eAnWDjZCMTI1Dx/zPLnpIAcL52qXNtEmrADgTgCxDfmqQScllTKVQP8jbRlAdD8LgOJKJr30aZNdhE8O0X48V2Vy63f7sDPcggUzxsGCOrnnZszZBLsusHG6XYoZ8X+pSK+JONMt79xIMKbrl0joByX3PYHF8gelsvewnWR3QqjjSNjYh08Eaie1RhcjWuZPeCnqF58wejT3af8Rusm+DtkTjiv0WBOB+Y+1yvRxfCJP45/mjMUGgBD0y4ouV1yJfN31FRAT8+rE9O6nHFxxYfGNYV8Skgs0U2eBVPFsXD2uXrxWNZtWNerFSRHbWwJGTPoQwtC+Coom2klEXw8QX5gzXs="
+        }
+      }
+    ],
+    "photos": [
+      {
+        "id": "android-photo-v1-001",
+        "cryptoVersion": 1,
+        "kind": "original",
+        "metadata": {
+          "algorithm": "AES-256-GCM",
+          "iv": "WRqSwjfbrmEps1J2",
+          "ciphertext": "eQEeYMQWJde0m8V7WF8K/V4027HGYVxZz/68MkGyRb2sc9K9pgXUhXZVjZtoHn3opzwVu13h685t8pK0zjFKxBQQ9WaQzdrjf7DO1zO9fW1mRKEuFQBOz4vjwQ=="
+        },
+        "content": {
+          "algorithm": "AES-256-GCM",
+          "iv": "SNqEtCR+qNPdgaad",
+          "ciphertext": "KPJL1Z080me06jZsqHHAXQ3Dt42ONSGEI96o4a2Ihne0S0V7TeEkJLix7GxLMV2hMSdyOH3yiJMb9pKuheKsB0nXEUf1F343FDkjw5Di1JP6IjoC"
+        }
+      }
+    ]
+}

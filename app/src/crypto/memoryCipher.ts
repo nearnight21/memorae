@@ -10,6 +10,12 @@ import {
   type SealedBytesV1,
   type VaultSessionV1,
 } from './types';
+import {
+  assertMemoryV1,
+  readMemoryV1,
+  type MemoryV1,
+  type ReadMemoryV1Result,
+} from '../memory/memoryV1';
 
 export interface EncryptedMemoryV1 {
   id: string;
@@ -64,4 +70,22 @@ export async function decryptMemory<T>(
     memoryAad(encrypted.id, encrypted.version),
   );
   return JSON.parse(decodeUtf8(plaintext)) as T;
+}
+
+export async function encryptMemoryV1(
+  primitives: CryptoPrimitives,
+  session: VaultSessionV1,
+  memory: MemoryV1,
+  version = 1,
+): Promise<EncryptedMemoryV1> {
+  assertMemoryV1(memory);
+  return encryptMemory(primitives, session, memory, version);
+}
+
+export async function decryptMemoryV1(
+  primitives: CryptoPrimitives,
+  session: VaultSessionV1,
+  encrypted: EncryptedMemoryV1,
+): Promise<ReadMemoryV1Result> {
+  return readMemoryV1(await decryptMemory<unknown>(primitives, session, encrypted));
 }

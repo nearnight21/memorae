@@ -1,18 +1,26 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   CipherIntegrityError,
   createVault,
   decryptMemory,
+  decryptMemoryV1,
   decryptPhoto,
   destroyVaultSession,
   encryptMemory,
+  encryptMemoryV1,
   encryptPhoto,
+  MemorySchemaError,
+  readMemoryV1,
   unlockVault,
   VaultUnlockError,
   type EncryptedMemoryV1,
+  type EncryptedPhotoV1,
+  type MemoryV1,
   type VaultEnvelopeV1,
 } from '../src/crypto';
+import { base64ToBytes } from '../src/crypto/encoding';
 import { assertPrototypeBundle } from '../src/prototype/storage';
 
 const PASSWORD = 'correct horse battery staple';
@@ -37,6 +45,65 @@ const sampleMemory = {
     lng: 120.15,
   },
 };
+
+const sampleMemoryV1: MemoryV1 = {
+  schemaVersion: 1,
+  id: 'memory-v1-hangzhou-001',
+  title: '雨后的西湖',
+  text: '傍晚沿湖散步，树叶和石板路都很亮。',
+  date: '2026-08-09',
+  tags: ['杭州', '散步'],
+  location: {
+    name: '西湖边',
+    city: '杭州',
+    country: '中国',
+    lat: 30.246,
+    lng: 120.15,
+  },
+  photos: [{ id: 'photo-v1-hangzhou-001', mimeType: 'image/png' }],
+  createdAt: '2026-08-09T10:20:30.000Z',
+  updatedAt: '2026-08-09T10:20:30.000Z',
+};
+
+const ANDROID_MEMORY_V1_FIXTURE_PASSWORD = 'memory-v1-cross-client-password';
+const ANDROID_MEMORY_V1_FIXTURE_PHOTO_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const androidMemoryV1FixtureExpected: MemoryV1 = {
+  schemaVersion: 1,
+  id: 'android-memory-v1-001',
+  title: 'Android 端的西湖记忆',
+  text: '这段文字由 Android 加密，必须能在 Web 恢复。',
+  date: '2026-08-10',
+  tags: ['杭州', '双端兼容'],
+  location: {
+    name: '西湖苏堤',
+    city: '杭州',
+    country: '中国',
+    lat: 30.242,
+    lng: 120.14,
+  },
+  photos: [{ id: 'android-photo-v1-001', mimeType: 'image/png' }],
+  createdAt: '2026-08-10T05:00:00.000Z',
+  updatedAt: '2026-08-10T05:00:00.000Z',
+};
+const androidMemoryV1FixturePhotoMetadata = {
+  filename: 'android-west-lake.png',
+  mimeType: 'image/png',
+  byteLength: 68,
+};
+
+interface MemoryV1Fixture {
+  vault: VaultEnvelopeV1;
+  memories: EncryptedMemoryV1[];
+  photos: EncryptedPhotoV1[];
+}
+
+async function loadAndroidMemoryV1Fixture(): Promise<MemoryV1Fixture> {
+  const value = await readFile(
+    new URL('./fixtures/android-memory-v1-bundle.json', import.meta.url),
+    'utf8',
+  );
+  return JSON.parse(value) as MemoryV1Fixture;
+}
 
 async function createTestVault() {
   return createVault(PASSWORD, TEST_KDF);
@@ -74,6 +141,66 @@ test('换设备导入 JSON 后，可以用同一密码恢复并解密记忆', as
   assert.deepEqual(restored, sampleMemory);
 });
 
+test('MemoryV1 加密后可以逐字段恢复', async () => {
+  const { session } = await createTestVault();
+  const encrypted = await encryptMemoryV1(session, sampleMemoryV1);
+  const restored = await decryptMemoryV1(session, encrypted);
+
+  assert.equal(restored.migrated, false);
+  assert.deepEqual(restored.memory, sampleMemoryV1);
+});
+
+test('Web 可以逐字段恢复 Android 生成的固定 MemoryV1 密文夹具', async () => {
+  const fixture = await loadAndroidMemoryV1Fixture();
+  const session = await unlockVault(fixture.vault, ANDROID_MEMORY_V1_FIXTURE_PASSWORD);
+  const memory = await decryptMemoryV1(session, fixture.memories[0]);
+  const photo = await decryptPhoto(session, fixture.photos[0]);
+
+  assert.deepEqual(memory.memory, androidMemoryV1FixtureExpected);
+  assert.deepEqual(photo.bytes, base64ToBytes(ANDROID_MEMORY_V1_FIXTURE_PHOTO_BASE64));
+  assert.deepEqual(photo.metadata, androidMemoryV1FixturePhotoMetadata);
+
+  const exportedCiphertext = JSON.stringify(fixture);
+  for (const plaintext of [
+    androidMemoryV1FixtureExpected.title,
+    androidMemoryV1FixtureExpected.text,
+    androidMemoryV1FixtureExpected.location?.name ?? '',
+    androidMemoryV1FixturePhotoMetadata.filename,
+    ANDROID_MEMORY_V1_FIXTURE_PHOTO_BASE64,
+  ]) {
+    assert.equal(exportedCiphertext.includes(plaintext), false);
+  }
+});
+
+test('旧原型结构会迁移到 MemoryV1', () => {
+  const result = readMemoryV1({
+    id: 'legacy-memory-001',
+    title: '旧记忆',
+    body: '旧正文',
+    date: '2026-08-08',
+    tags: ['旧标签'],
+    location: '杭州',
+    photoId: 'legacy-photo-001',
+    createdAt: '2026-08-08T01:02:03.000Z',
+  });
+
+  assert.equal(result.migrated, true);
+  assert.equal(result.memory.schemaVersion, 1);
+  assert.equal(result.memory.text, '旧正文');
+  assert.deepEqual(result.memory.location, { name: '杭州' });
+  assert.deepEqual(result.memory.photos, [{
+    id: 'legacy-photo-001',
+    mimeType: 'application/octet-stream',
+  }]);
+});
+
+test('未知 Memory schemaVersion 会明确失败', () => {
+  assert.throws(
+    () => readMemoryV1({ ...sampleMemoryV1, schemaVersion: 2 }),
+    MemorySchemaError,
+  );
+});
+
 test('错误密码不能解开 VMK', async () => {
   const { envelope } = await createTestVault();
 
@@ -101,6 +228,17 @@ test('记忆密文被修改后会触发完整性校验失败', async () => {
 
   await assert.rejects(
     decryptMemory(session, tampered),
+    CipherIntegrityError,
+  );
+});
+
+test('记忆 ID 被替换后会因 AAD 不匹配而失败', async () => {
+  const { session } = await createTestVault();
+  const encrypted = await encryptMemoryV1(session, sampleMemoryV1);
+  const wrongAad = { ...encrypted, id: 'memory-v1-wrong-id' };
+
+  await assert.rejects(
+    decryptMemoryV1(session, wrongAad),
     CipherIntegrityError,
   );
 });
