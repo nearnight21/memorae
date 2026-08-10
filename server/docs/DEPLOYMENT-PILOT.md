@@ -1,6 +1,6 @@
 # Memory Recall 国内试运行部署设计
 
-> 状态：试运行设计已确定；账号密码会话和跨账号隔离已有服务端回归测试；尚未购买或部署云资源
+> 状态：PostgreSQL 迁移、受邀请账号、会话和账号隔离密文存储已实现；尚未购买或部署云资源，COS、Docker、反向代理和备份尚未实现
 >
 > 适用范围：仅限受邀请测试账号的 Android 与 Web 跨设备密文同步验收
 
@@ -20,7 +20,7 @@ Fastify API (Tencent Cloud Lighthouse, Docker)
   | PostgreSQL connection                 | COS SDK / signed server request
   v                                       v
 PostgreSQL (same host, Docker volume)   Tencent Cloud COS private bucket
-  account/session/cipher metadata        encrypted photo payloads only
+  account/session/cipher payloads         encrypted photo payloads only
 ```
 
 首轮将 Fastify 和 PostgreSQL 放在同一台轻量云服务器上，目的是控制试运行成本和运维复杂度。COS 独立保存照片密文，避免将大文件放入 PostgreSQL。服务器只开放 HTTPS；PostgreSQL 不开放公网端口，COS 也不允许匿名读写。
@@ -39,11 +39,11 @@ PostgreSQL (same host, Docker volume)   Tencent Cloud COS private bucket
 
 首轮默认不做多设备管理界面。服务端可在会话表记录设备 ID、最后活动时间和撤销时间，但设备 ID 不得包含地点、设备名称或其他私人明文。
 
-当前代码已提供 `POST /v1/auth/login`、Argon2id 密码校验、HMAC 保存会话令牌摘要和按账号隔离的 API 认证入口，并有错误密码、无令牌和跨账号读取拒绝的回归测试。默认本地启动仍使用单一 `MEMORY_RECALL_LOCAL_TOKEN`，因为受邀请账号和会话必须与下一步的 PostgreSQL 持久化一起实现，不能把内存测试账户暴露为试运行功能。
+当前代码已提供 `POST /v1/auth/login`、Argon2id 密码校验、HMAC 保存会话令牌摘要和按账号隔离的 API 认证入口。`PostgresPasswordAuthStore` 将受邀请账号和会话持久化到 PostgreSQL，`create-invited-account` 命令仅供管理员创建测试账号；默认本地启动仍使用单一 `MEMORY_RECALL_LOCAL_TOKEN`，只供开发回归。PostgreSQL 集成测试覆盖账号隔离、session 过期和撤销、重复上传以及 409 冲突；它需要单独设置 `MEMORY_RECALL_TEST_DATABASE_URL`。
 
 ## PostgreSQL 数据模型
 
-所有表使用随机 UUID 作为主键。下面的字段是服务器同步所需的最小元数据；标题、正文、标签、日期、地点、文件名、MIME 类型和照片字节均不进入明文字段。
+账号和会话使用随机 UUID；密文记录以账号 UUID 与客户端生成的记录 ID 共同标识。下面的字段是服务器同步所需的最小元数据；标题、正文、标签、日期、地点、文件名、MIME 类型和照片字节均不进入明文字段。
 
 | 表 | 最小字段 | 用途 |
 | --- | --- | --- |
@@ -51,9 +51,9 @@ PostgreSQL (same host, Docker volume)   Tencent Cloud COS private bucket
 | `sessions` | `id`, `account_id`, `token_hash`, `device_id`, `expires_at`, `revoked_at`, `created_at` | 可撤销的登录会话；`token_hash` 是带服务器密钥的 HMAC 结果 |
 | `vault_envelopes` | `account_id`, `crypto_version`, `payload_json`, `created_at`, `updated_at` | 单个加密钥匙信封 JSON |
 | `memory_ciphers` | `account_id`, `memory_id`, `revision`, `crypto_version`, `deleted`, `payload_json`, `updated_at` | 加密记忆及最小同步版本信息 |
-| `photo_ciphers` | `account_id`, `photo_id`, `crypto_version`, `object_key`, `metadata_json`, `byte_length`, `created_at` | 加密照片元数据和 COS 对象引用 |
+| `photo_ciphers` | `account_id`, `photo_id`, `crypto_version`, `payload_json`, `created_at`, `updated_at` | 当前阶段完整的加密照片 JSON；COS 接入后改为加密元数据和对象引用 |
 
-`vault_envelopes.payload_json` 和 `memory_ciphers.payload_json` 只存现有 API 已验证的密文 JSON。`memory_id`、`photo_id`、修订号、大小和时间是允许的同步元数据。`photo_ciphers.metadata_json` 只存加密后的照片元数据；照片 `content` 密文必须放入 COS。
+`vault_envelopes.payload_json`、`memory_ciphers.payload_json` 和当前的 `photo_ciphers.payload_json` 只存现有 API 已验证的密文 JSON。`memory_id`、`photo_id`、修订号、大小和时间是允许的同步元数据。照片 JSON 内的元数据和内容在客户端加密后才进入数据库；接入 COS 后，照片 `content` 密文会迁到 COS，数据库只保留加密元数据和对象引用。
 
 所有密文查询都必须以 `account_id` 过滤。数据库唯一约束至少包括：`vault_envelopes.account_id`、`memory_ciphers(account_id, memory_id)` 和 `photo_ciphers(account_id, photo_id)`。
 
@@ -72,7 +72,7 @@ memory-recall/v1/{account-id}/photos/{photo-id}/content.json
 现有 `PUT/GET /v1/vault`、`PUT/GET /v1/memories` 和 `PUT/GET /v1/photos` 的密文请求和响应结构保持不变。迁移只替换两处服务端边界：
 
 1. 将固定 `MEMORY_RECALL_LOCAL_TOKEN` 和 `local-user` 替换为会话校验后的 `account_id`。
-2. 将 `JsonCipherStore` 替换为 `PostgresCipherStore`；照片内容改由 COS 存取。
+2. 将 `JsonCipherStore` 替换为 `PostgresCipherStore`；当前照片密文先入 PostgreSQL，接入 COS 后再切换照片内容存取边界。
 
 上线前必须保留并扩展现有双向加密回归测试：同一批 Android/Web 密文经过 PostgreSQL 和 COS 往返后，仍能在另一端恢复；服务端数据、数据库日志和 COS 对象中均不得出现测试明文。
 
@@ -83,6 +83,7 @@ memory-recall/v1/{account-id}/photos/{photo-id}/content.json
 ```text
 MEMORY_RECALL_DATABASE_URL=
 MEMORY_RECALL_SESSION_TOKEN_PEPPER=
+MEMORY_RECALL_LISTEN_HOST=
 MEMORY_RECALL_COS_BUCKET=
 MEMORY_RECALL_COS_REGION=
 MEMORY_RECALL_COS_SECRET_ID=
@@ -102,7 +103,7 @@ MEMORY_RECALL_ALLOWED_ORIGINS=
 
 1. 以已合入 `prototype` 的双端联调基线开始实现。
 2. 已完成账号密码、会话校验和跨账号隔离的服务端回归测试。
-3. 实现 PostgreSQL 存储、受邀请账号持久化和迁移脚本，保留 JSON 存储仅供本地测试。
+3. 已完成 PostgreSQL 存储、受邀请账号持久化和迁移脚本，JSON 存储仅供本地测试。
 4. 将照片密文字节迁移到私有 COS，并加入失败清理与重试。
 5. 添加 Docker Compose、反向代理和部署运行手册；此时再创建最小云资源。
 6. 进行 Android 真机、Web 和第二台真实设备的公网验收。

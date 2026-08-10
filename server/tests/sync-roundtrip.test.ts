@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { Pool } from 'pg';
 import type { MemoryV1 } from '../../memory-recall-mobile/src/memory/memoryV1.ts';
 import { buildApp } from '../src/app.ts';
-import { JsonCipherStore } from '../src/store.ts';
+import { applyMigrations } from '../src/migrations.ts';
+import { PostgresCipherStore, PostgresPasswordAuthStore } from '../src/postgres.ts';
+import { JsonCipherStore, type CipherStore } from '../src/store.ts';
 
 const LOCAL_TOKEN = 'local-test-token-at-least-16-chars';
 const PASSWORD = 'private-space-test-password';
+const TEST_DATABASE_URL = process.env.MEMORY_RECALL_TEST_DATABASE_URL;
 const TEST_KDF = {
   memoryKiB: 8 * 1024,
   iterations: 2,
@@ -82,13 +87,37 @@ test('Android and Web exchange ciphertext through the server in both directions'
   const { MemoryRecallSyncClient: WebSyncClient } = await import(webSyncModulePath);
   const directory = await mkdtemp(join(tmpdir(), 'memory-recall-server-'));
   const dataFile = join(directory, 'store.json');
+  let pool: Pool | null = null;
+  let schema: string | null = null;
+  let accountId = 'local-user';
+  let store: CipherStore = new JsonCipherStore(dataFile);
+  if (TEST_DATABASE_URL) {
+    schema = `memory_recall_sync_test_${randomUUID().replaceAll('-', '')}`;
+    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 1 });
+    await pool.query(`CREATE SCHEMA "${schema}"`);
+    await pool.query(`SET search_path TO "${schema}", public`);
+    await applyMigrations(pool);
+    accountId = randomUUID();
+    await new PostgresPasswordAuthStore(pool).createInvitedAccount({
+      id: accountId,
+      loginName: 'sync-test-account',
+      password: 'sync-test-account-password',
+      passwordHash: { memoryKiB: 8 * 1024, iterations: 1, parallelism: 1 },
+    });
+    store = new PostgresCipherStore(pool);
+  }
   const app = await buildApp({
-    store: new JsonCipherStore(dataFile),
+    store,
     localToken: LOCAL_TOKEN,
+    localUserId: accountId,
   });
   const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
   context.after(async () => {
     await app.close();
+    if (pool && schema) {
+      await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
+      await pool.end();
+    }
     await rm(directory, { recursive: true, force: true });
   });
 
@@ -186,7 +215,11 @@ test('Android and Web exchange ciphertext through the server in both directions'
     byteLength: webPhotoBytes.byteLength,
   });
 
-  const persistedCiphertext = await readFile(dataFile, 'utf8');
+  const persistedCiphertext = pool
+    ? JSON.stringify((await pool.query(
+      'SELECT payload_json FROM vault_envelopes UNION ALL SELECT payload_json FROM memory_ciphers UNION ALL SELECT payload_json FROM photo_ciphers',
+    )).rows)
+    : await readFile(dataFile, 'utf8');
   for (const plaintext of [
     memory.title,
     memory.text,
@@ -202,18 +235,20 @@ test('Android and Web exchange ciphertext through the server in both directions'
     assert.equal(persistedCiphertext.includes(plaintext), false);
   }
 
-  const reopenedStore = new JsonCipherStore(dataFile);
-  assert.deepEqual(await reopenedStore.getVault('local-user'), androidVault.envelope);
-  assert.deepEqual(await reopenedStore.listMemories('local-user'), [
+  const reopenedStore: CipherStore = pool
+    ? new PostgresCipherStore(pool)
+    : new JsonCipherStore(dataFile);
+  assert.deepEqual(await reopenedStore.getVault(accountId), androidVault.envelope);
+  assert.deepEqual(await reopenedStore.listMemories(accountId), [
     encryptedMemory,
     webEncryptedMemory,
   ]);
   assert.deepEqual(
-    await reopenedStore.getPhoto('local-user', encryptedPhoto.id),
+    await reopenedStore.getPhoto(accountId, encryptedPhoto.id),
     encryptedPhoto,
   );
   assert.deepEqual(
-    await reopenedStore.getPhoto('local-user', webEncryptedPhoto.id),
+    await reopenedStore.getPhoto(accountId, webEncryptedPhoto.id),
     webEncryptedPhoto,
   );
 

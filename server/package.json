@@ -9,17 +9,22 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
+    "migrate": "tsx src/migrate.ts",
+    "create-invited-account": "tsx src/createInvitedAccount.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:postgres": "tsx --test tests/postgres.test.ts tests/sync-roundtrip.test.ts",
     "verify": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
     "fastify": "^5.11.3",
-    "hash-wasm": "^4.12.0"
+    "hash-wasm": "^4.12.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "@types/pg": "^8.15.5",
     "tsx": "^4.23.12",
     "typescript": "~6.0.3"
   }
