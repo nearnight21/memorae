@@ -14,13 +14,14 @@
 - Android Keystore 保存随机设备钥匙，VMK 不直接写入 SecureStore。
 - 密码解锁、指纹解锁、手动锁定和内存钥匙清零。
 - 网页/移动端共用的加密 JSON 导入导出。
+- 验证界面手动上传、下载本地密文服务中的钥匙信封、MemoryV1 和照片密文。
 
 截至 2026-08-10，兼容性、密码、真实照片、指纹解锁和换机恢复五项 Android
 真机测试均已通过；现有自动协议测试为 11/11 通过。
 
-`src/sync/` 已提供连接本地密文测试服务的最小请求客户端，但尚未接入验证界面。它只用于
-自动验证 Android 与 Web 可以双向上传、下载并解密，不会读取 ThinkPad 数据，也没有连接任何
-正式云服务。运行方法见 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
+`src/sync/` 已接入验证界面，只用于本机 Android 与 Web 双向上传、下载并解密。服务地址和
+访问令牌只保存在当前页面内存，不会读取 ThinkPad 数据，也没有连接任何正式云服务。运行
+方法见 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
 
 ## 本地检查
 
@@ -30,6 +31,8 @@ npm run verify
 ```
 
 由于 Argon2id 使用原生模块，不能用 Expo Go。Android 真机需要 development build 或 preview APK。
+本地模拟器同样需要 development build；使用 `adb reverse tcp:8788 tcp:8788` 后可访问只监听
+电脑本机的密文服务。
 
 ## Android 包
 

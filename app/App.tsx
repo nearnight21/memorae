@@ -37,12 +37,15 @@ import {
   unlockWithDevice,
 } from './src/services/deviceUnlock';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
+import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
+import { MemoryRecallSyncClient } from './src/sync/syncClient';
 import {
   clearEncryptedContent,
   getEncryptedPhoto,
   getVaultEnvelope,
   initializeStorage,
   listEncryptedMemories,
+  listEncryptedPhotos,
   saveEncryptedMemory,
   saveEncryptedPhoto,
   saveVaultEnvelope,
@@ -60,6 +63,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const cipherSyncStorage = {
+  getVault: getVaultEnvelope,
+  saveVault: saveVaultEnvelope,
+  listMemories: listEncryptedMemories,
+  listPhotos: listEncryptedPhotos,
+  saveMemory: saveEncryptedMemory,
+  savePhoto: saveEncryptedPhoto,
+};
+
 export default function App() {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
@@ -72,6 +84,8 @@ export default function App() {
   const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
+  const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
+  const [syncToken, setSyncToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('正在检查本地密文库……');
 
@@ -310,6 +324,52 @@ export default function App() {
     );
   }
 
+  function createSyncClient(): MemoryRecallSyncClient {
+    if (!syncUrl.trim()) throw new Error('请输入本地密文服务地址。');
+    if (!syncToken.trim()) throw new Error('请输入本地访问令牌。');
+    return new MemoryRecallSyncClient({
+      baseUrl: syncUrl.trim(),
+      token: syncToken.trim(),
+    });
+  }
+
+  async function uploadLocalCiphertext(): Promise<void> {
+    setStatus('正在把本机密文发送到本地服务……');
+    const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
+    setStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+  }
+
+  async function downloadRemoteCiphertext(): Promise<void> {
+    setStatus('正在从本地服务下载密文……');
+    const result = await downloadCiphertext({
+      client: createSyncClient(),
+      storage: cipherSyncStorage,
+      decryptMemory: session
+        ? async (memory) => (await decryptMemoryV1(
+          nativeCryptoPrimitives,
+          session,
+          memory,
+        )).memory
+        : undefined,
+    });
+
+    if (result.importedVault) {
+      const downloadedVault = await getVaultEnvelope();
+      await disableDeviceUnlock();
+      setVault(downloadedVault);
+      setDeviceUnlockEnabled(false);
+      setMode('locked');
+      setStatus('钥匙信封已下载。请输入原私密空间密码解锁，再点一次下载密文。');
+      return;
+    }
+    if (result.requiresUnlock) {
+      setStatus('钥匙信封一致。请先解锁私密空间，再下载记忆和照片密文。');
+      return;
+    }
+    if (session) await refreshMemories(session);
+    setStatus(`下载完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+  }
+
   function confirmClear(): void {
     Alert.alert(
       '清空本机原型？',
@@ -360,6 +420,33 @@ export default function App() {
           <Text style={styles.hint}>运行真实 Android 原生 Argon2id，并解开网页端生成的固定 VMK、文字和照片。</Text>
           <Button title="运行兼容与性能测试" disabled={busy} onPress={() => void runTask(runCompatibility)} />
         </View>
+
+        {mode !== 'loading' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>本地密文同步</Text>
+            <Text style={styles.hint}>仅用于模拟器与网页联调。地址和令牌只保留在当前页面内存中。</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="本地服务地址"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={syncUrl}
+              onChangeText={setSyncUrl}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="本地访问令牌"
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              value={syncToken}
+              onChangeText={setSyncToken}
+            />
+            <Button title="上传本机密文" disabled={busy || !vault} onPress={() => void runTask(uploadLocalCiphertext)} />
+            <View style={styles.spacer} />
+            <Button title="下载服务器密文" disabled={busy} onPress={() => void runTask(downloadRemoteCiphertext)} />
+          </View>
+        )}
 
         {mode === 'loading' && <Text style={styles.centerText}>正在启动……</Text>}
 

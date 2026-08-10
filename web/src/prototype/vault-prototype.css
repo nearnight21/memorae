@@ -171,12 +171,66 @@ label {
 
 .vault-gate-card,
 .vault-proof-card,
+.vault-sync-card,
 .vault-entry-card,
 .vault-memories-panel {
   border: 1px solid var(--vault-line);
   border-radius: var(--vault-radius-lg);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
+}
+
+.vault-sync-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 20px 24px;
+}
+
+.vault-sync-card > p {
+  margin: 0;
+  color: var(--vault-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.vault-sync-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.vault-sync-fields label {
+  display: grid;
+  gap: 7px;
+}
+
+.vault-sync-fields span {
+  color: #cbc3b0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vault-sync-fields input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--vault-line);
+  border-radius: var(--vault-radius-sm);
+  color: var(--vault-paper);
+  background: rgba(11, 11, 9, 0.35);
+  outline: none;
+}
+
+.vault-sync-fields input:focus {
+  border-color: rgba(211, 187, 123, 0.72);
+  box-shadow: 0 0 0 3px rgba(183, 152, 84, 0.12);
+}
+
+.vault-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .vault-gate-card,
@@ -304,6 +358,7 @@ label {
 .vault-primary-button,
 .vault-actions button,
 .vault-transfer-actions button,
+.vault-sync-actions button,
 .vault-delete-link,
 .vault-confirm-delete {
   display: inline-flex;
@@ -402,7 +457,8 @@ button:disabled {
 }
 
 .vault-actions button,
-.vault-transfer-actions button {
+.vault-transfer-actions button,
+.vault-sync-actions button {
   min-height: 40px;
   padding: 0 13px;
   border-color: var(--vault-line);
@@ -412,7 +468,8 @@ button:disabled {
 }
 
 .vault-actions button:hover:not(:disabled),
-.vault-transfer-actions button:hover:not(:disabled) {
+.vault-transfer-actions button:hover:not(:disabled),
+.vault-sync-actions button:hover:not(:disabled) {
   border-color: rgba(211, 187, 123, 0.45);
   color: var(--vault-paper);
   background: rgba(183, 152, 84, 0.08);
@@ -704,7 +761,8 @@ button:disabled {
 
   .vault-header,
   .vault-gate-grid,
-  .vault-workspace {
+  .vault-workspace,
+  .vault-sync-fields {
     grid-template-columns: 1fr;
   }
 
@@ -741,6 +799,7 @@ button:disabled {
 
   .vault-gate-card,
   .vault-proof-card,
+  .vault-sync-card,
   .vault-entry-card,
   .vault-memories-panel {
     padding: 18px;

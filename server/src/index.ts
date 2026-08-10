@@ -17,9 +17,14 @@ async function main(): Promise<void> {
     process.cwd(),
     process.env.MEMORY_RECALL_DATA_FILE ?? '.local-data/store.json',
   );
+  const allowedOrigins = process.env.MEMORY_RECALL_ALLOWED_ORIGINS
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   const app = await buildApp({
     store: new JsonCipherStore(filePath),
     localToken,
+    allowedOrigins,
   });
   const address = await app.listen({ host: '127.0.0.1', port });
   process.stdout.write(`Memory Recall 本地密文服务已启动：${address}\n`);

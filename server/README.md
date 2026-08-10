@@ -19,8 +19,9 @@ npm.cmd run dev
 
 密文默认保存在 `memory-recall-server/.local-data/store.json`。该目录已被 Git 忽略，不会提交。
 
-可选环境变量见 [`.env.example`](.env.example)。程序不会自动读取 `.env`；PowerShell 运行前
-需要像上面一样设置环境变量。
+还可设置 `MEMORY_RECALL_PORT`、`MEMORY_RECALL_DATA_FILE`。如果网页临时运行在 3000 以外
+的端口，可用英文逗号分隔 `MEMORY_RECALL_ALLOWED_ORIGINS`。程序不会自动读取 `.env`；
+PowerShell 运行前需要像上面一样设置环境变量。
 
 ## 接口
 
@@ -54,5 +55,5 @@ npm.cmd run verify
 - 只有一个固定本地测试用户和一个本地令牌。
 - JSON 文件只是方便验证持久化，不代替正式数据库。
 - 照片密文暂存在 JSON 中，不适合大文件或生产使用。
-- Android 与 Web 的同步客户端尚未接入界面和离线上传队列。
+- Android 与 Web 验证界面已支持人工同步，但尚无离线上传队列、删除同步和冲突处理界面。
 - 不得暴露到公网或用于保存真实用户数据。

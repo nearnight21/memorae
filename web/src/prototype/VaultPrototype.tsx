@@ -28,6 +28,8 @@ import {
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from '../crypto';
+import { downloadCiphertext, uploadCiphertext } from '../sync/syncActions';
+import { MemoryRecallSyncClient } from '../sync/syncClient';
 import {
   assertPrototypeBundle,
   clearPrototypeDatabase,
@@ -80,6 +82,15 @@ function downloadJson(filename: string, value: unknown): void {
   URL.revokeObjectURL(url);
 }
 
+const cipherSyncStorage = {
+  getVault: getVaultEnvelope,
+  saveVault: saveVaultEnvelope,
+  listMemories: listEncryptedMemories,
+  listPhotos: listEncryptedPhotos,
+  saveMemory: saveEncryptedMemory,
+  savePhoto: saveEncryptedPhoto,
+};
+
 export default function VaultPrototype() {
   const [phase, setPhase] = useState<Phase>('booting');
   const [envelope, setEnvelope] = useState<VaultEnvelopeV1 | null>(null);
@@ -106,6 +117,8 @@ export default function VaultPrototype() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
+  const [syncToken, setSyncToken] = useState('');
   const photoInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
@@ -437,6 +450,64 @@ export default function VaultPrototype() {
     }
   };
 
+  const createSyncClient = () => {
+    if (!syncUrl.trim()) throw new Error('请输入本地密文服务地址。');
+    if (!syncToken.trim()) throw new Error('请输入本地访问令牌。');
+    return new MemoryRecallSyncClient({
+      baseUrl: syncUrl.trim(),
+      token: syncToken.trim(),
+    });
+  };
+
+  const handleUploadCiphertext = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
+      setNotice(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : '上传密文失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDownloadCiphertext = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await downloadCiphertext({
+        client: createSyncClient(),
+        storage: cipherSyncStorage,
+        decryptMemory: session
+          ? async (memory) => (await decryptMemoryV1(session, memory)).memory
+          : undefined,
+      });
+
+      if (result.importedVault) {
+        const downloadedEnvelope = await getVaultEnvelope();
+        setEnvelope(downloadedEnvelope);
+        setPhase('locked');
+        setNotice('钥匙信封已下载。请输入原私密空间密码解锁，再点一次下载密文。');
+        await refreshCipherStats(downloadedEnvelope);
+        return;
+      }
+      if (result.requiresUnlock) {
+        setNotice('钥匙信封一致。请先解锁私密空间，再下载记忆和照片密文。');
+        return;
+      }
+      if (session) await loadDecryptedMemories(session);
+      await refreshCipherStats(envelope);
+      setNotice(`下载完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : '下载密文失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const statusLabel = useMemo(() => {
     if (phase === 'unlocked') return '已解锁';
     if (phase === 'locked') return '已锁定';
@@ -461,7 +532,7 @@ export default function VaultPrototype() {
         <div>
           <p className="vault-eyebrow">MEMORIES · VMK V1 PROTOTYPE</p>
           <h1>私密空间验证</h1>
-          <p className="vault-subtitle">所有内容先在这台设备加密，当前页面不会连接服务器。</p>
+          <p className="vault-subtitle">所有内容先在这台设备加密；联调时只向本地服务发送密文。</p>
         </div>
         <div className="vault-status-group">
           <span className={`vault-status vault-status--${phase}`}>{statusLabel}</span>
@@ -475,6 +546,28 @@ export default function VaultPrototype() {
           <span>{error || notice}</span>
         </div>
       )}
+
+      <section className="vault-sync-card">
+        <div className="vault-section-heading">
+          <div><p>LOCAL CIPHERTEXT SYNC</p><h2>本地密文同步</h2></div>
+          <span>令牌不保存</span>
+        </div>
+        <p>用于当前电脑上的网页与 Android 模拟器联调，不会上传密码或 VMK。</p>
+        <div className="vault-sync-fields">
+          <label>
+            <span>本地服务地址</span>
+            <input value={syncUrl} onChange={(event) => setSyncUrl(event.target.value)} inputMode="url" autoCapitalize="none" spellCheck={false} />
+          </label>
+          <label>
+            <span>本地访问令牌</span>
+            <input type="password" value={syncToken} onChange={(event) => setSyncToken(event.target.value)} autoComplete="off" placeholder="启动服务时设置的令牌" />
+          </label>
+        </div>
+        <div className="vault-sync-actions">
+          <button type="button" onClick={handleUploadCiphertext} disabled={busy || !envelope}><Upload size={16} />上传本机密文</button>
+          <button type="button" onClick={handleDownloadCiphertext} disabled={busy}><Download size={16} />下载服务器密文</button>
+        </div>
+      </section>
 
       {phase !== 'unlocked' ? (
         <section className="vault-gate-grid">
@@ -645,7 +738,7 @@ export default function VaultPrototype() {
       )}
 
       <footer className="vault-footer">
-        <span>原型不会上传任何内容</span>
+        <span>只有主动点击同步时才连接本地密文服务</span>
         <a href="?legacy=1">查看原 Memories 界面</a>
       </footer>
     </main>
