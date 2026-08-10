@@ -99,7 +99,7 @@ release APK。
 - 已验证创建私密空间、真实文字与照片加密、锁定解锁和密文包导入导出流程。
 - Web 自动协议测试 8/8、TypeScript 检查和生产构建均通过。
 - 桌面端与移动端浏览器布局、错误密码拒绝和锁定后明文清除已经检查。
-- 详细结果与尚未覆盖的边界见 `memory-recall-web/docs/VALIDATION-RESULTS.md`。
+- 详细结果与尚未覆盖的边界见根目录 `DEVELOPMENT.md` 第十二节。
 
 ## 四、已经拍板的决定
 
@@ -251,7 +251,7 @@ Base64 通常使数据体积增加约三分之一。100 张、平均每张 10 MB
 ## 九、核心代码位置
 
 - `memory-recall-web/`：Web VMK V1 本地验证原型。
-- `memory-recall-web/docs/VALIDATION-RESULTS.md`：Web 自动化与浏览器验证结论。
+- `DEVELOPMENT.md` 第十二节：Web 自动化与浏览器验证结论。
 - `src/crypto/vault.ts`：VMK、Argon2id 和分层钥匙。
 - `src/crypto/memoryCipher.ts`：记忆加解密与 AAD。
 - `src/crypto/photoCipher.ts`：照片元数据和内容加解密。

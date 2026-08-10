@@ -24,4 +24,5 @@ npm.cmd run verify
 验证包括 TypeScript 检查、VMK 自动测试和生产构建。
 
 加密设计和当前边界见 [`docs/VMK-V1-PROTOTYPE.md`](docs/VMK-V1-PROTOTYPE.md)，
-本轮自动化与浏览器验证结论见 [`docs/VALIDATION-RESULTS.md`](docs/VALIDATION-RESULTS.md)。
+本轮自动化与浏览器验证结论见根目录
+[`DEVELOPMENT.md` 第十二节](../DEVELOPMENT.md#十二memory-recall-web-vmk-v1-验证结果)。
