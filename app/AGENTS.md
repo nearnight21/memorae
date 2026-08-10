@@ -1,3 +1,12 @@
-# Expo HAS CHANGED
+# Memory Recall 工作约束
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+1. 开始任何开发、评审或路线判断前，必须完整阅读：
+   - `README.md`
+   - `docs/PROJECT-STATUS.md`
+2. Expo 已发生版本变化。编写代码前必须阅读对应 SDK 57 的版本化官方文档：
+   https://docs.expo.dev/versions/v57.0.0/
+3. 所有面向用户的自然语言输出使用简体中文。
+4. 不要过度设计，只实现当前明确要求的阶段。不得自行改变
+   `docs/PROJECT-STATUS.md` 中“已经拍板”的产品或加密决定。
+5. 每当完成阶段、改变协议决定或发现影响路线的重要限制时，同步更新
+   `docs/PROJECT-STATUS.md` 的日期和相应章节，保证其他设备上的 Agent 无需用户重复说明。
