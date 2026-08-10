@@ -26,8 +26,8 @@
 
 ## 二、仓库位置与边界
 
-- 当前代码位于 ThinkPad 仓库的 `prototype` 分支：
-  `memory-recall-mobile/`。
+- 当前代码位于 ThinkPad 仓库的 `prototype` 分支：Android 原型在
+  `memory-recall-mobile/`，Web VMK 验证原型在 `memory-recall-web/`。
 - 它不读取 ThinkPad 数据，也没有接入原有 Supabase、Cloudflare 或 Camp Memories。
 - 当前仍与 ThinkPad 共用 Git 仓库；在 Web 正式开发前，计划拆为独立
   `memory-recall` 仓库。
@@ -92,6 +92,15 @@ JSON，写回 vault、记忆密文和照片 `.bin`，再输入原私密空间密
 仓库现有 TypeScript 类型检查通过，自动协议测试 6/6 通过。本机也已成功生成 Android
 release APK。
 
+### 7. Web VMK V1 本地验证
+
+- 独立的 React/Vite Web 原型已经并入 `memory-recall-web/`。
+- 默认入口不连接 ThinkPad 的 Supabase 或 R2，密文只保存在浏览器 IndexedDB。
+- 已验证创建私密空间、真实文字与照片加密、锁定解锁和密文包导入导出流程。
+- Web 自动协议测试 8/8、TypeScript 检查和生产构建均通过。
+- 桌面端与移动端浏览器布局、错误密码拒绝和锁定后明文清除已经检查。
+- 详细结果与尚未覆盖的边界见 `memory-recall-web/docs/VALIDATION-RESULTS.md`。
+
 ## 四、已经拍板的决定
 
 除非用户明确改变决定，后续 Agent 必须遵守以下内容。
@@ -136,7 +145,7 @@ JSON 在设备端整体加密。服务器只能获得同步必要的 ID、版本
 - 离线上传队列、断点续传和服务器同步状态。
 - Fastify API、短信登录、PostgreSQL、腾讯云 COS。
 - 真正的“上传服务器 → 换设备下载 → 解密”闭环。
-- React Web 与地图回溯体验。
+- 正式 React Web 地图回溯体验；当前完成的只是 Web VMK 本地验证壳。
 - 设备撤销、恢复短语、扫码授权、冲突处理。
 - 正式的数据导出、删号、隐私政策、备案和安全审计。
 
@@ -241,6 +250,8 @@ Base64 通常使数据体积增加约三分之一。100 张、平均每张 10 MB
 
 ## 九、核心代码位置
 
+- `memory-recall-web/`：Web VMK V1 本地验证原型。
+- `memory-recall-web/docs/VALIDATION-RESULTS.md`：Web 自动化与浏览器验证结论。
 - `src/crypto/vault.ts`：VMK、Argon2id 和分层钥匙。
 - `src/crypto/memoryCipher.ts`：记忆加解密与 AAD。
 - `src/crypto/photoCipher.ts`：照片元数据和内容加解密。
