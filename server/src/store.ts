@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import type {
   EncryptedMemoryV1,
   EncryptedPhotoV1,
@@ -51,7 +52,7 @@ function userData(document: CipherStoreDocument, userId: string): UserCipherData
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return isDeepStrictEqual(left, right);
 }
 
 export class JsonCipherStore implements CipherStore {

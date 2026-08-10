@@ -217,6 +217,27 @@ test('Android and Web exchange ciphertext through the server in both directions'
     webEncryptedPhoto,
   );
 
+  const reorderedMemory = {
+    payload: {
+      ciphertext: encryptedMemory.payload.ciphertext,
+      iv: encryptedMemory.payload.iv,
+      algorithm: encryptedMemory.payload.algorithm,
+    },
+    deleted: encryptedMemory.deleted,
+    cryptoVersion: encryptedMemory.cryptoVersion,
+    version: encryptedMemory.version,
+    id: encryptedMemory.id,
+  };
+  const reorderedUpload = await fetch(`${baseUrl}/v1/memories/${memory.id}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${LOCAL_TOKEN}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(reorderedMemory),
+  });
+  assert.equal(reorderedUpload.status, 204);
+
   const unauthorized = await fetch(`${baseUrl}/v1/memories`, {
     headers: { authorization: 'Bearer wrong-token' },
   });
