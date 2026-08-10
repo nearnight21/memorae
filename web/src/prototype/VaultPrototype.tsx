@@ -17,13 +17,14 @@ import {
 } from 'lucide-react';
 import {
   createVault,
-  decryptMemory,
+  decryptMemoryV1,
   decryptPhoto,
   destroyVaultSession,
-  encryptMemory,
+  encryptMemoryV1,
   encryptPhoto,
   unlockVault,
   type EncryptedMemoryV1,
+  type MemoryV1,
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from '../crypto';
@@ -44,19 +45,8 @@ import './vault-prototype.css';
 
 type Phase = 'booting' | 'setup' | 'locked' | 'unlocked';
 
-interface PrototypeMemory {
-  id: string;
-  title: string;
-  date: string;
-  body: string;
-  location: string;
-  tags: string[];
-  photoId: string;
-  createdAt: string;
-}
-
-interface VisibleMemory extends PrototypeMemory {
-  photoUrl: string;
+interface VisibleMemory extends MemoryV1 {
+  photoUrls: string[];
 }
 
 interface CipherStats {
@@ -165,17 +155,28 @@ export default function VaultPrototype() {
 
     const visible = await Promise.all(
       encryptedMemories.map(async (encryptedMemory) => {
-        const memory = await decryptMemory<PrototypeMemory>(activeSession, encryptedMemory);
-        const encryptedPhoto = photoMap.get(memory.photoId);
-        if (!encryptedPhoto) {
-          throw new Error(`记忆“${memory.title}”缺少照片密文。`);
+        const result = await decryptMemoryV1(activeSession, encryptedMemory);
+        const memory = result.memory;
+        if (result.migrated) {
+          await saveEncryptedMemory(await encryptMemoryV1(
+            activeSession,
+            memory,
+            encryptedMemory.version + 1,
+          ));
         }
-        const decryptedPhoto = await decryptPhoto(activeSession, encryptedPhoto);
-        const photoUrl = URL.createObjectURL(
-          new Blob([decryptedPhoto.bytes], { type: decryptedPhoto.metadata.mimeType }),
-        );
-        objectUrlsRef.current.push(photoUrl);
-        return { ...memory, photoUrl };
+        const photoUrls = await Promise.all(memory.photos.map(async ({ id }) => {
+          const encryptedPhoto = photoMap.get(id);
+          if (!encryptedPhoto) {
+            throw new Error(`记忆“${memory.title}”缺少照片密文：${id}。`);
+          }
+          const decryptedPhoto = await decryptPhoto(activeSession, encryptedPhoto);
+          const photoUrl = URL.createObjectURL(
+            new Blob([decryptedPhoto.bytes], { type: decryptedPhoto.metadata.mimeType }),
+          );
+          objectUrlsRef.current.push(photoUrl);
+          return photoUrl;
+        }));
+        return { ...memory, photoUrls };
       }),
     );
 
@@ -302,26 +303,29 @@ export default function VaultPrototype() {
         { filename: photo.name, mimeType: photo.type },
         { id: photoId },
       );
-      const memory: PrototypeMemory = {
+      const now = new Date().toISOString();
+      const memory: MemoryV1 = {
+        schemaVersion: 1,
         id: memoryId,
         title: title.trim(),
         date,
-        body: body.trim(),
-        location: location.trim(),
+        text: body.trim(),
+        location: location.trim() ? { name: location.trim() } : null,
         tags: tags
           .split(/[,，]/)
           .map((tag) => tag.trim())
           .filter(Boolean),
-        photoId,
-        createdAt: new Date().toISOString(),
+        photos: [{ id: photoId, mimeType: photo.type }],
+        createdAt: now,
+        updatedAt: now,
       };
-      const encryptedMemory = await encryptMemory(session, memory);
+      const encryptedMemory = await encryptMemoryV1(session, memory);
 
       await saveEncryptedPhoto(encryptedPhoto);
       try {
         await saveEncryptedMemory(encryptedMemory);
       } catch (saveError) {
-        await deleteEncryptedMemory(memoryId, photoId);
+        await deleteEncryptedMemory(memoryId, [photoId]);
         throw saveError;
       }
 
@@ -351,7 +355,7 @@ export default function VaultPrototype() {
 
     setBusy(true);
     try {
-      await deleteEncryptedMemory(memory.id, memory.photoId);
+      await deleteEncryptedMemory(memory.id, memory.photos.map(({ id }) => id));
       if (session) await loadDecryptedMemories(session);
       await refreshCipherStats(envelope);
       setDeletingId(null);
@@ -598,14 +602,14 @@ export default function VaultPrototype() {
                 <div className="vault-memory-list">
                   {memories.map((memory) => (
                     <article className="vault-memory-card" key={memory.id}>
-                      <img src={memory.photoUrl} alt={memory.title} />
+                      {memory.photoUrls[0] && <img src={memory.photoUrls[0]} alt={memory.title} />}
                       <div className="vault-memory-content">
                         <div className="vault-memory-meta">
                           <span>{memory.date}</span>
-                          {memory.location && <span><MapPin size={13} />{memory.location}</span>}
+                          {memory.location && <span><MapPin size={13} />{memory.location.name}</span>}
                         </div>
                         <h3>{memory.title}</h3>
-                        <p>{memory.body}</p>
+                        <p>{memory.text}</p>
                         {memory.tags.length > 0 && <div className="vault-tags">{memory.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                         <button type="button" className={deletingId === memory.id ? 'vault-confirm-delete' : 'vault-delete-link'} onClick={() => handleDelete(memory)} disabled={busy}>
                           <Trash2 size={14} />{deletingId === memory.id ? '再点一次删除密文' : '删除'}

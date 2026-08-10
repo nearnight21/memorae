@@ -114,11 +114,11 @@ export async function saveEncryptedPhoto(photo: EncryptedPhotoV1): Promise<void>
   });
 }
 
-export async function deleteEncryptedMemory(memoryId: string, photoId?: string): Promise<void> {
+export async function deleteEncryptedMemory(memoryId: string, photoIds: string[] = []): Promise<void> {
   return withDatabase(async (database) => {
     const transaction = database.transaction([MEMORY_STORE, PHOTO_STORE], 'readwrite');
     transaction.objectStore(MEMORY_STORE).delete(memoryId);
-    if (photoId) {
+    for (const photoId of photoIds) {
       transaction.objectStore(PHOTO_STORE).delete(photoId);
     }
     await transactionComplete(transaction);

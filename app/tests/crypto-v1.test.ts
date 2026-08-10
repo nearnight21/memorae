@@ -6,14 +6,19 @@ import {
   bytesToHex,
   createVault,
   decryptMemory,
+  decryptMemoryV1,
   decryptPhoto,
   destroyVaultSession,
   encryptMemory,
+  encryptMemoryV1,
   encryptPhoto,
+  MemorySchemaError,
+  readMemoryV1,
   unlockVault,
   VaultUnlockError,
   type EncryptedMemoryV1,
   type EncryptedPhotoV1,
+  type MemoryV1,
   type VaultEnvelopeV1,
 } from '../src/crypto';
 import { nodeCryptoPrimitives } from './support/nodePrimitives';
@@ -22,6 +27,51 @@ const TEST_KDF = {
   memoryKiB: 8 * 1024,
   iterations: 2,
   parallelism: 1,
+};
+
+const sampleMemoryV1: MemoryV1 = {
+  schemaVersion: 1,
+  id: 'memory-v1-hangzhou-001',
+  title: '雨后的西湖',
+  text: '傍晚沿湖散步，树叶和石板路都很亮。',
+  date: '2026-08-09',
+  tags: ['杭州', '散步'],
+  location: {
+    name: '西湖边',
+    city: '杭州',
+    country: '中国',
+    lat: 30.246,
+    lng: 120.15,
+  },
+  photos: [{ id: 'photo-v1-hangzhou-001', mimeType: 'image/png' }],
+  createdAt: '2026-08-09T10:20:30.000Z',
+  updatedAt: '2026-08-09T10:20:30.000Z',
+};
+
+const WEB_MEMORY_V1_FIXTURE_PASSWORD = 'memory-v1-cross-client-password';
+const WEB_MEMORY_V1_FIXTURE_PHOTO_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const webMemoryV1FixtureExpected: MemoryV1 = {
+  schemaVersion: 1,
+  id: 'web-memory-v1-001',
+  title: '网页端的西湖记忆',
+  text: '这段文字由 Web 加密，必须能在 Android 恢复。',
+  date: '2026-08-10',
+  tags: ['杭州', '双端兼容'],
+  location: {
+    name: '西湖断桥',
+    city: '杭州',
+    country: '中国',
+    lat: 30.259,
+    lng: 120.148,
+  },
+  photos: [{ id: 'web-photo-v1-001', mimeType: 'image/png' }],
+  createdAt: '2026-08-10T04:00:00.000Z',
+  updatedAt: '2026-08-10T04:00:00.000Z',
+};
+const webMemoryV1FixturePhotoMetadata = {
+  filename: 'web-west-lake.png',
+  mimeType: 'image/png',
+  byteLength: 68,
 };
 
 interface WebFixture {
@@ -37,12 +87,26 @@ interface WebFixture {
   };
 }
 
+interface MemoryV1Fixture {
+  vault: VaultEnvelopeV1;
+  memories: EncryptedMemoryV1[];
+  photos: EncryptedPhotoV1[];
+}
+
 async function loadWebFixture(): Promise<WebFixture> {
   const value = await readFile(
     new URL('./fixtures/web-v1-bundle.json', import.meta.url),
     'utf8',
   );
   return JSON.parse(value) as WebFixture;
+}
+
+async function loadWebMemoryV1Fixture(): Promise<MemoryV1Fixture> {
+  const value = await readFile(
+    new URL('./fixtures/web-memory-v1-bundle.json', import.meta.url),
+    'utf8',
+  );
+  return JSON.parse(value) as MemoryV1Fixture;
 }
 
 test('Argon2id 固定向量与网页实现一致', async () => {
@@ -139,6 +203,174 @@ test('创建、加密、锁定和重新解锁形成闭环', async () => {
     (await decryptPhoto(nodeCryptoPrimitives, restoredSession, encryptedPhoto)).bytes,
     photoBytes,
   );
+});
+
+test('Android 可以逐字段恢复 Web 生成的固定 MemoryV1 密文夹具', async () => {
+  const fixture = await loadWebMemoryV1Fixture();
+  const session = await unlockVault(
+    nodeCryptoPrimitives,
+    fixture.vault,
+    WEB_MEMORY_V1_FIXTURE_PASSWORD,
+  );
+  const memory = await decryptMemoryV1(
+    nodeCryptoPrimitives,
+    session,
+    fixture.memories[0],
+  );
+  const photo = await decryptPhoto(
+    nodeCryptoPrimitives,
+    session,
+    fixture.photos[0],
+  );
+
+  assert.deepEqual(memory.memory, webMemoryV1FixtureExpected);
+  assert.deepEqual(photo.bytes, base64ToBytes(WEB_MEMORY_V1_FIXTURE_PHOTO_BASE64));
+  assert.deepEqual(photo.metadata, webMemoryV1FixturePhotoMetadata);
+
+  const exportedCiphertext = JSON.stringify(fixture);
+  for (const plaintext of [
+    webMemoryV1FixtureExpected.title,
+    webMemoryV1FixtureExpected.text,
+    webMemoryV1FixtureExpected.location?.name ?? '',
+    webMemoryV1FixturePhotoMetadata.filename,
+    WEB_MEMORY_V1_FIXTURE_PHOTO_BASE64,
+  ]) {
+    assert.equal(exportedCiphertext.includes(plaintext), false);
+  }
+});
+
+test('MemoryV1 加密后可以逐字段恢复', async () => {
+  const { session } = await createVault(
+    nodeCryptoPrimitives,
+    'memory-v1-password',
+    TEST_KDF,
+  );
+  const encrypted = await encryptMemoryV1(
+    nodeCryptoPrimitives,
+    session,
+    sampleMemoryV1,
+  );
+  const restored = await decryptMemoryV1(
+    nodeCryptoPrimitives,
+    session,
+    encrypted,
+  );
+
+  assert.equal(restored.migrated, false);
+  assert.deepEqual(restored.memory, sampleMemoryV1);
+});
+
+test('旧原型结构会迁移到 MemoryV1', () => {
+  const result = readMemoryV1({
+    id: 'legacy-memory-001',
+    title: '旧记忆',
+    body: '旧正文',
+    date: '2026-08-08',
+    tags: ['旧标签'],
+    location: '杭州',
+    photoId: 'legacy-photo-001',
+    createdAt: '2026-08-08T01:02:03.000Z',
+  });
+
+  assert.equal(result.migrated, true);
+  assert.equal(result.memory.schemaVersion, 1);
+  assert.equal(result.memory.text, '旧正文');
+  assert.deepEqual(result.memory.location, { name: '杭州' });
+  assert.deepEqual(result.memory.photos, [{
+    id: 'legacy-photo-001',
+    mimeType: 'application/octet-stream',
+  }]);
+});
+
+test('未知 Memory schemaVersion 会明确失败', () => {
+  assert.throws(
+    () => readMemoryV1({ ...sampleMemoryV1, schemaVersion: 2 }),
+    MemorySchemaError,
+  );
+});
+
+test('Android 与 Web 可以双向恢复同一份 MemoryV1 和照片字节', async () => {
+  const webCryptoModulePath = '../../memory-recall-web/src/crypto/index.ts';
+  const {
+    createVault: createWebVault,
+    decryptMemoryV1: decryptWebMemoryV1,
+    decryptPhoto: decryptWebPhoto,
+    encryptMemoryV1: encryptWebMemoryV1,
+    encryptPhoto: encryptWebPhoto,
+    unlockVault: unlockWebVault,
+  } = await import(webCryptoModulePath);
+  const password = 'memory-v1-cross-client-password';
+  const photoBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
+  const photoMetadata = { filename: '西湖照片.png', mimeType: 'image/png' };
+
+  const webVault = await createWebVault(password, TEST_KDF);
+  const webMemory = await encryptWebMemoryV1(webVault.session, sampleMemoryV1);
+  const webPhoto = await encryptWebPhoto(
+    webVault.session,
+    photoBytes,
+    photoMetadata,
+    { id: sampleMemoryV1.photos[0].id },
+  );
+  const androidSession = await unlockVault(
+    nodeCryptoPrimitives,
+    webVault.envelope,
+    password,
+  );
+  assert.deepEqual(
+    (await decryptMemoryV1(nodeCryptoPrimitives, androidSession, webMemory)).memory,
+    sampleMemoryV1,
+  );
+  const androidPhoto = await decryptPhoto(
+    nodeCryptoPrimitives,
+    androidSession,
+    webPhoto,
+  );
+  assert.deepEqual(androidPhoto.bytes, photoBytes);
+  assert.deepEqual(androidPhoto.metadata, { ...photoMetadata, byteLength: photoBytes.byteLength });
+
+  const androidVault = await createVault(
+    nodeCryptoPrimitives,
+    password,
+    TEST_KDF,
+  );
+  const androidMemory = await encryptMemoryV1(
+    nodeCryptoPrimitives,
+    androidVault.session,
+    sampleMemoryV1,
+  );
+  const androidEncryptedPhoto = await encryptPhoto(
+    nodeCryptoPrimitives,
+    androidVault.session,
+    photoBytes,
+    photoMetadata,
+    { id: sampleMemoryV1.photos[0].id },
+  );
+  const webSession = await unlockWebVault(androidVault.envelope, password);
+  assert.deepEqual(
+    (await decryptWebMemoryV1(webSession, androidMemory)).memory,
+    sampleMemoryV1,
+  );
+  const webPhotoResult = await decryptWebPhoto(webSession, androidEncryptedPhoto);
+  assert.deepEqual(webPhotoResult.bytes, photoBytes);
+  assert.deepEqual(webPhotoResult.metadata, { ...photoMetadata, byteLength: photoBytes.byteLength });
+
+  for (const privatePlaintext of [
+    sampleMemoryV1.title,
+    sampleMemoryV1.text,
+    sampleMemoryV1.location?.name ?? '',
+    photoMetadata.filename,
+  ]) {
+    assert.equal(JSON.stringify({
+      vault: webVault.envelope,
+      memories: [webMemory],
+      photos: [webPhoto],
+    }).includes(privatePlaintext), false);
+    assert.equal(JSON.stringify({
+      vault: androidVault.envelope,
+      memories: [androidMemory],
+      photos: [androidEncryptedPhoto],
+    }).includes(privatePlaintext), false);
+  }
 });
 
 test('错误密码不能解开 VMK', async () => {

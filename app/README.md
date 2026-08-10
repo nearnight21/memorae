@@ -39,3 +39,6 @@ npx eas-cli build --platform android --profile preview
 `preview` 生成可直接安装的 APK；`production` 用于未来商店 AAB，不是当前目标。
 
 完整真机步骤见 [docs/ANDROID-TESTING.md](docs/ANDROID-TESTING.md)。
+
+正式记忆 JSON 字段、校验规则、旧原型迁移和双端兼容夹具见
+[MemoryV1 数据契约](../MEMORY-V1.md)。

@@ -1,0 +1,65 @@
+{
+    "format": "memory-recall-encrypted-bundle",
+    "bundleVersion": 1,
+    "exportedAt": "2026-08-10T04:01:00.000Z",
+    "vault": {
+      "schema": "memory-recall-vault",
+      "cryptoVersion": 1,
+      "createdAt": "2026-08-10T06:43:59.375Z",
+      "kdf": {
+        "name": "Argon2id",
+        "salt": "eROhk7TEVC0TTYIHMc1d+A==",
+        "memoryKiB": 8192,
+        "iterations": 2,
+        "parallelism": 1,
+        "hashLength": 32
+      },
+      "wrappedVmk": {
+        "algorithm": "AES-256-GCM",
+        "iv": "dTP3cE8sESzy3yFj",
+        "ciphertext": "389fQV7ykI9YZyROOqutwEVaSDceJvjJnLbKbwO3N2ywPjozeYgTRFsUTAtsDjbR"
+      },
+      "wrappedKeys": {
+        "text": {
+          "algorithm": "AES-256-GCM",
+          "iv": "vOf6qYB4fS+PqYIn",
+          "ciphertext": "HC5hRyuup8b3ZP2XIzF0xbgNriTCjNuP2jJjwtBJAX7CV3g+8lUL9UcoydNVx21+"
+        },
+        "photo": {
+          "algorithm": "AES-256-GCM",
+          "iv": "RYWyuD3bKC/vwPrK",
+          "ciphertext": "qNWzxiTEZrMDw88T1+C0mLy7aq3uxh071KnnYaQVmIl+uqn9rwooV2d2d6XW1Br9"
+        }
+      }
+    },
+    "memories": [
+      {
+        "id": "web-memory-v1-001",
+        "version": 1,
+        "cryptoVersion": 1,
+        "deleted": false,
+        "payload": {
+          "algorithm": "AES-256-GCM",
+          "iv": "RRBdqxZe6Tu9TVM+",
+          "ciphertext": "kRewuwyZeJl8+azMRb+eDT1l9k6RY6jXw4zInDA3iUBVylqaVKpFuUMgpmeQ0R1GBFLqtmLVFQXcjS7IWvsRm1Qhx/vRcwtWvNq7qwI7Cxv+XebQ2Xk5v91i201AwtHXtcb8fvx/Pev7oo7BLXAQsjARD7g0NN4/SsT7WW1/JQrQ/BbI6SV9ctABd9uDOsbgoYdeLc2/KFeAgNDEMfn4LHfA0zwVHCe5aVBpYLs191g1BttCqqfJnhC4emb0Af93nRqzik0XjcljC5OCDpC3dfcLxm1j5eLIBnvRXZUYx1G3egHhukFul5o6CPz3Yv6tUzKxgM2m+4D35b2JxGA8kDYi9Xf8xsc8Oq2H6bK35YnHQhuLZkgGj4Ne23lg7SyzNNueARvSiKOIby5rpHhf315QhLC/eirvd8Dj/ZWI4EBPqtYgPzrGaqE7SHwpaNdpZ4PQrzP41OWcibTaYMxgnnXXaWgC640SISAI+PMQLGQN5tT5p494QvWno/qf6TrPD/3MFZdGR4x8hZ0iWUG8Nhxbk5cHNUbiuTzpkwW1x/4PEp+COG/kte68bpjDL7V+XnBZ+2YuK5CooLXMU6CNP5rZbC4="
+        }
+      }
+    ],
+    "photos": [
+      {
+        "id": "web-photo-v1-001",
+        "cryptoVersion": 1,
+        "kind": "original",
+        "metadata": {
+          "algorithm": "AES-256-GCM",
+          "iv": "PTwgjLMOi983Ls3O",
+          "ciphertext": "mKSYe4HeGEVWMJcmJeMajoG2iWIMYO0GrAWZ/qsewimVDjqOxhHB3MuNmOSQTYL0bjrIBYfvsjDJEmkh3b4BhZUiWR9NfrihqBGM65+k3AF9o1pH3IYt"
+        },
+        "content": {
+          "algorithm": "AES-256-GCM",
+          "iv": "TkNlLFLfQ3TZUyIe",
+          "ciphertext": "H78D411kvCj2M2OT3Y0tCHZuO9W9/QWRXZw7vdu34SbYz657Xwm/tUKJGmt1So7KwC3JtKBT0pgujERH952rtI1rr4zHil3FTlstQiU2mJ5FY7vB"
+        }
+      }
+    ]
+}

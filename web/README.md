@@ -26,3 +26,6 @@ npm.cmd run verify
 加密设计和当前边界见 [`docs/VMK-V1-PROTOTYPE.md`](docs/VMK-V1-PROTOTYPE.md)，
 项目目标、开发进度、验证结论和下一步任务统一记录在根目录
 [`DEVELOPMENT.md`](../DEVELOPMENT.md)。
+
+正式记忆 JSON 字段、校验规则、旧原型迁移和双端兼容夹具见
+[MemoryV1 数据契约](../MEMORY-V1.md)。
