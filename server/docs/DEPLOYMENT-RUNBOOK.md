@@ -11,8 +11,9 @@
 2. 一个解析到该主机公网 IP 的 API 子域名，例如 `sync.example.cn`。Caddy 将使用该域名自动申请和续期
    HTTPS 证书；`MEMORY_RECALL_ALLOWED_ORIGINS` 应填写实际 Web 应用的不同来源，例如 `https://app.example.cn`。
 3. Docker Engine 与 Docker Compose Plugin。数据库不会安装在主机系统中，而是由 Compose 在私有网络中运行。
-4. 可选但建议在第一次有真实照片前完成：创建与服务器同地域的腾讯云 COS 私有桶，关闭匿名读写和公共 CDN
-   缓存，为部署账号授予该桶 `memory-recall/v1/` 前缀的最小读、写、删权限。
+4. 可选但在第一次有真实照片前必须完成：创建与服务器同地域的腾讯云 COS 私有桶，关闭匿名读写和公共 CDN
+   缓存，为部署账号授予该桶 `memory-recall/v1/` 前缀的最小读、写、检查和删除权限。正式 Web 直传直下时，
+   COS CORS 只允许实际 Web 来源及必需的 `GET`、`PUT`、`HEAD`，不得使用 `*` 来源。
 
 ## 首次启动
 
@@ -63,13 +64,21 @@ MEMORY_RECALL_COS_SECRET_ID=
 MEMORY_RECALL_COS_SECRET_KEY=
 ```
 
-启用后，数据库保存照片的加密元数据及随机对象引用，COS 保存客户端加密后的 `content` JSON。完成以下验收后
-才可用于真实测试照片：
+启用后，数据库保存照片的加密元数据及随机对象引用，COS 保存客户端加密后的照片内容。当前代码仍由 Fastify
+中转 `content` JSON，只用于验证 COS 持久化和密文恢复；正式向受邀请用户开放前，必须按
+[`DEPLOYMENT-PILOT.md`](DEPLOYMENT-PILOT.md) 实现短期签名直传直下和三档图片。完成以下验收后才可用于真实测试照片：
 
 1. Android 上传照片，确认数据库记录不含该照片 `content` 密文。
 2. Web 下载并恢复照片；再由 Web 上传另一张，Android 下载并恢复。
 3. 使用另一测试账号读取同一 `photo_id`，结果必须为 `404`。
 4. 检查 COS 桶为私有，匿名请求不能读取对象，应用日志没有记录令牌、密码、密文全文或 COS 密钥。
+5. 直传直下实现后，分别上传和下载 `thumbnail`、`preview`、`original`，确认数据库唯一键包含图片档位，
+   过期签名、跨账号签名申请和未授权 CORS 请求均失败。
+6. 监控 Lighthouse 公网流量，确认照片内容由 Android/Web 与 COS 直接传输，API 只处理鉴权、签名、
+   加密元数据和提交状态。
+7. 验证地图气泡使用 `thumbnail`，最后一级默认使用 `preview`，只有明确高清查看、导出或完整恢复才获取 `original`。
+8. Web 锁定后不得残留钥匙、明文和 `blob:` URL；有界 IndexedDB 只保存加密小图，“退出并清除本机缓存”
+   必须删除该账号的本机密文。
 
 ## 更新、备份与恢复
 
@@ -99,4 +108,5 @@ docker compose exec -T postgres pg_dump -U memory_recall memory_recall \
 
 当前开发机已通过 Docker Compose 启动 PostgreSQL 17.6、执行两项迁移、创建邀请账号，并完成登录、鉴权读取、
 HTTP logout 撤销以及随机 schema 的真实数据库集成测试。真实 COS 桶、Caddy 公网 HTTPS、备份与监控仍未验收；
-完成这些项目和双端公网恢复前，不得把试运行环境标记为可对受邀请测试账号开放。
+短期签名直传直下、三档图片和正式 Web 加密缓存边界也尚未实现。完成这些项目和双端公网恢复前，不得把试运行
+环境标记为可对受邀请测试账号开放。

@@ -73,7 +73,9 @@ npm.cmd start
 ```
 
 桶必须关闭匿名读写和公共 CDN 缓存。没有这四项时服务仍使用 PostgreSQL 的临时照片 JSON 存储，
-方便先完成数据库与登录验收。
+方便先完成数据库与登录验收。当前 `PUT/GET /v1/photos/:id` 仍由 API 中转照片 `content`，只用于
+协议回归和迁移兼容；正式图片通道将改为账号鉴权后的私有 COS 短期签名直传直下，客户端不接触
+长期 COS 密钥，照片字节也不再经过 Lighthouse。
 
 ## 接口
 
@@ -120,5 +122,8 @@ npm.cmd run test:postgres
 - 本地 JSON 模式只有一个固定测试用户和令牌；它只供开发回归。
 - PostgreSQL 模式只允许管理员创建受邀请账号，尚无公开注册或账号管理界面。
 - 未配置 COS 时照片密文暂存在 PostgreSQL JSONB 中；该回退路径不适合大文件或生产使用。
+- 当前 COS 实现仍由 Fastify 中转照片内容；短期签名直传直下、上传完成确认和过期对象清理尚未实现。
+- 当前照片契约只有 `original` 与 `thumbnail`；地图气泡缩略图、最后一级 `preview` 展示图、原图按需
+  获取和 Web 有界加密小图缓存尚未实现。
 - Android 与 Web 验证界面已支持人工同步，但尚无离线上传队列、删除同步和冲突处理界面。
 - Docker Compose、PostgreSQL 迁移、邀请账号、登录和退出已完成本机容器验收；Caddy 公网 HTTPS、备份、监控和私有 COS 桶仍未验证，因此不得暴露到公网或用于保存真实用户数据。详见 [`docs/DEPLOYMENT-RUNBOOK.md`](docs/DEPLOYMENT-RUNBOOK.md)。
