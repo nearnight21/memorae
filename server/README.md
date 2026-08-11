@@ -78,6 +78,7 @@ npm.cmd start
 ## 接口
 
 - `GET /health`：检查服务是否启动，不需要令牌。
+- `POST /v1/auth/login`、`POST /v1/auth/logout`：PostgreSQL 模式登录及撤销当前短期会话。
 - `PUT /v1/vault`、`GET /v1/vault`：保存或读取加密后的钥匙信封。
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
 - `PUT /v1/photos/:id`、`GET /v1/photos/:id`：保存或读取照片密文。

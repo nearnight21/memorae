@@ -14,14 +14,15 @@
 - Android Keystore 保存随机设备钥匙，VMK 不直接写入 SecureStore。
 - 密码解锁、指纹解锁、手动锁定和内存钥匙清零。
 - 网页/移动端共用的加密 JSON 导入导出。
-- 验证界面手动上传、下载本地密文服务中的钥匙信封、MemoryV1 和照片密文。
+- 验证界面使用受邀请账号或本地固定令牌，手动上传、下载密文服务中的钥匙信封、MemoryV1 和照片密文。
 
 截至 2026-08-10，兼容性、密码、真实照片、指纹解锁和换机恢复五项 Android
 真机测试均已通过；现有自动协议测试为 11/11 通过。
 
-`src/sync/` 已接入验证界面，只用于本机 Android 与 Web 双向上传、下载并解密。服务地址和
-访问令牌只保存在当前页面内存，不会读取 ThinkPad 数据，也没有连接任何正式云服务。运行
-方法见 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
+`src/sync/` 已接入验证界面。试运行模式使用独立的登录账号与登录密码换取短期访问令牌；本地开发
+仍可切换到固定令牌。登录密码和令牌只保存在当前进程内存，退出会撤销服务端会话；它们与私密
+空间密码、VMK 完全分离。应用不会读取 ThinkPad 数据。运行方法见
+[`memory-recall-server/README.md`](../memory-recall-server/README.md)。
 
 ## 本地检查
 

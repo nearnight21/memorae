@@ -41,7 +41,7 @@ PostgreSQL (same host, Docker volume)   Tencent Cloud COS private bucket
 
 首轮默认不做多设备管理界面。服务端可在会话表记录设备 ID、最后活动时间和撤销时间，但设备 ID 不得包含地点、设备名称或其他私人明文。
 
-当前代码已提供 `POST /v1/auth/login`、Argon2id 密码校验、HMAC 保存会话令牌摘要和按账号隔离的 API 认证入口。`PostgresPasswordAuthStore` 将受邀请账号和会话持久化到 PostgreSQL，`create-invited-account` 命令仅供管理员创建测试账号；默认本地启动仍使用单一 `MEMORY_RECALL_LOCAL_TOKEN`，只供开发回归。PostgreSQL 集成测试覆盖账号隔离、session 过期和撤销、重复上传以及 409 冲突；它需要单独设置 `MEMORY_RECALL_TEST_DATABASE_URL`。
+当前代码已提供 `POST /v1/auth/login`、`POST /v1/auth/logout`、Argon2id 密码校验、HMAC 保存会话令牌摘要和按账号隔离的 API 认证入口。`PostgresPasswordAuthStore` 将受邀请账号和可撤销会话持久化到 PostgreSQL，`create-invited-account` 命令仅供管理员创建测试账号；Android 与 Web 验证界面均能使用账号密码换取短期令牌并主动退出。默认本地启动仍使用单一 `MEMORY_RECALL_LOCAL_TOKEN`，只供开发回归。PostgreSQL 集成测试覆盖账号隔离、session 过期和撤销、重复上传以及 409 冲突；它需要单独设置 `MEMORY_RECALL_TEST_DATABASE_URL`。
 
 ## PostgreSQL 数据模型
 
