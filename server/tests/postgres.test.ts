@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { Pool } from 'pg';
 import {
@@ -8,7 +9,10 @@ import {
 import { buildApp } from '../src/app.ts';
 import type { EncryptedMemoryV1, EncryptedPhotoV1, VaultEnvelopeV1 } from '../src/contracts.ts';
 import { applyMigrations } from '../src/migrations.ts';
-import type { PhotoObjectStore } from '../src/photoObjectStore.ts';
+import {
+  PhotoObjectNotFoundError,
+  type DirectPhotoObjectStore,
+} from '../src/photoObjectStore.ts';
 import {
   PostgresCipherStore,
   PostgresCosCipherStore,
@@ -68,8 +72,10 @@ const androidPhoto: EncryptedPhotoV1 = {
   content: { algorithm: 'AES-256-GCM', iv: 'android-content-iv', ciphertext: 'android-content-ciphertext' },
 };
 
-class InMemoryPhotoObjectStore implements PhotoObjectStore {
+class InMemoryPhotoObjectStore implements DirectPhotoObjectStore {
   readonly objects = new Map<string, string>();
+  readonly signedRequests: Array<{ key: string; method: 'GET' | 'PUT' }> = [];
+  beforeDelete?: (key: string) => Promise<void>;
 
   async putObject(key: string, content: string): Promise<void> {
     this.objects.set(key, content);
@@ -82,7 +88,26 @@ class InMemoryPhotoObjectStore implements PhotoObjectStore {
   }
 
   async deleteObject(key: string): Promise<void> {
+    await this.beforeDelete?.(key);
     this.objects.delete(key);
+  }
+
+  async createSignedUrl(
+    key: string,
+    method: 'GET' | 'PUT',
+    _expiresInSeconds: number,
+  ): Promise<string> {
+    this.signedRequests.push({ key, method });
+    return `https://cos.test/${encodeURIComponent(key)}?method=${method}`;
+  }
+
+  async headObject(key: string): Promise<{ contentLength: number; etag: string }> {
+    const content = this.objects.get(key);
+    if (content === undefined) throw new PhotoObjectNotFoundError();
+    return {
+      contentLength: Buffer.byteLength(content, 'utf8'),
+      etag: `etag-${Buffer.byteLength(content, 'utf8')}`,
+    };
   }
 }
 
@@ -107,6 +132,116 @@ if (!databaseUrl) {
     skip: '未设置 MEMORY_RECALL_TEST_DATABASE_URL。',
   }, () => undefined);
 } else {
+  test('photo migrations preserve legacy database and COS photos', async (context) => {
+    const schema = `memory_recall_upgrade_${randomUUID().replaceAll('-', '')}`;
+    const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+    await pool.query(`CREATE SCHEMA "${schema}"`);
+    await pool.query(`SET search_path TO "${schema}", public`);
+    context.after(async () => {
+      await pool.query(`DROP SCHEMA "${schema}" CASCADE`);
+      await pool.end();
+    });
+
+    const migration001 = await readFile(
+      new URL('../migrations/001_initial.sql', import.meta.url),
+      'utf8',
+    );
+    const migration002 = await readFile(
+      new URL('../migrations/002_photo_cos_reference.sql', import.meta.url),
+      'utf8',
+    );
+    await pool.query(migration001);
+    await pool.query(migration002);
+    await pool.query(
+      `CREATE TABLE schema_migrations (
+         name TEXT PRIMARY KEY,
+         applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+       )`,
+    );
+    await pool.query(
+      `INSERT INTO schema_migrations (name)
+       VALUES ('001_initial.sql'), ('002_photo_cos_reference.sql')`,
+    );
+
+    const accountId = randomUUID();
+    const legacyDatabasePhoto: EncryptedPhotoV1 = {
+      ...androidPhoto,
+      id: 'legacy-database-photo',
+    };
+    await pool.query(
+      `INSERT INTO accounts (id, login_name, password_hash)
+       VALUES ($1::uuid, 'legacy-account', 'test-only-password-hash')`,
+      [accountId],
+    );
+    await pool.query(
+      `INSERT INTO photo_ciphers (
+         account_id, photo_id, crypto_version, payload_json
+       ) VALUES ($1::uuid, $2, 1, $3::jsonb)`,
+      [accountId, legacyDatabasePhoto.id, JSON.stringify(legacyDatabasePhoto)],
+    );
+    await pool.query(
+      `INSERT INTO photo_ciphers (
+         account_id, photo_id, crypto_version, payload_json,
+         storage_kind, object_key, photo_kind, metadata_json
+       ) VALUES (
+         $1::uuid, 'legacy-cos-photo', 1, NULL,
+         'cos', 'legacy/cipher.json', 'thumbnail', $2::jsonb
+       )`,
+      [accountId, JSON.stringify(androidPhoto.metadata)],
+    );
+
+    assert.deepEqual(await applyMigrations(pool), [
+      '003_direct_photo_variants.sql',
+      '004_photo_content_digest.sql',
+    ]);
+
+    const upgraded = await pool.query<{
+      photo_id: string;
+      photo_kind: string;
+      storage_kind: string | null;
+      transfer_status: string | null;
+    }>(
+      `SELECT photo_id, photo_kind, storage_kind, transfer_status
+       FROM photo_ciphers
+       ORDER BY photo_id`,
+    );
+    assert.deepEqual(upgraded.rows, [
+      {
+        photo_id: 'legacy-cos-photo',
+        photo_kind: 'thumbnail',
+        storage_kind: 'cos',
+        transfer_status: 'ready',
+      },
+      {
+        photo_id: 'legacy-database-photo',
+        photo_kind: 'original',
+        storage_kind: null,
+        transfer_status: null,
+      },
+    ]);
+    assert.deepEqual(
+      await new PostgresCipherStore(pool).getPhoto(accountId, legacyDatabasePhoto.id),
+      legacyDatabasePhoto,
+    );
+
+    const previewPhoto: EncryptedPhotoV1 = {
+      ...legacyDatabasePhoto,
+      kind: 'preview',
+    };
+    await new PostgresCipherStore(pool).putPhoto(accountId, previewPhoto);
+    const variants = await pool.query<{ photo_kind: string }>(
+      `SELECT photo_kind
+       FROM photo_ciphers
+       WHERE account_id = $1::uuid AND photo_id = $2
+       ORDER BY photo_kind`,
+      [accountId, legacyDatabasePhoto.id],
+    );
+    assert.deepEqual(variants.rows, [
+      { photo_kind: 'original' },
+      { photo_kind: 'preview' },
+    ]);
+  });
+
   test('PostgreSQL stores sessions and account-scoped ciphertext', async (context) => {
     const schema = `memory_recall_test_${randomUUID().replaceAll('-', '')}`;
     const pool = new Pool({ connectionString: databaseUrl, max: 1 });
@@ -217,7 +352,11 @@ if (!databaseUrl) {
     assert.equal(changedPhoto.status, 409);
 
     const cosObjectStore = new InMemoryPhotoObjectStore();
-    const cosStore = new PostgresCosCipherStore(pool, cosObjectStore);
+    const cosStore = new PostgresCosCipherStore(pool, cosObjectStore, {
+      now: () => now,
+      signedUrlTtlSeconds: 300,
+      pendingUploadTtlMs: 60_000,
+    });
     const cosPhoto: EncryptedPhotoV1 = {
       ...androidPhoto,
       id: 'cos-photo-001',
@@ -243,6 +382,90 @@ if (!databaseUrl) {
       /同一照片 ID/,
     );
 
+    const directPhotoId = 'direct-photo-001';
+    for (const kind of ['thumbnail', 'preview', 'original'] as const) {
+      const directContent = JSON.stringify({
+        algorithm: 'AES-256-GCM',
+        iv: `${kind}-content-iv`,
+        ciphertext: `${kind}-content-ciphertext`,
+      });
+      const contentSha256 = createHash('sha256').update(directContent).digest('hex');
+      const upload = await cosStore.beginUpload(alice.id, {
+        id: directPhotoId,
+        kind,
+        cryptoVersion: 1,
+        metadata: {
+          algorithm: 'AES-256-GCM',
+          iv: `${kind}-metadata-iv`,
+          ciphertext: `${kind}-metadata-ciphertext`,
+        },
+        contentLength: Buffer.byteLength(directContent, 'utf8'),
+        contentSha256,
+      });
+      assert.equal(upload.status, 'upload');
+      if (upload.status !== 'upload') throw new Error('测试应获得上传授权。');
+      assert.equal(upload.method, 'PUT');
+      assert.equal(upload.headers['content-type'], 'application/octet-stream');
+      const signedPut = cosObjectStore.signedRequests.at(-1);
+      assert.equal(signedPut?.method, 'PUT');
+      assert.ok(signedPut?.key.includes(`/${kind}/`));
+      cosObjectStore.objects.set(signedPut!.key, directContent);
+      await cosStore.completeUpload(alice.id, directPhotoId, kind, upload.uploadId);
+
+      const download = await cosStore.createDownload(alice.id, directPhotoId, kind);
+      assert.ok(download);
+      assert.equal(download.kind, kind);
+      assert.equal(download.contentLength, Buffer.byteLength(directContent, 'utf8'));
+      assert.equal(download.contentSha256, contentSha256);
+      assert.equal(cosObjectStore.signedRequests.at(-1)?.method, 'GET');
+      assert.equal(await cosStore.createDownload(bob.id, directPhotoId, kind), null);
+      assert.deepEqual(await cosStore.beginUpload(alice.id, {
+        id: directPhotoId,
+        kind,
+        cryptoVersion: 1,
+        metadata: download.metadata,
+        contentLength: download.contentLength,
+        contentSha256,
+      }), { status: 'complete' });
+    }
+    const directRows = await pool.query<{ photo_kind: string; transfer_status: string }>(
+      `SELECT photo_kind, transfer_status
+       FROM photo_ciphers
+       WHERE account_id = $1::uuid AND photo_id = $2
+       ORDER BY photo_kind`,
+      [alice.id, directPhotoId],
+    );
+    assert.deepEqual(directRows.rows, [
+      { photo_kind: 'original', transfer_status: 'ready' },
+      { photo_kind: 'preview', transfer_status: 'ready' },
+      { photo_kind: 'thumbnail', transfer_status: 'ready' },
+    ]);
+    assert.equal((await cosStore.getPhoto(alice.id, directPhotoId))?.kind, 'original');
+
+    const incorrectLengthUpload = await cosStore.beginUpload(alice.id, {
+      id: 'incorrect-length-photo',
+      kind: 'preview',
+      cryptoVersion: 1,
+      metadata: androidPhoto.metadata,
+      contentLength: 128,
+      contentSha256: 'b'.repeat(64),
+    });
+    if (incorrectLengthUpload.status !== 'upload') {
+      throw new Error('测试应获得上传授权。');
+    }
+    const incorrectLengthKey = cosObjectStore.signedRequests.at(-1)?.key;
+    assert.ok(incorrectLengthKey);
+    cosObjectStore.objects.set(incorrectLengthKey, 'too-short');
+    await assert.rejects(
+      cosStore.completeUpload(
+        alice.id,
+        'incorrect-length-photo',
+        'preview',
+        incorrectLengthUpload.uploadId,
+      ),
+      /长度与申请不一致/,
+    );
+
     now = new Date('2026-08-11T00:00:01.001Z');
     const expired = await fetch(`${baseUrl}/v1/memories`, { headers: bearer(aliceToken) });
     assert.equal(expired.status, 401);
@@ -256,5 +479,24 @@ if (!databaseUrl) {
     assert.equal(logout.status, 204);
     const revoked = await fetch(`${baseUrl}/v1/memories`, { headers: bearer(revocableToken) });
     assert.equal(revoked.status, 401);
+
+    now = new Date('2026-08-11T00:02:00.000Z');
+    let pendingRowRemovedBeforeObjectCleanup = false;
+    cosObjectStore.beforeDelete = async () => {
+      const pendingRow = await pool.query(
+        `SELECT 1 FROM photo_ciphers
+         WHERE account_id = $1::uuid AND photo_id = 'incorrect-length-photo'`,
+        [alice.id],
+      );
+      pendingRowRemovedBeforeObjectCleanup = pendingRow.rowCount === 0;
+    };
+    assert.equal(await cosStore.cleanupExpiredUploads(), 1);
+    assert.equal(pendingRowRemovedBeforeObjectCleanup, true);
+    const expiredRow = await pool.query(
+      `SELECT 1 FROM photo_ciphers
+       WHERE account_id = $1::uuid AND photo_id = 'incorrect-length-photo'`,
+      [alice.id],
+    );
+    assert.equal(expiredRow.rowCount, 0);
   });
 }

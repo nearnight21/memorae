@@ -13,6 +13,7 @@ const DATABASE_NAME = 'memory-recall-vmk.db';
 const PHOTO_DIRECTORY_NAME = 'encrypted-photos-v1';
 const VAULT_META_KEY = 'vault-envelope-v1';
 const DEVICE_UNLOCK_META_KEY = 'device-unlock-v1';
+const STORAGE_SCHEMA_VERSION = 2;
 
 let databasePromise: Promise<SQLiteDatabase> | null = null;
 
@@ -46,14 +47,41 @@ async function openDatabase(): Promise<SQLiteDatabase> {
         );
 
         CREATE TABLE IF NOT EXISTS photos (
-          id TEXT PRIMARY KEY NOT NULL,
+          id TEXT NOT NULL,
           kind TEXT NOT NULL,
           crypto_version INTEGER NOT NULL,
           metadata_json TEXT NOT NULL,
           content_iv TEXT NOT NULL,
-          content_file TEXT NOT NULL
+          content_file TEXT NOT NULL,
+          PRIMARY KEY (id, kind)
         );
       `);
+      const version = await database.getFirstAsync<{ user_version: number }>(
+        'PRAGMA user_version',
+      );
+      if ((version?.user_version ?? 0) < STORAGE_SCHEMA_VERSION) {
+        await database.withTransactionAsync(async () => {
+          await database.execAsync(`
+            CREATE TABLE photos_v2 (
+              id TEXT NOT NULL,
+              kind TEXT NOT NULL,
+              crypto_version INTEGER NOT NULL,
+              metadata_json TEXT NOT NULL,
+              content_iv TEXT NOT NULL,
+              content_file TEXT NOT NULL,
+              PRIMARY KEY (id, kind)
+            );
+            INSERT OR IGNORE INTO photos_v2 (
+              id, kind, crypto_version, metadata_json, content_iv, content_file
+            )
+            SELECT id, kind, crypto_version, metadata_json, content_iv, content_file
+            FROM photos;
+            DROP TABLE photos;
+            ALTER TABLE photos_v2 RENAME TO photos;
+            PRAGMA user_version = 2;
+          `);
+        });
+      }
       return database;
     });
   }
@@ -137,8 +165,7 @@ export async function saveEncryptedPhoto(photo: EncryptedPhotoV1): Promise<void>
     `INSERT INTO photos (
        id, kind, crypto_version, metadata_json, content_iv, content_file
      ) VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       kind = excluded.kind,
+     ON CONFLICT(id, kind) DO UPDATE SET
        crypto_version = excluded.crypto_version,
        metadata_json = excluded.metadata_json,
        content_iv = excluded.content_iv,
@@ -179,11 +206,15 @@ async function photoFromRow(row: PhotoRow): Promise<EncryptedPhotoV1> {
   };
 }
 
-export async function getEncryptedPhoto(id: string): Promise<EncryptedPhotoV1 | null> {
+export async function getEncryptedPhoto(
+  id: string,
+  kind: EncryptedPhotoV1['kind'] = 'original',
+): Promise<EncryptedPhotoV1 | null> {
   const database = await openDatabase();
   const row = await database.getFirstAsync<PhotoRow>(
-    'SELECT * FROM photos WHERE id = ?',
+    'SELECT * FROM photos WHERE id = ? AND kind = ?',
     id,
+    kind,
   );
   return row ? photoFromRow(row) : null;
 }
@@ -192,6 +223,27 @@ export async function listEncryptedPhotos(): Promise<EncryptedPhotoV1[]> {
   const database = await openDatabase();
   const rows = await database.getAllAsync<PhotoRow>('SELECT * FROM photos ORDER BY rowid DESC');
   return Promise.all(rows.map(photoFromRow));
+}
+
+export async function deleteEncryptedPhotoVariants(id: string): Promise<void> {
+  const database = await openDatabase();
+  const rows = await database.getAllAsync<Pick<PhotoRow, 'content_file'>>(
+    'SELECT content_file FROM photos WHERE id = ?',
+    id,
+  );
+  await database.runAsync('DELETE FROM photos WHERE id = ?', id);
+  const contentFiles = new Set(rows.map((row) => row.content_file));
+  for (const kind of ['thumbnail', 'preview', 'original'] as const) {
+    contentFiles.add(photoFileName({ id, kind }));
+  }
+  for (const contentFile of contentFiles) {
+    const file = new File(encryptedPhotoDirectory(), contentFile);
+    try {
+      if (file.exists) file.delete();
+    } catch {
+      // 数据库引用已经移除；残留加密文件不会参与同步，并会在清空本机密文时删除。
+    }
+  }
 }
 
 export async function clearEncryptedContent(): Promise<void> {

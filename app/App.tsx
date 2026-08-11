@@ -31,6 +31,10 @@ import { nativeCryptoPrimitives } from './src/crypto/nativePrimitives';
 import { pickEncryptedBundle, shareEncryptedBundle } from './src/services/bundleFiles';
 import { runNativeCompatibilityCheck } from './src/services/compatibility';
 import {
+  createJpegPhotoVariant,
+  PHOTO_VARIANT_SPECS,
+} from './src/photos/photoVariants';
+import {
   disableDeviceUnlock,
   enableDeviceUnlock,
   hasDeviceUnlock,
@@ -41,6 +45,7 @@ import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient } from './src/sync/syncClient';
 import {
   clearEncryptedContent,
+  deleteEncryptedPhotoVariants,
   getEncryptedPhoto,
   getVaultEnvelope,
   initializeStorage,
@@ -55,10 +60,14 @@ interface PendingPhoto {
   uri: string;
   filename: string;
   mimeType: string;
+  width: number;
+  height: number;
 }
 
 type Mode = 'loading' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
+
+const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -226,10 +235,15 @@ export default function App() {
     });
     if (result.canceled) return;
     const asset = result.assets[0];
+    const byteLength = asset.fileSize ?? new File(asset.uri).size;
+    if (byteLength === null) throw new Error('无法读取所选照片的大小。');
+    if (byteLength > MAX_PHOTO_BYTES) throw new Error('照片不能超过 30MB。');
     setPendingPhoto({
       uri: asset.uri,
       filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
       mimeType: asset.mimeType ?? 'image/jpeg',
+      width: asset.width,
+      height: asset.height,
     });
     setStatus(`已选择照片：${asset.fileName ?? '未命名照片'}`);
   }
@@ -242,21 +256,52 @@ export default function App() {
     let photoId: string | undefined;
     let photoMetric = '';
     if (pendingPhoto) {
-      const plaintextFile = new File(pendingPhoto.uri);
-      const photoBytes = await plaintextFile.bytes();
       const startedAt = performance.now();
+      photoId = nativeCryptoPrimitives.randomUUID();
       try {
-        const encryptedPhoto = await encryptPhoto(
-          nativeCryptoPrimitives,
-          session,
-          photoBytes,
-          { filename: pendingPhoto.filename, mimeType: pendingPhoto.mimeType },
-        );
-        await saveEncryptedPhoto(encryptedPhoto);
-        photoId = encryptedPhoto.id;
-        photoMetric = `；${Math.round(photoBytes.byteLength / 1024)} KiB 照片加密 ${Math.round(performance.now() - startedAt)} ms`;
-      } finally {
-        photoBytes.fill(0);
+        for (const spec of PHOTO_VARIANT_SPECS) {
+          const variantBytes = await createJpegPhotoVariant(
+            pendingPhoto.uri,
+            pendingPhoto.width,
+            pendingPhoto.height,
+            spec,
+          );
+          try {
+            await saveEncryptedPhoto(await encryptPhoto(
+              nativeCryptoPrimitives,
+              session,
+              variantBytes,
+              { filename: pendingPhoto.filename, mimeType: 'image/jpeg' },
+              { id: photoId, kind: spec.kind },
+            ));
+          } finally {
+            variantBytes.fill(0);
+          }
+        }
+        const plaintextFile = new File(pendingPhoto.uri);
+        if (plaintextFile.size !== null && plaintextFile.size > MAX_PHOTO_BYTES) {
+          throw new Error('照片不能超过 30MB。');
+        }
+        const photoBytes = await plaintextFile.bytes();
+        try {
+          await saveEncryptedPhoto(await encryptPhoto(
+            nativeCryptoPrimitives,
+            session,
+            photoBytes,
+            { filename: pendingPhoto.filename, mimeType: pendingPhoto.mimeType },
+            { id: photoId, kind: 'original' },
+          ));
+          photoMetric = `；${Math.round(photoBytes.byteLength / 1024)} KiB 原图及两档展示图加密 ${Math.round(performance.now() - startedAt)} ms`;
+        } finally {
+          photoBytes.fill(0);
+        }
+      } catch (error) {
+        try {
+          await deleteEncryptedPhotoVariants(photoId);
+        } catch {
+          // 保留最初的照片处理错误，残留加密文件可在清空本机密文时删除。
+        }
+        throw error;
       }
     }
 
@@ -275,12 +320,23 @@ export default function App() {
       createdAt: now,
       updatedAt: now,
     };
-    const encryptedMemory = await encryptMemoryV1(
-      nativeCryptoPrimitives,
-      session,
-      memory,
-    );
-    await saveEncryptedMemory(encryptedMemory);
+    try {
+      const encryptedMemory = await encryptMemoryV1(
+        nativeCryptoPrimitives,
+        session,
+        memory,
+      );
+      await saveEncryptedMemory(encryptedMemory);
+    } catch (error) {
+      if (photoId) {
+        try {
+          await deleteEncryptedPhotoVariants(photoId);
+        } catch {
+          // 保留最初的记忆保存错误，残留加密文件可在清空本机密文时删除。
+        }
+      }
+      throw error;
+    }
     setTitle('');
     setBody('');
     setPendingPhoto(null);
@@ -291,7 +347,8 @@ export default function App() {
   async function showPhoto(memory: MemoryV1): Promise<void> {
     const photoId = memory.photos[0]?.id;
     if (!session || !photoId) return;
-    const encrypted = await getEncryptedPhoto(photoId);
+    const encrypted = await getEncryptedPhoto(photoId, 'preview')
+      ?? await getEncryptedPhoto(photoId, 'original');
     if (!encrypted) throw new Error('找不到照片密文。');
     const startedAt = performance.now();
     const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);

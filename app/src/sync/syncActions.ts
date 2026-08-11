@@ -4,7 +4,12 @@ import type {
   MemoryV1,
   VaultEnvelopeV1,
 } from '../crypto';
-import { MemoryRecallSyncClient, SyncRequestError } from './syncClient';
+import {
+  DirectPhotoTransferUnavailableError,
+  MemoryRecallSyncClient,
+  PhotoVariantNotFoundError,
+  SyncRequestError,
+} from './syncClient';
 
 export interface CipherSyncStorage {
   getVault(): Promise<VaultEnvelopeV1 | null>;
@@ -13,6 +18,7 @@ export interface CipherSyncStorage {
   listPhotos(): Promise<EncryptedPhotoV1[]>;
   saveMemory(memory: EncryptedMemoryV1): Promise<void>;
   savePhoto(photo: EncryptedPhotoV1): Promise<void>;
+  saveCachedPhoto?(photo: EncryptedPhotoV1): Promise<void>;
 }
 
 export interface DownloadCiphertextOptions {
@@ -60,12 +66,24 @@ export async function uploadCiphertext(
     storage.listPhotos(),
   ]);
   await client.putVault(localVault);
-  for (const photo of photos) await client.putPhoto(photo);
+  let uploadedPhotos = 0;
+  for (const photo of photos) {
+    try {
+      await client.putPhotoVariant(photo);
+      uploadedPhotos += 1;
+    } catch (error) {
+      if (!(error instanceof DirectPhotoTransferUnavailableError)) throw error;
+      if (photo.kind === 'original') {
+        await client.putPhoto(photo);
+        uploadedPhotos += 1;
+      }
+    }
+  }
   for (const memory of memories) await client.putMemory(memory);
 
   return {
     memories: memories.length,
-    photos: photos.length,
+    photos: uploadedPhotos,
     requiresUnlock: false,
     importedVault: false,
   };
@@ -95,14 +113,30 @@ export async function downloadCiphertext(
     for (const photo of memory.photos) photoIds.add(photo.id);
   }
 
+  let downloadedPhotos = 0;
   for (const photoId of photoIds) {
-    await options.storage.savePhoto(await options.client.getPhoto(photoId));
+    for (const kind of ['thumbnail', 'preview'] as const) {
+      try {
+        const photo = await options.client.getPhotoVariant(photoId, kind);
+        await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(photo);
+        downloadedPhotos += 1;
+      } catch (error) {
+        if (!(error instanceof PhotoVariantNotFoundError)) throw error;
+      }
+    }
+    try {
+      await options.storage.savePhoto(await options.client.getPhotoVariant(photoId, 'original'));
+    } catch (error) {
+      if (!(error instanceof PhotoVariantNotFoundError)) throw error;
+      await options.storage.savePhoto(await options.client.getPhoto(photoId));
+    }
+    downloadedPhotos += 1;
   }
   for (const memory of memories) await options.storage.saveMemory(memory);
 
   return {
     memories: memories.length,
-    photos: photoIds.size,
+    photos: downloadedPhotos,
     requiresUnlock: false,
     importedVault: false,
   };

@@ -16,8 +16,19 @@ import {
   type EncryptedMemoryV1,
   type EncryptedPhotoV1,
   type MemoryListResponse,
+  type PhotoKind,
+  type SealedBytesV1,
   type VaultEnvelopeV1,
 } from './contracts';
+import {
+  beginPhotoUploadBodySchema,
+  completePhotoUploadBodySchema,
+  photoVariantParamsSchema,
+  PhotoTransferConflictError,
+  PhotoTransferNotFoundError,
+  PhotoTransferValidationError,
+  type DirectPhotoTransfer,
+} from './photoTransfer';
 import { CipherConflictError, type CipherStore } from './store';
 
 export interface BuildAppOptions {
@@ -26,6 +37,7 @@ export interface BuildAppOptions {
   localUserId?: string;
   authenticator?: RequestAuthenticator;
   allowedOrigins?: string[];
+  photoTransfer?: DirectPhotoTransfer;
 }
 
 interface IdParams {
@@ -36,6 +48,21 @@ interface LoginBody {
   loginName: string;
   password: string;
   deviceId?: string;
+}
+
+interface PhotoVariantParams extends IdParams {
+  kind: PhotoKind;
+}
+
+interface BeginPhotoUploadBody {
+  cryptoVersion: 1;
+  metadata: SealedBytesV1;
+  contentLength: number;
+  contentSha256: string;
+}
+
+interface CompletePhotoUploadBody {
+  uploadId: string;
 }
 
 declare module 'fastify' {
@@ -67,6 +94,19 @@ function currentAccountId(request: FastifyRequest): string {
     throw new Error('认证钩子没有设置账号。');
   }
   return request.accountId;
+}
+
+function sendPhotoTransferError(error: unknown, reply: FastifyReply): FastifyReply | null {
+  if (error instanceof PhotoTransferNotFoundError) {
+    return reply.code(404).send({ error: error.message });
+  }
+  if (error instanceof PhotoTransferConflictError) {
+    return reply.code(409).send({ error: error.message });
+  }
+  if (error instanceof PhotoTransferValidationError) {
+    return reply.code(422).send({ error: error.message });
+  }
+  return null;
 }
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
@@ -179,33 +219,104 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     items: await options.store.listMemories(currentAccountId(request)),
   }));
 
-  app.put<{ Params: IdParams; Body: EncryptedPhotoV1 }>('/v1/photos/:id', {
-    schema: {
-      params: idParamsSchema,
-      body: encryptedPhotoSchema,
-    },
-  }, async (request, reply) => {
-    if (request.params.id !== request.body.id) {
-      return reply.code(400).send({ error: '路径中的照片 ID 与密文不一致。' });
-    }
-    try {
-      await options.store.putPhoto(currentAccountId(request), request.body);
-      return reply.code(204).send();
-    } catch (error) {
-      if (error instanceof CipherConflictError) {
-        return reply.code(409).send({ error: error.message });
+  if (!options.photoTransfer) {
+    app.put<{ Params: IdParams; Body: EncryptedPhotoV1 }>('/v1/photos/:id', {
+      schema: {
+        params: idParamsSchema,
+        body: encryptedPhotoSchema,
+      },
+    }, async (request, reply) => {
+      if (request.params.id !== request.body.id) {
+        return reply.code(400).send({ error: '路径中的照片 ID 与密文不一致。' });
       }
-      throw error;
-    }
-  });
+      try {
+        await options.store.putPhoto(currentAccountId(request), request.body);
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof CipherConflictError) {
+          return reply.code(409).send({ error: error.message });
+        }
+        throw error;
+      }
+    });
 
-  app.get<{ Params: IdParams }>('/v1/photos/:id', {
-    schema: { params: idParamsSchema },
-  }, async (request, reply) => {
-    const photo = await options.store.getPhoto(currentAccountId(request), request.params.id);
-    if (!photo) return reply.code(404).send({ error: '找不到照片密文。' });
-    return photo;
-  });
+    app.get<{ Params: IdParams }>('/v1/photos/:id', {
+      schema: { params: idParamsSchema },
+    }, async (request, reply) => {
+      const photo = await options.store.getPhoto(currentAccountId(request), request.params.id);
+      if (!photo) return reply.code(404).send({ error: '找不到照片密文。' });
+      return photo;
+    });
+  }
+
+  if (options.photoTransfer) {
+    app.post<{ Params: PhotoVariantParams; Body: BeginPhotoUploadBody }>(
+      '/v1/photos/:id/:kind/upload',
+      {
+        schema: {
+          params: photoVariantParamsSchema,
+          body: beginPhotoUploadBodySchema,
+        },
+      },
+      async (request, reply) => {
+        try {
+          return await options.photoTransfer!.beginUpload(currentAccountId(request), {
+            id: request.params.id,
+            kind: request.params.kind,
+            cryptoVersion: request.body.cryptoVersion,
+            metadata: request.body.metadata,
+            contentLength: request.body.contentLength,
+            contentSha256: request.body.contentSha256,
+          });
+        } catch (error) {
+          const response = sendPhotoTransferError(error, reply);
+          if (response) return response;
+          throw error;
+        }
+      },
+    );
+
+    app.post<{ Params: PhotoVariantParams; Body: CompletePhotoUploadBody }>(
+      '/v1/photos/:id/:kind/complete',
+      {
+        schema: {
+          params: photoVariantParamsSchema,
+          body: completePhotoUploadBodySchema,
+        },
+      },
+      async (request, reply) => {
+        try {
+          await options.photoTransfer!.completeUpload(
+            currentAccountId(request),
+            request.params.id,
+            request.params.kind,
+            request.body.uploadId,
+          );
+          return reply.code(204).send();
+        } catch (error) {
+          const response = sendPhotoTransferError(error, reply);
+          if (response) return response;
+          throw error;
+        }
+      },
+    );
+
+    app.get<{ Params: PhotoVariantParams }>(
+      '/v1/photos/:id/:kind/download',
+      { schema: { params: photoVariantParamsSchema } },
+      async (request, reply) => {
+        const grant = await options.photoTransfer!.createDownload(
+          currentAccountId(request),
+          request.params.id,
+          request.params.kind,
+        );
+        if (!grant) {
+          return reply.code(404).send({ error: '找不到可下载的照片密文。' });
+        }
+        return grant;
+      },
+    );
+  }
 
   return app;
 }

@@ -22,6 +22,7 @@ import {
 } from '../src/crypto';
 import { base64ToBytes } from '../src/crypto/encoding';
 import { assertPrototypeBundle } from '../src/prototype/storage';
+import { fitPhotoWithin } from '../src/photos/photoVariants';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -255,6 +256,22 @@ test('所有照片共用 PhotoKey，但每次加密使用不同 IV', async () =>
   const restored = await decryptPhoto(session, first);
   assert.deepEqual(restored.metadata, { ...metadata, byteLength: bytes.byteLength });
   assert.deepEqual(restored.bytes, bytes);
+});
+
+test('三档图片保持比例、不会放大小图，preview AAD 不能冒充缩略图', async () => {
+  assert.deepEqual(fitPhotoWithin(4032, 3024, 1600), { width: 1600, height: 1200 });
+  assert.deepEqual(fitPhotoWithin(120, 80, 256), { width: 120, height: 80 });
+
+  const { session } = await createTestVault();
+  const bytes = new Uint8Array([10, 20, 30, 40]);
+  const encrypted = await encryptPhoto(
+    session,
+    bytes,
+    { filename: 'private-preview.jpg', mimeType: 'image/jpeg' },
+    { id: 'preview-photo-001', kind: 'preview' },
+  );
+  assert.deepEqual((await decryptPhoto(session, encrypted)).bytes, bytes);
+  await assert.rejects(decryptPhoto(session, { ...encrypted, kind: 'thumbnail' }));
 });
 
 test('锁定私密空间后，内存中的钥匙会被清零且不能继续使用', async () => {

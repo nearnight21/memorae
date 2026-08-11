@@ -1,6 +1,6 @@
 # Memory Recall 国内试运行部署设计
 
-> 状态：PostgreSQL 迁移、受邀请账号、可撤销会话、账号隔离密文存储、COS 照片内容存储及 Docker/Caddy 配置已实现；本机容器与真实 PostgreSQL 集成测试已通过。当前照片内容仍由 Fastify 在客户端与 COS 之间中转；短期签名直传直下、三档图片和正式 Web 加密缓存边界已经定案但尚未实现，也尚未购买云资源或验证公网 HTTPS 与真实 COS 桶
+> 状态：PostgreSQL、三档照片、五分钟短期签名直传直下、Android/Web 三档生成与直传客户端、Web 有界加密小图缓存及 Docker/Caddy 配置已实现；本机容器、真实 PostgreSQL、双端本地对象服务及真实私有 COS 最小单档链路已通过。正式地图尚未接入私密数据，也尚未购买国内云服务器或验证公网 HTTPS 与三档真实照片
 >
 > 适用范围：仅限受邀请测试账号的 Android 与 Web 跨设备密文同步验收
 
@@ -55,21 +55,21 @@ PostgreSQL (same host, Docker volume)
 | `memory_ciphers` | `account_id`, `memory_id`, `revision`, `crypto_version`, `deleted`, `payload_json`, `updated_at` | 加密记忆及最小同步版本信息 |
 | `photo_ciphers` | `account_id`, `photo_id`, `photo_kind`, `crypto_version`, `payload_json` 或 `object_key`、`metadata_json` | 未配置 COS 时保存完整加密照片 JSON；COS 模式按图片档位保存加密元数据和对象引用 |
 
-`vault_envelopes.payload_json`、`memory_ciphers.payload_json` 和未配置 COS 时的 `photo_ciphers.payload_json` 只存现有 API 已验证的密文 JSON。`memory_id`、`photo_id`、修订号、大小和时间是允许的同步元数据。配置全部 COS 环境变量后，照片 `content` 密文会迁到 COS，数据库只保留加密元数据和服务端生成的随机对象引用；确认本次对象未被数据库引用时，服务端最多尝试三次删除它。连接结果不确定时保留密文对象，避免删除可能已提交的用户记录。
+`vault_envelopes.payload_json`、`memory_ciphers.payload_json` 和未配置 COS 时的 `photo_ciphers.payload_json` 只存现有 API 已验证的密文 JSON。`memory_id`、`photo_id`、修订号、大小和时间是允许的同步元数据。配置全部 COS 环境变量后，照片 `content` 密文会迁到 COS，数据库只保留加密元数据和服务端生成的随机对象引用。未完成上传过期时，服务端先原子删除仍为 `pending` 的数据库记录，再尽力删除对应 COS 密文对象，避免与完成操作并发时误删已提交照片；删除失败只会留下无法再获得签名地址的加密孤儿对象，运维应定期按数据库引用核对并清理。
 
-所有密文查询都必须以 `account_id` 过滤。数据库唯一约束至少包括：`vault_envelopes.account_id`、`memory_ciphers(account_id, memory_id)` 和 `photo_ciphers(account_id, photo_id, photo_kind)`。当前实现仍以 `(account_id, photo_id)` 唯一标识照片；落地多档图片时需要迁移为包含 `photo_kind` 的复合唯一键，且不能改变 `MemoryV1.photos[].id` 的含义。
+所有密文查询都必须以 `account_id` 过滤。数据库唯一约束包括：`vault_envelopes.account_id`、`memory_ciphers(account_id, memory_id)` 和 `photo_ciphers(account_id, photo_id, photo_kind)`。三档照片复合唯一键迁移已经实现，且没有改变 `MemoryV1.photos[].id` 的含义。
 
 ## COS 对象规则
 
 COS 桶必须为私有桶。对象路径只使用服务端生成或校验后的账号 UUID、照片 ID 和密文版本，例如：
 
 ```text
-memory-recall/v1/{account-id}/photos/{photo-id}/{random-uuid}.json
+memory-recall/v1/{account-id}/photos/{photo-id}/{photo-kind}/{random-uuid}.json
 ```
 
 客户端不得自行指定完整 COS 路径，也不得拿到长期 COS 密钥。当前实现为了保持 `/v1/photos/:id` 的请求和响应结构不变，由 Fastify 将 `EncryptedPhotoV1.content` 原样序列化为 UTF-8 JSON 后写入 COS，并在读取时与数据库中的 `metadata_json` 重新组合；该中转路径只保留给协议回归和迁移兼容，不作为正式图片数据通道。
 
-目标路径由 API 在完成账号和对象归属校验后签发短期、单对象、单操作的 GET/PUT 地址。Web 端只允许来自已配置正式来源的 CORS 请求；签名不得授予列桶、访问其他前缀或长期读写能力。上传采用“申请地址 → 客户端直传密文 → 服务端检查对象并提交索引”的流程，失败或未完成对象要有过期清理规则。后续需要降低 Base64 开销时，再通过新的照片传输协议版本改为二进制密文。对象内容已被客户端加密，但仍按私有用户数据处理：禁止公共读、禁止公共 CDN 缓存、禁止在日志中写出对象内容或签名 URL。
+目标路径由 API 在完成账号和对象归属校验后签发五分钟、单对象、单操作的 GET/PUT 地址。Web 端只允许来自已配置正式来源的 CORS 请求；签名不得授予列桶、访问其他前缀或长期读写能力。部署账号必须具有目标前缀的 `GetObject`、`HeadObject`、`PutObject`、`DeleteObject` 最小权限。上传采用“申请地址 → 客户端直传密文 → 服务端检查对象并提交索引”的流程，失败或未完成对象要有过期清理规则。当前受邀试运行接受 PUT 签名不能强制实际上传大小的边界，并通过短签名、删除权限和费用告警控制风险；公开注册前再增加配额、限流或可强制大小的上传策略。后续需要降低 Base64 开销时，再通过新的照片传输协议版本改为二进制密文。对象内容已被客户端加密，但仍按私有用户数据处理：禁止公共读、禁止公共 CDN 缓存、禁止在日志中写出对象内容或签名 URL。
 
 ## 图片分级与 Web 缓存边界
 
@@ -81,7 +81,7 @@ memory-recall/v1/{account-id}/photos/{photo-id}/{random-uuid}.json
 | `preview` | 用户逐层进入后的最后一级大图 | 约 1280～1600 px、150～400 KB |
 | `original` | 用户明确高清放大、导出或完整恢复 | 保留原始字节 |
 
-尺寸和体积是编码目标而不是明文服务端字段；客户端生成后分别加密，COS 只看到密文对象。当前照片契约只有 `original` 与 `thumbnail`，实现前需要给照片传输层增加版本化的 `preview` 支持，并保持已冻结的 `MemoryV1` 不变。
+尺寸和体积是编码目标而不是明文服务端字段；客户端生成后分别加密，COS 只看到密文对象。服务端照片传输层与 Android/Web 客户端已支持 `thumbnail`、`preview`、`original`，数据库通过 `(account_id, photo_id, photo_kind)` 隔离三档对象，并保持已冻结的 `MemoryV1` 不变；Android 与 Web 都拒绝超过 30 MiB 的原始照片。
 
 Web 默认允许对加密的 `thumbnail` 和 `preview` 做容量受限、按最近使用淘汰的 IndexedDB 缓存，避免每次打开重复下载。锁定、退出私密空间或页面销毁时必须清除 VMK、派生钥匙、明文状态和临时 `blob:` URL；正常锁定不删除加密小图缓存。登录 access token 仍只保存在页面内存，`original` 不由应用默认持久化。退出界面提供显式的“退出并清除本机缓存”，供公共或不可信设备使用，不在正常登录流程中增加强制的设备信任询问。
 
@@ -91,8 +91,8 @@ Web 默认允许对加密的 `thumbnail` 和 `preview` 做容量受限、按最�
 
 1. 将固定 `MEMORY_RECALL_LOCAL_TOKEN` 和 `local-user` 替换为会话校验后的 `account_id`。
 2. 将 `JsonCipherStore` 替换为 `PostgresCipherStore`；配置完整 COS 环境变量时使用 `PostgresCosCipherStore`，将照片内容切换到 COS。
-3. 将照片内容从 Fastify 中转改为客户端使用短期签名地址与私有 COS 直传直下；Fastify 只返回加密元数据、签名结果和提交状态。
-4. 将单一原图记录扩展为 `thumbnail`、`preview`、`original` 三档密文对象，并维持账号隔离和幂等提交。
+3. 已增加 `POST /v1/photos/:id/:kind/upload`、`POST /v1/photos/:id/:kind/complete` 和 `GET /v1/photos/:id/:kind/download`；客户端使用短期签名地址与私有 COS 直传直下，Fastify 只返回加密元数据、签名结果和提交状态。配置 COS 后不注册旧照片中转接口。
+4. 已将单一照片记录扩展为 `thumbnail`、`preview`、`original` 三档密文对象，维持账号隔离、待上传过期清理和幂等完成确认。
 
 上线前必须保留并扩展现有双向加密回归测试：同一批 Android/Web 密文经过 PostgreSQL 和 COS 往返后，仍能在另一端恢复；服务端数据、数据库日志和 COS 对象中均不得出现测试明文。
 
@@ -128,6 +128,8 @@ MEMORY_RECALL_ALLOWED_ORIGINS=
 2. 已完成账号密码、会话校验和跨账号隔离的服务端回归测试。
 3. 已完成 PostgreSQL 存储、受邀请账号持久化和迁移脚本，JSON 存储仅供本地测试。
 4. 已实现照片密文字节迁移到私有 COS 的服务器中转代码和失败清理；该路径只用于回归和迁移兼容。
-5. 实现三档照片、私有 COS 短期签名直传直下、上传完成确认、过期对象清理及 Web 有界加密小图缓存。
+5. 服务端与 Android/Web 已实现三档照片、私有 COS 短期签名直传直下、上传完成确认、长度与摘要校验、
+   幂等上传和过期待上传清理；Web 已实现 96 MiB 有界加密小图缓存。真实 COS 最小单档链路已通过，
+   三档真实照片、双端公网恢复与正式地图气泡仍待验收。
 6. 已添加 Docker Compose、Caddy 反向代理和部署运行手册；本机 Docker/PostgreSQL 迁移、账号登录和 HTTP logout 验收已通过，创建最小云资源后再验收公网 HTTPS、真实 COS、备份和监控。
 7. 进行 Android 真机、Web 和第二台真实设备的公网验收；完成直传直下与缓存安全检查前不得向受邀请用户开放。

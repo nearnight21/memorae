@@ -239,6 +239,29 @@ test('Android 可以逐字段恢复 Web 生成的固定 MemoryV1 密文夹具', 
   }
 });
 
+test('preview 照片使用独立 AAD，不能被伪装成其他档位', async () => {
+  const { session } = await createVault(
+    nodeCryptoPrimitives,
+    'preview-photo-password',
+    TEST_KDF,
+  );
+  const bytes = new Uint8Array([10, 20, 30, 40]);
+  const encrypted = await encryptPhoto(
+    nodeCryptoPrimitives,
+    session,
+    bytes,
+    { filename: 'private-preview.jpg', mimeType: 'image/jpeg' },
+    { id: 'preview-photo-001', kind: 'preview' },
+  );
+  assert.deepEqual(
+    (await decryptPhoto(nodeCryptoPrimitives, session, encrypted)).bytes,
+    bytes,
+  );
+  await assert.rejects(
+    decryptPhoto(nodeCryptoPrimitives, session, { ...encrypted, kind: 'thumbnail' }),
+  );
+});
+
 test('MemoryV1 加密后可以逐字段恢复', async () => {
   const { session } = await createVault(
     nodeCryptoPrimitives,

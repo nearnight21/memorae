@@ -48,16 +48,32 @@ async function main(): Promise<void> {
     }
     const pool = createPostgresPool(databaseUrl);
     const cosOptions = cosOptionsFromEnvironment();
+    const cosStore = cosOptions
+      ? new PostgresCosCipherStore(pool, new TencentCosObjectStore(cosOptions))
+      : null;
     const app = await buildApp({
-      store: cosOptions
-        ? new PostgresCosCipherStore(pool, new TencentCosObjectStore(cosOptions))
-        : new PostgresCipherStore(pool),
+      store: cosStore ?? new PostgresCipherStore(pool),
+      photoTransfer: cosStore ?? undefined,
       authenticator: new PasswordSessionAuthenticator(new PostgresPasswordAuthStore(pool), {
         tokenPepper,
       }),
       allowedOrigins,
     });
+    const cleanupExpiredPhotos = async () => {
+      if (!cosStore) return;
+      try {
+        await cosStore.cleanupExpiredUploads();
+      } catch {
+        process.stderr.write('照片待上传对象清理失败，将在下一周期重试。\n');
+      }
+    };
+    void cleanupExpiredPhotos();
+    const photoCleanupTimer = cosStore
+      ? setInterval(() => void cleanupExpiredPhotos(), 15 * 60 * 1000)
+      : null;
+    photoCleanupTimer?.unref();
     app.addHook('onClose', async () => {
+      if (photoCleanupTimer) clearInterval(photoCleanupTimer);
       await pool.end();
     });
     const host = process.env.MEMORY_RECALL_LISTEN_HOST ?? '0.0.0.0';

@@ -12,10 +12,11 @@ export interface PhotoMetadataV1 {
   mimeType: string;
   byteLength: number;
 }
+export type PhotoKind = 'original' | 'thumbnail' | 'preview';
 export interface EncryptedPhotoV1 {
   id: string;
   cryptoVersion: typeof CRYPTO_VERSION;
-  kind: 'original' | 'thumbnail';
+  kind: PhotoKind;
   metadata: SealedBytesV1;
   content: SealedBytesV1;
 }

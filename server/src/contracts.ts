@@ -31,10 +31,13 @@ export interface EncryptedMemoryV1 {
   payload: SealedBytesV1;
 }
 
+export const PHOTO_KINDS = ['thumbnail', 'preview', 'original'] as const;
+export type PhotoKind = typeof PHOTO_KINDS[number];
+
 export interface EncryptedPhotoV1 {
   id: string;
   cryptoVersion: 1;
-  kind: 'original' | 'thumbnail';
+  kind: PhotoKind;
   metadata: SealedBytesV1;
   content: SealedBytesV1;
 }
@@ -43,7 +46,7 @@ export interface MemoryListResponse {
   items: EncryptedMemoryV1[];
 }
 
-const sealedBytesSchema = {
+export const sealedBytesSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['algorithm', 'iv', 'ciphertext'],
@@ -132,7 +135,7 @@ export const encryptedPhotoSchema = {
       pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$',
     },
     cryptoVersion: { const: 1 },
-    kind: { enum: ['original', 'thumbnail'] },
+    kind: { enum: PHOTO_KINDS },
     metadata: sealedBytesSchema,
     content: sealedBytesSchema,
   },

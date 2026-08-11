@@ -1,11 +1,19 @@
 import type { EncryptedMemoryV1, EncryptedPhotoV1, VaultEnvelopeV1 } from '../crypto';
 
 const DATABASE_NAME = 'memory-recall-vmk-prototype';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const META_STORE = 'meta';
 const MEMORY_STORE = 'memories';
-const PHOTO_STORE = 'photos';
+const LEGACY_PHOTO_STORE = 'photos';
+const PHOTO_STORE = 'photo-variants';
+const PHOTO_ID_INDEX = 'photo-id';
 const VAULT_KEY = 'vault-v1';
+const ENCRYPTED_PHOTO_CACHE_LIMIT_BYTES = 96 * 1024 * 1024;
+
+interface StoredEncryptedPhoto extends EncryptedPhotoV1 {
+  cacheStoredAt?: string;
+  cacheBytes?: number;
+}
 
 export interface PrototypeBundleV1 {
   format: 'memory-recall-encrypted-bundle';
@@ -44,7 +52,18 @@ function openDatabase(): Promise<IDBDatabase> {
         database.createObjectStore(MEMORY_STORE, { keyPath: 'id' });
       }
       if (!database.objectStoreNames.contains(PHOTO_STORE)) {
-        database.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
+        const photoStore = database.createObjectStore(PHOTO_STORE, {
+          keyPath: ['id', 'kind'],
+        });
+        photoStore.createIndex(PHOTO_ID_INDEX, 'id', { unique: false });
+        if (database.objectStoreNames.contains(LEGACY_PHOTO_STORE)) {
+          const legacyRequest = request.transaction!
+            .objectStore(LEGACY_PHOTO_STORE)
+            .getAll() as IDBRequest<EncryptedPhotoV1[]>;
+          legacyRequest.onsuccess = () => {
+            legacyRequest.result.forEach((photo) => photoStore.put(photo));
+          };
+        }
       }
     };
 
@@ -92,9 +111,30 @@ export async function listEncryptedMemories(): Promise<EncryptedMemoryV1[]> {
 export async function listEncryptedPhotos(): Promise<EncryptedPhotoV1[]> {
   return withDatabase(async (database) => {
     const transaction = database.transaction(PHOTO_STORE, 'readonly');
-    return requestResult(
-      transaction.objectStore(PHOTO_STORE).getAll() as IDBRequest<EncryptedPhotoV1[]>,
+    const stored = await requestResult(
+      transaction.objectStore(PHOTO_STORE).getAll() as IDBRequest<StoredEncryptedPhoto[]>,
     );
+    return stored.map(({ cacheStoredAt: _cacheStoredAt, cacheBytes: _cacheBytes, ...photo }) => photo);
+  });
+}
+
+async function enforceEncryptedPhotoCacheLimit(): Promise<void> {
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(PHOTO_STORE, 'readwrite');
+    const store = transaction.objectStore(PHOTO_STORE);
+    const photos = await requestResult(
+      store.getAll() as IDBRequest<StoredEncryptedPhoto[]>,
+    );
+    const cached = photos
+      .filter((photo) => photo.cacheStoredAt && photo.cacheBytes)
+      .sort((left, right) => left.cacheStoredAt!.localeCompare(right.cacheStoredAt!));
+    let totalBytes = cached.reduce((sum, photo) => sum + (photo.cacheBytes ?? 0), 0);
+    for (const photo of cached) {
+      if (totalBytes <= ENCRYPTED_PHOTO_CACHE_LIMIT_BYTES) break;
+      store.delete([photo.id, photo.kind]);
+      totalBytes -= photo.cacheBytes ?? 0;
+    }
+    await transactionComplete(transaction);
   });
 }
 
@@ -114,12 +154,53 @@ export async function saveEncryptedPhoto(photo: EncryptedPhotoV1): Promise<void>
   });
 }
 
+export async function saveCachedEncryptedPhoto(photo: EncryptedPhotoV1): Promise<void> {
+  if (photo.kind === 'original') {
+    throw new Error('原图不能写入默认 Web 下载缓存。');
+  }
+  const stored: StoredEncryptedPhoto = {
+    ...photo,
+    cacheStoredAt: new Date().toISOString(),
+    cacheBytes: new TextEncoder().encode(JSON.stringify(photo)).byteLength,
+  };
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(PHOTO_STORE, 'readwrite');
+    const store = transaction.objectStore(PHOTO_STORE);
+    const existing = await requestResult(
+      store.get([photo.id, photo.kind]) as IDBRequest<StoredEncryptedPhoto | undefined>,
+    );
+    if (!existing || existing.cacheStoredAt) {
+      store.put(stored);
+    }
+    await transactionComplete(transaction);
+  });
+  await enforceEncryptedPhotoCacheLimit();
+}
+
+export async function clearEncryptedPhotoCache(): Promise<void> {
+  await withDatabase(async (database) => {
+    const transaction = database.transaction(PHOTO_STORE, 'readwrite');
+    const store = transaction.objectStore(PHOTO_STORE);
+    const photos = await requestResult(
+      store.getAll() as IDBRequest<StoredEncryptedPhoto[]>,
+    );
+    photos
+      .filter((photo) => photo.cacheStoredAt)
+      .forEach((photo) => store.delete([photo.id, photo.kind]));
+    await transactionComplete(transaction);
+  });
+}
+
 export async function deleteEncryptedMemory(memoryId: string, photoIds: string[] = []): Promise<void> {
   return withDatabase(async (database) => {
     const transaction = database.transaction([MEMORY_STORE, PHOTO_STORE], 'readwrite');
     transaction.objectStore(MEMORY_STORE).delete(memoryId);
+    const photoStore = transaction.objectStore(PHOTO_STORE);
     for (const photoId of photoIds) {
-      transaction.objectStore(PHOTO_STORE).delete(photoId);
+      const keys = await requestResult(
+        photoStore.index(PHOTO_ID_INDEX).getAllKeys(photoId),
+      );
+      keys.forEach((key) => photoStore.delete(key));
     }
     await transactionComplete(transaction);
   });
@@ -189,13 +270,17 @@ export async function replaceWithEncryptedBundle(bundle: PrototypeBundleV1): Pro
 
 export async function clearPrototypeDatabase(): Promise<void> {
   return withDatabase(async (database) => {
-    const transaction = database.transaction(
-      [META_STORE, MEMORY_STORE, PHOTO_STORE],
-      'readwrite',
-    );
+    const storeNames = [META_STORE, MEMORY_STORE, PHOTO_STORE];
+    if (database.objectStoreNames.contains(LEGACY_PHOTO_STORE)) {
+      storeNames.push(LEGACY_PHOTO_STORE);
+    }
+    const transaction = database.transaction(storeNames, 'readwrite');
     transaction.objectStore(META_STORE).clear();
     transaction.objectStore(MEMORY_STORE).clear();
     transaction.objectStore(PHOTO_STORE).clear();
+    if (database.objectStoreNames.contains(LEGACY_PHOTO_STORE)) {
+      transaction.objectStore(LEGACY_PHOTO_STORE).clear();
+    }
     await transactionComplete(transaction);
   });
 }

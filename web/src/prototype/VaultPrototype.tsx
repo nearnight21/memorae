@@ -24,6 +24,7 @@ import {
   encryptPhoto,
   unlockVault,
   type EncryptedMemoryV1,
+  type EncryptedPhotoV1,
   type MemoryV1,
   type VaultEnvelopeV1,
   type VaultSessionV1,
@@ -32,6 +33,7 @@ import { downloadCiphertext, uploadCiphertext } from '../sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient } from '../sync/syncClient';
 import {
   assertPrototypeBundle,
+  clearEncryptedPhotoCache,
   clearPrototypeDatabase,
   createEncryptedBundle,
   deleteEncryptedMemory,
@@ -40,9 +42,14 @@ import {
   listEncryptedPhotos,
   replaceWithEncryptedBundle,
   saveEncryptedMemory,
+  saveCachedEncryptedPhoto,
   saveEncryptedPhoto,
   saveVaultEnvelope,
 } from './storage';
+import {
+  createJpegPhotoVariant,
+  PHOTO_VARIANT_SPECS,
+} from '../photos/photoVariants';
 import './vault-prototype.css';
 
 type Phase = 'booting' | 'setup' | 'locked' | 'unlocked';
@@ -90,6 +97,7 @@ const cipherSyncStorage = {
   listPhotos: listEncryptedPhotos,
   saveMemory: saveEncryptedMemory,
   savePhoto: saveEncryptedPhoto,
+  saveCachedPhoto: saveCachedEncryptedPhoto,
 };
 
 export default function VaultPrototype() {
@@ -169,7 +177,14 @@ export default function VaultPrototype() {
       listEncryptedMemories(),
       listEncryptedPhotos(),
     ]);
-    const photoMap = new Map(encryptedPhotos.map((item) => [item.id, item]));
+    const photoMap = new Map<string, EncryptedPhotoV1>();
+    const photoKindRank = { thumbnail: 0, original: 1, preview: 2 } as const;
+    for (const item of encryptedPhotos) {
+      const current = photoMap.get(item.id);
+      if (!current || photoKindRank[item.kind] > photoKindRank[current.kind]) {
+        photoMap.set(item.id, item);
+      }
+    }
 
     const visible = await Promise.all(
       encryptedMemories.map(async (encryptedMemory) => {
@@ -310,17 +325,35 @@ export default function VaultPrototype() {
       return;
     }
 
+    const photoId = crypto.randomUUID();
+    const memoryId = crypto.randomUUID();
+    let memorySaved = false;
     setBusy(true);
     try {
+      for (const spec of PHOTO_VARIANT_SPECS) {
+        const variantBytes = await createJpegPhotoVariant(photo, spec);
+        try {
+          await saveEncryptedPhoto(await encryptPhoto(
+            session,
+            variantBytes,
+            { filename: photo.name, mimeType: 'image/jpeg' },
+            { id: photoId, kind: spec.kind },
+          ));
+        } finally {
+          variantBytes.fill(0);
+        }
+      }
       const photoBytes = new Uint8Array(await photo.arrayBuffer());
-      const photoId = crypto.randomUUID();
-      const memoryId = crypto.randomUUID();
-      const encryptedPhoto = await encryptPhoto(
-        session,
-        photoBytes,
-        { filename: photo.name, mimeType: photo.type },
-        { id: photoId },
-      );
+      try {
+        await saveEncryptedPhoto(await encryptPhoto(
+          session,
+          photoBytes,
+          { filename: photo.name, mimeType: photo.type },
+          { id: photoId, kind: 'original' },
+        ));
+      } finally {
+        photoBytes.fill(0);
+      }
       const now = new Date().toISOString();
       const memory: MemoryV1 = {
         schemaVersion: 1,
@@ -339,13 +372,8 @@ export default function VaultPrototype() {
       };
       const encryptedMemory = await encryptMemoryV1(session, memory);
 
-      await saveEncryptedPhoto(encryptedPhoto);
-      try {
-        await saveEncryptedMemory(encryptedMemory);
-      } catch (saveError) {
-        await deleteEncryptedMemory(memoryId, [photoId]);
-        throw saveError;
-      }
+      await saveEncryptedMemory(encryptedMemory);
+      memorySaved = true;
 
       await loadDecryptedMemories(session);
       await refreshCipherStats(envelope);
@@ -358,6 +386,13 @@ export default function VaultPrototype() {
       if (photoInputRef.current) photoInputRef.current.value = '';
       setNotice('保存成功：页面中的文字和照片均由本地密文重新解密得到。');
     } catch (saveError) {
+      if (!memorySaved) {
+        try {
+          await deleteEncryptedMemory(memoryId, [photoId]);
+        } catch {
+          // 保留最初的照片处理或记忆保存错误。
+        }
+      }
       setError(saveError instanceof Error ? saveError.message : '加密保存失败。');
     } finally {
       setBusy(false);
@@ -499,6 +534,36 @@ export default function VaultPrototype() {
       setNotice('已退出同步账号，当前访问令牌已撤销。');
     } catch (logoutError) {
       setError(logoutError instanceof Error ? logoutError.message : '退出同步账号失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLogoutAndClearCache = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    let remoteLogoutFailed = false;
+    try {
+      await createSyncClient().logout();
+    } catch {
+      remoteLogoutFailed = true;
+    }
+    try {
+      if (session) destroyVaultSession(session);
+      revokePhotoUrls();
+      setSession(null);
+      setMemories([]);
+      setPhase(envelope ? 'locked' : 'setup');
+      setSyncToken('');
+      setSyncSessionExpiresAt(null);
+      await clearEncryptedPhotoCache();
+      await refreshCipherStats(envelope);
+      setNotice(remoteLogoutFailed
+        ? '本机已锁定并清除下载缓存；服务器会话撤销失败，页面令牌已移除并会在到期后失效。'
+        : '已退出同步账号、锁定私密空间并清除下载的加密小图缓存。');
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : '本机锁定或清除缓存失败。');
     } finally {
       setBusy(false);
     }
@@ -648,7 +713,10 @@ export default function VaultPrototype() {
         <div className="vault-sync-actions">
           {syncAuthMode === 'account' ? (
             syncToken
-              ? <button type="button" onClick={handleLogoutSyncService} disabled={busy}>退出同步账号</button>
+              ? <>
+                  <button type="button" onClick={handleLogoutSyncService} disabled={busy}>退出同步账号</button>
+                  <button type="button" onClick={handleLogoutAndClearCache} disabled={busy}>退出并清除下载缓存</button>
+                </>
               : <button type="button" onClick={handleLoginSyncService} disabled={busy}>登录同步服务</button>
           ) : null}
           <button type="button" onClick={handleToggleSyncAuthMode} disabled={busy}>

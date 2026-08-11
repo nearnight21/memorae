@@ -72,10 +72,11 @@ npm.cmd run migrate
 npm.cmd start
 ```
 
-桶必须关闭匿名读写和公共 CDN 缓存。没有这四项时服务仍使用 PostgreSQL 的临时照片 JSON 存储，
-方便先完成数据库与登录验收。当前 `PUT/GET /v1/photos/:id` 仍由 API 中转照片 `content`，只用于
-协议回归和迁移兼容；正式图片通道将改为账号鉴权后的私有 COS 短期签名直传直下，客户端不接触
-长期 COS 密钥，照片字节也不再经过 Lighthouse。
+桶必须关闭匿名读写和公共 CDN 缓存，部署账号还必须拥有目标前缀的 `GetObject`、`HeadObject`、
+`PutObject` 和 `DeleteObject` 最小权限。没有 COS 配置时，服务仍使用 PostgreSQL 临时照片 JSON 存储并
+注册旧 `PUT/GET /v1/photos/:id`，只供本地回归；配置 COS 后旧中转接口不会注册，Android/Web 只能使用
+账号鉴权后的五分钟短期签名直传直下。真实私有 COS 已完成一份 4 KiB 随机测试密文的 PUT、完成确认、
+GET 和 SHA-256 校验，照片字节没有经过 API；Android/Web 三档真实照片与公网环境仍需继续验收。
 
 ## 接口
 
@@ -83,7 +84,10 @@ npm.cmd start
 - `POST /v1/auth/login`、`POST /v1/auth/logout`：PostgreSQL 模式登录及撤销当前短期会话。
 - `PUT /v1/vault`、`GET /v1/vault`：保存或读取加密后的钥匙信封。
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
-- `PUT /v1/photos/:id`、`GET /v1/photos/:id`：保存或读取照片密文。
+- `PUT /v1/photos/:id`、`GET /v1/photos/:id`：仅在未配置 COS 时注册，供本地回归保存或读取原图密文。
+- `POST /v1/photos/:id/:kind/upload`：为 `thumbnail`、`preview` 或 `original` 申请短期 COS PUT 地址。
+- `POST /v1/photos/:id/:kind/complete`：直传完成后检查对象长度并提交密文索引。
+- `GET /v1/photos/:id/:kind/download`：校验账号归属后返回短期 COS GET 地址和加密元数据。
 
 除 `/health` 和 PostgreSQL 模式下的 `POST /v1/auth/login` 外，请求都必须携带：
 
@@ -122,8 +126,11 @@ npm.cmd run test:postgres
 - 本地 JSON 模式只有一个固定测试用户和令牌；它只供开发回归。
 - PostgreSQL 模式只允许管理员创建受邀请账号，尚无公开注册或账号管理界面。
 - 未配置 COS 时照片密文暂存在 PostgreSQL JSONB 中；该回退路径不适合大文件或生产使用。
-- 当前 COS 实现仍由 Fastify 中转照片内容；短期签名直传直下、上传完成确认和过期对象清理尚未实现。
-- 当前照片契约只有 `original` 与 `thumbnail`；地图气泡缩略图、最后一级 `preview` 展示图、原图按需
-  获取和 Web 有界加密小图缓存尚未实现。
+- 服务端和 Android/Web 的三档短期签名直传直下、复合唯一键、幂等上传、摘要校验和过期清理已实现；
+  真实 COS 最小单档链路已通过，三档真实照片和双端公网恢复尚未验收。配置 COS 后旧中转接口关闭。
+- 客户端已经生成 `thumbnail`、`preview`、`original` 并让验证页普通查看优先使用 `preview`；Web 已有
+  96 MiB 有界加密小图缓存。正式地图尚未接入私密数据，因此地图气泡使用缩略图仍待正式界面阶段完成。
 - Android 与 Web 验证界面已支持人工同步，但尚无离线上传队列、删除同步和冲突处理界面。
-- Docker Compose、PostgreSQL 迁移、邀请账号、登录和退出已完成本机容器验收；Caddy 公网 HTTPS、备份、监控和私有 COS 桶仍未验证，因此不得暴露到公网或用于保存真实用户数据。详见 [`docs/DEPLOYMENT-RUNBOOK.md`](docs/DEPLOYMENT-RUNBOOK.md)。
+- Docker Compose、PostgreSQL 迁移、邀请账号、登录和退出已完成本机容器验收；私有 COS 最小链路已验证；
+  Caddy 公网 HTTPS、三档双端恢复、备份和监控仍未验证，因此不得开放给受邀测试用户。详见
+  [`docs/DEPLOYMENT-RUNBOOK.md`](docs/DEPLOYMENT-RUNBOOK.md)。

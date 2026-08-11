@@ -12,8 +12,12 @@
    HTTPS 证书；`MEMORY_RECALL_ALLOWED_ORIGINS` 应填写实际 Web 应用的不同来源，例如 `https://app.example.cn`。
 3. Docker Engine 与 Docker Compose Plugin。数据库不会安装在主机系统中，而是由 Compose 在私有网络中运行。
 4. 可选但在第一次有真实照片前必须完成：创建与服务器同地域的腾讯云 COS 私有桶，关闭匿名读写和公共 CDN
-   缓存，为部署账号授予该桶 `memory-recall/v1/` 前缀的最小读、写、检查和删除权限。正式 Web 直传直下时，
+   缓存，为部署账号授予该桶 `memory-recall/v1/` 前缀的最小读、写、检查和删除权限。所需 CAM action 为
+   `name/cos:GetObject`、`name/cos:HeadObject`、`name/cos:PutObject`、`name/cos:DeleteObject`；缺少
+   `DeleteObject` 会让过期待上传残留为无法清理的 COS 孤儿对象。正式 Web 直传直下时，
    COS CORS 只允许实际 Web 来源及必需的 `GET`、`PUT`、`HEAD`，不得使用 `*` 来源。
+5. 在腾讯云费用中心为 COS 设置余额和费用告警。五分钟 PUT 签名只限制对象和有效期，不强制实际上传大小；
+   当前受邀试运行接受这一边界，公开注册前必须增加上传配额、限流或可强制大小的上传策略。
 
 ## 首次启动
 
@@ -64,9 +68,11 @@ MEMORY_RECALL_COS_SECRET_ID=
 MEMORY_RECALL_COS_SECRET_KEY=
 ```
 
-启用后，数据库保存照片的加密元数据及随机对象引用，COS 保存客户端加密后的照片内容。当前代码仍由 Fastify
-中转 `content` JSON，只用于验证 COS 持久化和密文恢复；正式向受邀请用户开放前，必须按
-[`DEPLOYMENT-PILOT.md`](DEPLOYMENT-PILOT.md) 实现短期签名直传直下和三档图片。完成以下验收后才可用于真实测试照片：
+启用后，数据库保存照片的加密元数据及随机对象引用，COS 保存客户端加密后的照片内容；旧
+`PUT/GET /v1/photos/:id` 不再注册，照片字节不能经由 Fastify 中转。服务端已经按
+[`DEPLOYMENT-PILOT.md`](DEPLOYMENT-PILOT.md) 提供三档照片五分钟短期签名直传直下接口；Android/Web
+客户端已接入并通过本地对象服务自动往返测试。真实私有 COS 已使用 4 KiB 随机测试密文完成 PUT、完成确认、
+GET 和 SHA-256 校验；完成以下真实照片验收后才可用于受邀测试：
 
 1. Android 上传照片，确认数据库记录不含该照片 `content` 密文。
 2. Web 下载并恢复照片；再由 Web 上传另一张，Android 下载并恢复。
@@ -77,8 +83,8 @@ MEMORY_RECALL_COS_SECRET_KEY=
 6. 监控 Lighthouse 公网流量，确认照片内容由 Android/Web 与 COS 直接传输，API 只处理鉴权、签名、
    加密元数据和提交状态。
 7. 验证地图气泡使用 `thumbnail`，最后一级默认使用 `preview`，只有明确高清查看、导出或完整恢复才获取 `original`。
-8. Web 锁定后不得残留钥匙、明文和 `blob:` URL；有界 IndexedDB 只保存加密小图，“退出并清除本机缓存”
-   必须删除该账号的本机密文。
+8. Web 锁定后不得残留钥匙、明文和 `blob:` URL；有界 IndexedDB 只保存加密小图，“退出并清除下载缓存”
+   必须删除远端下载的可淘汰小图，但不得误删本机创建或手动完整恢复的数据。
 
 ## 更新、备份与恢复
 
@@ -106,7 +112,8 @@ docker compose exec -T postgres pg_dump -U memory_recall memory_recall \
 
 ## 当前部署门槛
 
-当前开发机已通过 Docker Compose 启动 PostgreSQL 17.6、执行两项迁移、创建邀请账号，并完成登录、鉴权读取、
-HTTP logout 撤销以及随机 schema 的真实数据库集成测试。真实 COS 桶、Caddy 公网 HTTPS、备份与监控仍未验收；
-短期签名直传直下、三档图片和正式 Web 加密缓存边界也尚未实现。完成这些项目和双端公网恢复前，不得把试运行
-环境标记为可对受邀请测试账号开放。
+当前开发机已通过 Docker Compose 启动 PostgreSQL 17.6、执行四项迁移、创建邀请账号，并完成登录、鉴权读取、
+HTTP logout 撤销以及随机 schema 的真实数据库集成测试。真实 COS 最小单档链路已经通过；Caddy 公网 HTTPS、
+三档真实照片、备份与监控仍未验收；
+短期签名直传直下、三档图片生成、Android/Web 客户端和 96 MiB Web 加密小图缓存已通过自动测试；
+正式地图接入与公网双端恢复仍未完成。完成这些项目和双端公网恢复前，不得把试运行环境标记为可对受邀请测试账号开放。
