@@ -37,7 +37,9 @@
           "microphonePermission": false
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-sharing",
+      "./plugins/with-local-network-security"
     ],
     "web": {
       "favicon": "./assets/favicon.png"

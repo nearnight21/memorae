@@ -38,7 +38,7 @@ import {
 } from './src/services/deviceUnlock';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
-import { MemoryRecallSyncClient } from './src/sync/syncClient';
+import { loginSyncSession, MemoryRecallSyncClient } from './src/sync/syncClient';
 import {
   clearEncryptedContent,
   getEncryptedPhoto,
@@ -58,6 +58,7 @@ interface PendingPhoto {
 }
 
 type Mode = 'loading' | 'setup' | 'locked' | 'unlocked';
+type SyncAuthMode = 'account' | 'token';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -85,7 +86,11 @@ export default function App() {
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
   const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
+  const [syncAuthMode, setSyncAuthMode] = useState<SyncAuthMode>('account');
+  const [syncLoginName, setSyncLoginName] = useState('');
+  const [syncLoginPassword, setSyncLoginPassword] = useState('');
   const [syncToken, setSyncToken] = useState('');
+  const [syncSessionExpiresAt, setSyncSessionExpiresAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('正在检查本地密文库……');
 
@@ -333,6 +338,39 @@ export default function App() {
     });
   }
 
+  async function loginToSyncService(): Promise<void> {
+    if (!syncUrl.trim()) throw new Error('请输入密文服务地址。');
+    if (syncLoginName.trim().length < 3) throw new Error('请输入受邀请账号。');
+    if (syncLoginPassword.length < 8) throw new Error('登录密码至少需要 8 个字符。');
+    const login = await loginSyncSession(syncUrl.trim(), {
+      loginName: syncLoginName.trim(),
+      password: syncLoginPassword,
+      deviceId: 'android-prototype',
+    });
+    setSyncToken(login.accessToken);
+    setSyncSessionExpiresAt(login.expiresAt);
+    setSyncLoginPassword('');
+    setStatus(`同步账号登录成功，会话有效至 ${new Date(login.expiresAt).toLocaleString()}。`);
+  }
+
+  async function logoutFromSyncService(): Promise<void> {
+    await createSyncClient().logout();
+    setSyncToken('');
+    setSyncSessionExpiresAt(null);
+    setStatus('已退出同步账号，当前访问令牌已撤销。');
+  }
+
+  async function toggleSyncAuthMode(): Promise<void> {
+    if (syncAuthMode === 'account' && syncToken) {
+      await createSyncClient().logout();
+    }
+    setSyncToken('');
+    setSyncSessionExpiresAt(null);
+    setSyncLoginPassword('');
+    setSyncAuthMode((current) => (current === 'account' ? 'token' : 'account'));
+    setStatus(syncAuthMode === 'account' ? '已切换到本地固定令牌模式。' : '已切换到受邀请账号登录。');
+  }
+
   async function uploadLocalCiphertext(): Promise<void> {
     setStatus('正在把本机密文发送到本地服务……');
     const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
@@ -424,7 +462,7 @@ export default function App() {
         {mode !== 'loading' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>本地密文同步</Text>
-            <Text style={styles.hint}>仅用于模拟器与网页联调。地址和令牌只保留在当前页面内存中。</Text>
+            <Text style={styles.hint}>登录密码和短期令牌只保留在当前页面内存中，与私密空间密码完全分离。</Text>
             <TextInput
               style={styles.input}
               placeholder="本地服务地址"
@@ -433,18 +471,55 @@ export default function App() {
               value={syncUrl}
               onChangeText={setSyncUrl}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="本地访问令牌"
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              value={syncToken}
-              onChangeText={setSyncToken}
-            />
-            <Button title="上传本机密文" disabled={busy || !vault} onPress={() => void runTask(uploadLocalCiphertext)} />
+            {syncAuthMode === 'account' ? (
+              syncToken ? (
+                <>
+                  <Text style={styles.hint}>受邀请账号已登录{syncSessionExpiresAt ? `，有效至 ${new Date(syncSessionExpiresAt).toLocaleString()}` : ''}。</Text>
+                  <Button title="退出同步账号" disabled={busy} onPress={() => void runTask(logoutFromSyncService)} />
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="受邀请账号"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={syncLoginName}
+                    onChangeText={setSyncLoginName}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="独立登录密码"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry
+                    value={syncLoginPassword}
+                    onChangeText={setSyncLoginPassword}
+                  />
+                  <Button title="登录同步服务" disabled={busy} onPress={() => void runTask(loginToSyncService)} />
+                </>
+              )
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="本地固定访问令牌"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                value={syncToken}
+                onChangeText={setSyncToken}
+              />
+            )}
             <View style={styles.spacer} />
-            <Button title="下载服务器密文" disabled={busy} onPress={() => void runTask(downloadRemoteCiphertext)} />
+            <Button
+              title={syncAuthMode === 'account' ? '改用本地固定令牌' : '改用受邀请账号'}
+              disabled={busy}
+              onPress={() => void runTask(toggleSyncAuthMode)}
+            />
+            <View style={styles.spacer} />
+            <Button title="上传本机密文" disabled={busy || !vault || !syncToken} onPress={() => void runTask(uploadLocalCiphertext)} />
+            <View style={styles.spacer} />
+            <Button title="下载服务器密文" disabled={busy || !syncToken} onPress={() => void runTask(downloadRemoteCiphertext)} />
           </View>
         )}
 

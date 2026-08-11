@@ -121,4 +121,14 @@ test('password sessions authenticate one account without exposing another accoun
     headers: bearer('not-a-valid-session-token'),
   });
   assert.equal(invalidToken.status, 401);
+
+  const logout = await fetch(`${baseUrl}/v1/auth/logout`, {
+    method: 'POST',
+    headers: bearer(aliceToken),
+  });
+  assert.equal(logout.status, 204);
+  const afterLogout = await fetch(`${baseUrl}/v1/memories`, {
+    headers: bearer(aliceToken),
+  });
+  assert.equal(afterLogout.status, 401);
 });

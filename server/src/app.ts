@@ -131,6 +131,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     });
   }
 
+  if (authenticator.logout) {
+    app.post('/v1/auth/logout', async (request, reply) => {
+      const token = bearerToken(request);
+      if (!token) {
+        return reply.code(401).send({ error: '访问令牌无效或已过期。' });
+      }
+      await authenticator.logout!(token);
+      return reply.code(204).send();
+    });
+  }
+
   app.put<{ Body: VaultEnvelopeV1 }>('/v1/vault', {
     schema: { body: vaultEnvelopeSchema },
   }, async (request, reply) => {

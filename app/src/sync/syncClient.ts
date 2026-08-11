@@ -9,11 +9,37 @@ export interface SyncClientOptions {
   token: string;
 }
 
+export interface SyncLoginCredentials {
+  loginName: string;
+  password: string;
+  deviceId?: string;
+}
+
+export interface SyncLoginSession {
+  accessToken: string;
+  expiresAt: string;
+}
+
 export class SyncRequestError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
     this.name = 'SyncRequestError';
   }
+}
+
+export async function loginSyncSession(
+  baseUrl: string,
+  credentials: SyncLoginCredentials,
+): Promise<SyncLoginSession> {
+  const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+  if (!response.ok) {
+    throw new SyncRequestError(response.status, `登录失败：HTTP ${response.status}。`);
+  }
+  return response.json() as Promise<SyncLoginSession>;
 }
 
 export class MemoryRecallSyncClient {
@@ -67,5 +93,9 @@ export class MemoryRecallSyncClient {
 
   getPhoto(photoId: string): Promise<EncryptedPhotoV1> {
     return this.request(`/v1/photos/${encodeURIComponent(photoId)}`);
+  }
+
+  logout(): Promise<void> {
+    return this.request('/v1/auth/logout', { method: 'POST' });
   }
 }

@@ -249,11 +249,11 @@ if (!databaseUrl) {
 
     now = new Date('2026-08-11T00:00:02.000Z');
     const revocableToken = await login(baseUrl, 'alice', 'alice-test-password');
-    await pool.query(
-      `UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP
-       WHERE account_id = $1::uuid AND revoked_at IS NULL`,
-      [alice.id],
-    );
+    const logout = await fetch(`${baseUrl}/v1/auth/logout`, {
+      method: 'POST',
+      headers: bearer(revocableToken),
+    });
+    assert.equal(logout.status, 204);
     const revoked = await fetch(`${baseUrl}/v1/memories`, { headers: bearer(revocableToken) });
     assert.equal(revoked.status, 401);
   });
