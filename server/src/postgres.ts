@@ -172,6 +172,16 @@ export class PostgresPasswordAuthStore implements PasswordAuthStore {
       revokedAt: toIsoString(session.revoked_at),
     };
   }
+
+  async revokeSessionByTokenHash(tokenHash: string, revokedAt: string): Promise<void> {
+    await this.database.query(
+      `UPDATE sessions
+       SET revoked_at = $2::timestamptz
+       WHERE token_hash = $1
+         AND revoked_at IS NULL`,
+      [tokenHash, revokedAt],
+    );
+  }
 }
 
 export class PostgresCipherStore implements CipherStore {

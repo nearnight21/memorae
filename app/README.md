@@ -17,12 +17,15 @@
 - 验证界面使用受邀请账号或本地固定令牌，手动上传、下载密文服务中的钥匙信封、MemoryV1 和照片密文。
 
 截至 2026-08-10，兼容性、密码、真实照片、指纹解锁和换机恢复五项 Android
-真机测试均已通过；现有自动协议测试为 11/11 通过。
+真机测试均已通过；现有自动协议测试为 11/11、TypeScript 检查和 Expo Doctor 20/20 均通过。
 
 `src/sync/` 已接入验证界面。试运行模式使用独立的登录账号与登录密码换取短期访问令牌；本地开发
-仍可切换到固定令牌。登录密码和令牌只保存在当前进程内存，退出会撤销服务端会话；它们与私密
+仍可切换到固定令牌。登录密码和令牌只保存在当前进程内存，HTTP logout 会撤销服务端会话；它们与私密
 空间密码、VMK 完全分离。应用不会读取 ThinkPad 数据。运行方法见
 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
+
+Android release 仅允许 `127.0.0.1`、`localhost` 和模拟器宿主地址 `10.0.2.2` 使用明文 HTTP；
+其他同步地址仍须使用 HTTPS。
 
 ## 本地检查
 
@@ -43,6 +46,9 @@ npx eas-cli build --platform android --profile preview
 ```
 
 `preview` 生成可直接安装的 APK；`production` 用于未来商店 AAB，不是当前目标。
+本机 `gradlew assembleRelease` 目前使用 Android Debug 证书，只适合受控测试；对外试运行前必须创建
+独立 release keystore 或配置 EAS Android Credentials，将密钥和密码放入受保护的凭据存储并单独备份，
+不得提交到 Git。
 
 完整真机步骤见 [docs/ANDROID-TESTING.md](docs/ANDROID-TESTING.md)。
 

@@ -29,7 +29,7 @@ import {
   type VaultSessionV1,
 } from '../crypto';
 import { downloadCiphertext, uploadCiphertext } from '../sync/syncActions';
-import { MemoryRecallSyncClient } from '../sync/syncClient';
+import { loginSyncSession, MemoryRecallSyncClient } from '../sync/syncClient';
 import {
   assertPrototypeBundle,
   clearPrototypeDatabase,
@@ -46,6 +46,7 @@ import {
 import './vault-prototype.css';
 
 type Phase = 'booting' | 'setup' | 'locked' | 'unlocked';
+type SyncAuthMode = 'account' | 'token';
 
 interface VisibleMemory extends MemoryV1 {
   photoUrls: string[];
@@ -118,7 +119,11 @@ export default function VaultPrototype() {
   const [resetArmed, setResetArmed] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
+  const [syncAuthMode, setSyncAuthMode] = useState<SyncAuthMode>('account');
+  const [syncLoginName, setSyncLoginName] = useState('');
+  const [syncLoginPassword, setSyncLoginPassword] = useState('');
   const [syncToken, setSyncToken] = useState('');
+  const [syncSessionExpiresAt, setSyncSessionExpiresAt] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const objectUrlsRef = useRef<string[]>([]);
@@ -459,6 +464,67 @@ export default function VaultPrototype() {
     });
   };
 
+  const handleLoginSyncService = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      if (!syncUrl.trim()) throw new Error('请输入密文服务地址。');
+      if (syncLoginName.trim().length < 3) throw new Error('请输入受邀请账号。');
+      if (syncLoginPassword.length < 8) throw new Error('登录密码至少需要 8 个字符。');
+      const login = await loginSyncSession(syncUrl.trim(), {
+        loginName: syncLoginName.trim(),
+        password: syncLoginPassword,
+        deviceId: 'web-prototype',
+      });
+      setSyncToken(login.accessToken);
+      setSyncSessionExpiresAt(login.expiresAt);
+      setSyncLoginPassword('');
+      setNotice(`同步账号登录成功，会话有效至 ${new Date(login.expiresAt).toLocaleString()}。`);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : '登录同步服务失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLogoutSyncService = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await createSyncClient().logout();
+      setSyncToken('');
+      setSyncSessionExpiresAt(null);
+      setNotice('已退出同步账号，当前访问令牌已撤销。');
+    } catch (logoutError) {
+      setError(logoutError instanceof Error ? logoutError.message : '退出同步账号失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleToggleSyncAuthMode = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      if (syncAuthMode === 'account' && syncToken) {
+        await createSyncClient().logout();
+      }
+      const nextMode = syncAuthMode === 'account' ? 'token' : 'account';
+      setSyncToken('');
+      setSyncSessionExpiresAt(null);
+      setSyncLoginPassword('');
+      setSyncAuthMode(nextMode);
+      setNotice(nextMode === 'account' ? '已切换到受邀请账号登录。' : '已切换到本地固定令牌模式。');
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : '切换认证模式失败。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleUploadCiphertext = async () => {
     setBusy(true);
     setError('');
@@ -550,22 +616,46 @@ export default function VaultPrototype() {
       <section className="vault-sync-card">
         <div className="vault-section-heading">
           <div><p>LOCAL CIPHERTEXT SYNC</p><h2>本地密文同步</h2></div>
-          <span>令牌不保存</span>
+          <span>{syncAuthMode === 'account' ? '账号会话不保存' : '固定令牌不保存'}</span>
         </div>
-        <p>用于当前电脑上的网页与 Android 模拟器联调，不会上传密码或 VMK。</p>
+        <p>登录密码和短期令牌只保留在页面内存中，与私密空间密码和 VMK 完全分离。</p>
         <div className="vault-sync-fields">
           <label>
             <span>本地服务地址</span>
             <input value={syncUrl} onChange={(event) => setSyncUrl(event.target.value)} inputMode="url" autoCapitalize="none" spellCheck={false} />
           </label>
-          <label>
-            <span>本地访问令牌</span>
-            <input type="password" value={syncToken} onChange={(event) => setSyncToken(event.target.value)} autoComplete="off" placeholder="启动服务时设置的令牌" />
-          </label>
+          {syncAuthMode === 'account' ? (
+            <>
+              <label>
+                <span>受邀请账号</span>
+                <input value={syncLoginName} onChange={(event) => setSyncLoginName(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={Boolean(syncToken)} />
+              </label>
+              <label>
+                <span>独立登录密码</span>
+                <input type="password" value={syncLoginPassword} onChange={(event) => setSyncLoginPassword(event.target.value)} autoComplete="current-password" placeholder={syncToken ? '账号已登录' : '至少 8 个字符'} disabled={Boolean(syncToken)} />
+              </label>
+            </>
+          ) : (
+            <label>
+              <span>本地固定访问令牌</span>
+              <input type="password" value={syncToken} onChange={(event) => setSyncToken(event.target.value)} autoComplete="off" placeholder="启动服务时设置的令牌" />
+            </label>
+          )}
         </div>
+        {syncAuthMode === 'account' && syncToken && syncSessionExpiresAt ? (
+          <p>账号已登录，会话有效至 {new Date(syncSessionExpiresAt).toLocaleString()}。</p>
+        ) : null}
         <div className="vault-sync-actions">
-          <button type="button" onClick={handleUploadCiphertext} disabled={busy || !envelope}><Upload size={16} />上传本机密文</button>
-          <button type="button" onClick={handleDownloadCiphertext} disabled={busy}><Download size={16} />下载服务器密文</button>
+          {syncAuthMode === 'account' ? (
+            syncToken
+              ? <button type="button" onClick={handleLogoutSyncService} disabled={busy}>退出同步账号</button>
+              : <button type="button" onClick={handleLoginSyncService} disabled={busy}>登录同步服务</button>
+          ) : null}
+          <button type="button" onClick={handleToggleSyncAuthMode} disabled={busy}>
+            {syncAuthMode === 'account' ? '改用本地固定令牌' : '改用受邀请账号'}
+          </button>
+          <button type="button" onClick={handleUploadCiphertext} disabled={busy || !envelope || !syncToken}><Upload size={16} />上传本机密文</button>
+          <button type="button" onClick={handleDownloadCiphertext} disabled={busy || !syncToken}><Download size={16} />下载服务器密文</button>
         </div>
       </section>
 

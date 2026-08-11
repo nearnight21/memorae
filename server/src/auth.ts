@@ -19,6 +19,7 @@ export interface LoginSession {
 export interface RequestAuthenticator {
   authenticate(accessToken: string): Promise<AuthenticatedAccount | null>;
   login?(credentials: LoginCredentials): Promise<LoginSession | null>;
+  logout?(accessToken: string): Promise<void>;
 }
 
 export interface PasswordAccount {
@@ -44,6 +45,7 @@ export interface PasswordAuthStore {
   findAccountByLogin(loginName: string): Promise<PasswordAccount | null>;
   createSession(session: NewStoredSession): Promise<void>;
   findSessionByTokenHash(tokenHash: string): Promise<StoredSession | null>;
+  revokeSessionByTokenHash(tokenHash: string, revokedAt: string): Promise<void>;
 }
 
 export interface PasswordHashOptions {
@@ -178,6 +180,14 @@ export class PasswordSessionAuthenticator implements RequestAuthenticator {
     return { accountId: session.accountId };
   }
 
+  async logout(accessToken: string): Promise<void> {
+    if (!accessToken) return;
+    await this.store.revokeSessionByTokenHash(
+      tokenHash(this.options.tokenPepper, accessToken),
+      this.now().toISOString(),
+    );
+  }
+
   getPasswordHashOptions(): PasswordHashOptions {
     return { ...this.passwordHash };
   }
@@ -218,5 +228,11 @@ export class InMemoryPasswordAuthStore implements PasswordAuthStore {
   async findSessionByTokenHash(tokenHashValue: string): Promise<StoredSession | null> {
     const session = this.sessionsByTokenHash.get(tokenHashValue);
     return session ? { ...session } : null;
+  }
+
+  async revokeSessionByTokenHash(tokenHashValue: string, revokedAt: string): Promise<void> {
+    const session = this.sessionsByTokenHash.get(tokenHashValue);
+    if (!session || session.revokedAt) return;
+    this.sessionsByTokenHash.set(tokenHashValue, { ...session, revokedAt });
   }
 }

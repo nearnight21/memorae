@@ -1,6 +1,6 @@
 # Memory Recall 国内试运行部署设计
 
-> 状态：PostgreSQL 迁移、受邀请账号、会话、账号隔离密文存储、COS 照片内容存储及 Docker/Caddy 配置已实现；尚未购买或部署云资源，未验证容器、真实数据库或 COS 桶
+> 状态：PostgreSQL 迁移、受邀请账号、可撤销会话、账号隔离密文存储、COS 照片内容存储及 Docker/Caddy 配置已实现；本机容器与真实 PostgreSQL 集成测试已通过，尚未购买云资源或验证公网 HTTPS 与真实 COS 桶
 >
 > 适用范围：仅限受邀请测试账号的 Android 与 Web 跨设备密文同步验收
 
@@ -107,5 +107,5 @@ MEMORY_RECALL_ALLOWED_ORIGINS=
 2. 已完成账号密码、会话校验和跨账号隔离的服务端回归测试。
 3. 已完成 PostgreSQL 存储、受邀请账号持久化和迁移脚本，JSON 存储仅供本地测试。
 4. 已实现照片密文字节迁移到私有 COS 的代码和失败清理；创建私有桶后运行真实 COS 验收。
-5. 已添加 Docker Compose、Caddy 反向代理和部署运行手册；创建最小云资源后进行真实容器验收。
+5. 已添加 Docker Compose、Caddy 反向代理和部署运行手册；本机 Docker/PostgreSQL 迁移、账号登录和 HTTP logout 验收已通过，创建最小云资源后再验收公网 HTTPS、真实 COS、备份和监控。
 6. 进行 Android 真机、Web 和第二台真实设备的公网验收。

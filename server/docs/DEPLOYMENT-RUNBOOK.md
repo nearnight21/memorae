@@ -97,6 +97,6 @@ docker compose exec -T postgres pg_dump -U memory_recall memory_recall \
 
 ## 当前部署门槛
 
-此仓库已提供 PostgreSQL、COS 和容器配置代码，但当前开发机没有 Docker、PostgreSQL 或真实 COS 桶，尚未完成
-容器、真实数据库及 COS 的端到端验收。完成本手册的首次启动和 COS 验收后，再把试运行环境标记为可对受邀请
-测试账号开放。
+当前开发机已通过 Docker Compose 启动 PostgreSQL 17.6、执行两项迁移、创建邀请账号，并完成登录、鉴权读取、
+HTTP logout 撤销以及随机 schema 的真实数据库集成测试。真实 COS 桶、Caddy 公网 HTTPS、备份与监控仍未验收；
+完成这些项目和双端公网恢复前，不得把试运行环境标记为可对受邀请测试账号开放。
