@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Memory Recall VMK",
+    "name": "所忆",
     "slug": "memory-recall-mobile",
     "version": "0.1.0",
     "scheme": "memory-recall-vmk",
@@ -26,13 +26,13 @@
         "expo-secure-store",
         {
           "configureAndroidBackup": true,
-          "faceIDPermission": "允许 Memory Recall 使用面容 ID 解锁本机私密空间。"
+          "faceIDPermission": "允许“所忆”使用面容 ID 解锁本机私密空间。"
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "允许 Memory Recall 选择照片并在设备端加密。",
+          "photosPermission": "允许“所忆”选择照片并在设备端加密。",
           "cameraPermission": false,
           "microphonePermission": false
         }
