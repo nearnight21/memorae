@@ -407,7 +407,7 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
     >
       {/* 软木板 / 时间线沿用紧凑切换器；地区页使用设计稿中的左侧主导航 */}
       {viewMode !== 'places' && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-1 bg-stone-900/85 backdrop-blur-md rounded-full border border-stone-700/50 p-1 shadow-xl">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-1 bg-stone-900/85 backdrop-blur-md rounded-full border border-stone-700/50 p-1 shadow-xl">
           {([
             { key: 'board', icon: '🗺️', name: '软木板' },
             { key: 'timeline', icon: '📖', name: '时间线' },
