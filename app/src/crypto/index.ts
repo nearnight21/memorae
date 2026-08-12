@@ -4,3 +4,4 @@ export * from './photoCipher';
 export * from './types';
 export * from './vault';
 export * from '../memory/memoryV1';
+export * from '../memory/memoryV2';

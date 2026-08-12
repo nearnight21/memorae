@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Plus, Image as ImageIcon, Sparkles, Check, Upload, Loader2, Images, MapPin } from 'lucide-react';
-import { uploadImage } from '../supabase';
+import { X, Plus, Image as ImageIcon, Check, Upload, Loader2, Images, MapPin } from 'lucide-react';
+import { selectLocalPhoto } from '../product/selectPhoto';
 import { Memory, CategoryType, PinnedBy } from '../types';
 import { geocodeAddress } from '../lib/geo';
 import LocationPicker from './LocationPicker';
@@ -8,7 +8,7 @@ import LocationMapPicker from './LocationMapPicker';
 
 interface AddMemoryDialogProps {
   onClose: () => void;
-  onAddMemory: (newMemory: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => void;
+  onAddMemory: (newMemory: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => Promise<void>;
 }
 
 export default function AddMemoryDialog({
@@ -23,7 +23,6 @@ export default function AddMemoryDialog({
   const [presentSelf, setPresentSelf] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [galleryInput, setGalleryInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
   const [pinnedBy, setPinnedBy] = useState<PinnedBy>('pin');
@@ -36,42 +35,12 @@ export default function AddMemoryDialog({
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Pre-configured elegant themed Unsplash stock pools
-  const categoryImagePresets: Record<CategoryType, string[]> = {
-    travel: [
-      'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1527631746610-bca00a040d60?auto=format&fit=crop&w=600&q=80',
-    ],
-    growth: [
-      'https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80',
-    ],
-    motorcycle: [
-      'https://images.unsplash.com/photo-1511920170033-f8396924c348?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
-    ],
-    photography: [
-      'https://images.unsplash.com/photo-1495707902641-75cac588d2e9?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=600&q=80',
-      'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=600&q=80',
-    ],
-  };
-
-  const autofillPresetImage = () => {
-    const list = categoryImagePresets[category];
-    const item = list[Math.floor(Math.random() * list.length)];
-    setImageUrl(item);
-  };
-
   const handleLocalUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsUploading(true);
       try {
-        const url = await uploadImage(file, 'camp_');
+        const url = await selectLocalPhoto(file);
         setImageUrl(url);
       } catch (err: any) {
         console.error('Upload failed:', err);
@@ -88,7 +57,6 @@ export default function AddMemoryDialog({
     setGalleryImages((images) =>
       images.includes(normalizedUrl) ? images : [...images, normalizedUrl]
     );
-    setGalleryInput('');
   };
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,7 +65,7 @@ export default function AddMemoryDialog({
 
     setIsGalleryUploading(true);
     try {
-      addGalleryImage(await uploadImage(file, 'gallery_'));
+      addGalleryImage(await selectLocalPhoto(file));
     } catch (err: any) {
       console.error('Gallery upload failed:', err);
       alert('随附照片上传失败：' + (err.message || '未知错误'));
@@ -136,12 +104,11 @@ export default function AddMemoryDialog({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !date || !pastSelf || !presentSelf) return;
+    if (!title || !date || !pastSelf || !presentSelf || !imageUrl) return;
 
-    // Use current customized or fall back to preset
-    const activeImage = imageUrl.trim() || categoryImagePresets[category][0];
+    const activeImage = imageUrl;
 
     // Auto-extract year from date string (e.g., "2025-04-12" or "2025.04.12")
     let parsedYear = 2025;
@@ -155,7 +122,7 @@ export default function AddMemoryDialog({
       }
     }
 
-    onAddMemory({
+    await onAddMemory({
       title,
       date: date.includes('-') ? date.replace(/-/g, '.') : date,
       year: parsedYear,
@@ -166,7 +133,7 @@ export default function AddMemoryDialog({
       pastSelf,
       presentSelf,
       pinnedBy,
-      location: locationName.trim() ? { name: locationName.trim(), mx: 0, my: 0 } : undefined,
+      location: locationName.trim() ? { name: locationName.trim(), mx: 50, my: 50 } : undefined,
       country: country.trim() || undefined,
       city: city.trim() || undefined,
       lat: lat ?? undefined,
@@ -431,37 +398,9 @@ export default function AddMemoryDialog({
                     />
                   </label>
 
-                  <div className="flex items-center gap-2 rounded-lg border border-amber-900/20 bg-[#fdfcf7] px-2.5 py-1.5">
-                    <ImageIcon className="h-3.5 w-3.5 shrink-0 text-stone-400" />
-                    <input
-                      id="add-input-image"
-                      type="url"
-                      placeholder="或粘贴封面图片 URL"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      className="min-w-0 flex-1 bg-transparent text-[10px] font-mono text-stone-700 outline-none placeholder:text-stone-400"
-                    />
-                    {imageUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => setImageUrl('')}
-                        className="shrink-0 px-1 text-xs text-stone-400 hover:text-stone-700"
-                        title="清除封面图"
-                        aria-label="清除封面图"
-                      >
-                        ✕
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={autofillPresetImage}
-                        className="shrink-0 inline-flex items-center gap-1 rounded border border-amber-200/70 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800 hover:bg-amber-100"
-                      >
-                        <Sparkles className="h-2.5 w-2.5" />
-                        自动配图
-                      </button>
-                    )}
-                  </div>
+                  <p className="rounded-lg border border-amber-900/20 bg-[#fdfcf7] px-2.5 py-2 text-[9px] leading-relaxed text-stone-500">
+                    照片只从本机选择，保存时生成三档密文；不会先上传到第三方图床。
+                  </p>
                 </div>
               </div>
 
@@ -474,7 +413,7 @@ export default function AddMemoryDialog({
                     }`}
                   >
                     {isGalleryUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                    {isGalleryUploading ? '上传中…' : '上传本地照片'}
+                    {isGalleryUploading ? '处理中…' : '选择本地照片'}
                     <input
                       id="add-input-gallery-file"
                       type="file"
@@ -484,31 +423,6 @@ export default function AddMemoryDialog({
                       className="hidden"
                     />
                   </label>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    id="add-input-gallery-url"
-                    type="url"
-                    placeholder="粘贴随附照片 URL"
-                    value={galleryInput}
-                    onChange={(e) => setGalleryInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addGalleryImage(galleryInput);
-                      }
-                    }}
-                    className="min-w-0 flex-1 rounded-lg border border-amber-900/20 bg-[#fdfcf7] px-2.5 py-1.5 text-[10px] font-mono outline-none focus:border-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addGalleryImage(galleryInput)}
-                    disabled={!galleryInput.trim()}
-                    className="rounded-lg bg-amber-900 px-2.5 py-1.5 text-[10px] font-semibold text-stone-100 transition-colors hover:bg-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    添加
-                  </button>
                 </div>
 
                 {galleryImages.length > 0 && (

@@ -18,15 +18,27 @@ import {
   Clock3,
   Footprints,
   ChevronRight,
-  X
+  X,
+  Cloud,
+  LoaderCircle,
+  LockKeyhole,
 } from 'lucide-react';
 
 // Data & Types
-import { Memory, CategoryType, PinnedBy } from './types';
-import { INITIAL_MEMORIES } from './data';
-
-// Supabase client
-import { supabase, uploadImage, mapMemory, memoryToDb } from './supabase';
+import { Memory } from './types';
+import { decryptMemoryV2, type VaultSessionV1 } from './crypto';
+import {
+  getVaultEnvelope,
+  listEncryptedMemories,
+  listEncryptedPhotos,
+  saveCachedEncryptedPhoto,
+  saveEncryptedMemory,
+  saveEncryptedPhoto,
+  saveVaultEnvelope,
+} from './prototype/storage';
+import { deleteProductMemory, loadProductMemories, saveProductMemory } from './product/productStore';
+import { downloadCiphertext, uploadCiphertext } from './sync/syncActions';
+import { loginSyncSession, MemoryRecallSyncClient } from './sync/syncClient';
 
 // Subcomponents
 import CampfireSynthPlayer from './components/CampfireSynthPlayer';
@@ -37,17 +49,34 @@ import AddMemoryDialog from './components/AddMemoryDialog';
 import TimelineView from './components/TimelineView';
 import MapView from './components/MapView';
 
-export default function App() {
-  // --- Auth States ---
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authSubmitting, setAuthSubmitting] = useState(false);
+const cipherSyncStorage = {
+  getVault: getVaultEnvelope,
+  saveVault: saveVaultEnvelope,
+  listMemories: listEncryptedMemories,
+  listPhotos: listEncryptedPhotos,
+  saveMemory: saveEncryptedMemory,
+  savePhoto: saveEncryptedPhoto,
+  saveCachedPhoto: saveCachedEncryptedPhoto,
+};
+
+interface AppProps {
+  session: VaultSessionV1;
+  initialMemories: Memory[];
+  onLock: () => void;
+}
+
+export default function App({ session, initialMemories, onLock }: AppProps) {
+  const [showSync, setShowSync] = useState(false);
+  const [syncUrl, setSyncUrl] = useState(import.meta.env.VITE_MEMORY_RECALL_API_URL?.trim() || 'http://127.0.0.1:8788');
+  const [syncLoginName, setSyncLoginName] = useState('');
+  const [syncLoginPassword, setSyncLoginPassword] = useState('');
+  const [syncToken, setSyncToken] = useState('');
+  const [syncStatus, setSyncStatus] = useState('');
+  const [syncError, setSyncError] = useState('');
+  const [syncBusy, setSyncBusy] = useState(false);
 
   // --- Persistent States ---
-  const [memories, setMemories] = useState<Memory[]>([]);
+  const [memories, setMemories] = useState<Memory[]>(initialMemories);
 
   // --- Board Scenery States (Continuous Timeline) ---
   const [scrollX, setScrollX] = useState<number>(0);
@@ -68,45 +97,6 @@ export default function App() {
     if (mode === 'places') setHasOpenedPlaces(true);
     setViewMode(mode);
   };
-
-  // --- Auth initialization ---
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }: any) => {
-      setSession(s);
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, s: any) => {
-      setSession(s);
-    });
-
-    return () => subscription?.unsubscribe();
-  }, []);
-
-  // --- Data fetch after auth ---
-  useEffect(() => {
-    if (!session) return;
-
-    const loadData = async () => {
-      const { data: memData, error: memErr } = await supabase
-        .from("memories")
-        .select("*")
-        .order("date", { ascending: false });
-
-      if (!memErr && memData && memData.length > 0) {
-        setMemories(memData.map(m => ({ ...m, py: Math.max(0, Math.min(58, m.py)) })).map(mapMemory));
-      } else if (!localStorage.getItem("camp_seeded")) {
-        // Seed demo data once per browser; prevents re-seeding after the user deletes all memories
-        setMemories(INITIAL_MEMORIES);
-        for (const m of INITIAL_MEMORIES) {
-          await supabase.from("memories").insert(memoryToDb(m));
-        }
-        localStorage.setItem("camp_seeded", "1");
-      }
-    };
-
-    loadData();
-  }, [session]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -246,13 +236,8 @@ export default function App() {
   const [showAddMemory, setShowAddMemory] = useState<boolean>(false);
   const [showGuide, setShowGuide] = useState<boolean>(false);
 
-  // --- Supabase-backed state mutators ---
-  const saveMemoriesToStorage = async (updatedMemories: Memory[]) => {
-    setMemories(updatedMemories);
-  };
-
   // --- Adds a new memory Polaroid ---
-  const handleAddMemory = (newMem: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => {
+  const handleAddMemory = async (newMem: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => {
     // Generate organic relative percentage positioning matching selected Category quadrants
     // travel: Left-Up (px:6-22, py:6-26)
     // growth: Right-Up (px:70-86, py:6-26)
@@ -283,38 +268,17 @@ export default function App() {
         break;
     }
 
-    // Include dynamic geographical map connection if category matches and locations available
-    let locationVal = undefined;
-    if (newMem.category === 'travel') {
-      const places = [
-        { name: 'Okinawa Beaches', mx: 38, my: 80 },
-        { name: 'Toyama Peaks', mx: 50, my: 48 },
-        { name: 'Sapporo Snows', mx: 66, my: 18 }
-      ];
-      locationVal = places[rnd(0, places.length - 1)];
-    } else if (newMem.category === 'motorcycle') {
-      const places = [
-        { name: 'Izu Shore dirt route', mx: 58, my: 55 },
-        { name: 'Nikko Scenic passes', mx: 60, my: 38 }
-      ];
-      locationVal = places[rnd(0, places.length - 1)];
-    }
-
     const completedMemory: Memory = {
       ...newMem,
-      id: `custom-memory-${Date.now()}`,
+      id: crypto.randomUUID(),
       px,
       py,
       rotation: rnd(-9, 9),
-      location: locationVal
     };
 
+    await saveProductMemory(session, completedMemory);
     const updated = [completedMemory, ...memories];
-    saveMemoriesToStorage(updated);
-    // Persist to Supabase
-    supabase.from("memories").insert(memoryToDb(completedMemory)).then(({ error }: any) => {
-      if (error) console.error("addMemory error:", error);
-    });
+    setMemories(updated);
 
     // Dynamic focus onto the newly added memory's year
     const nextYearsList = Array.from(new Set([...updated.map(m => m.year), 2024, 2025, 2026])).sort((a, b) => a - b);
@@ -330,28 +294,100 @@ export default function App() {
   const handleUpdateMemory = (updatedMem: Memory) => {
     const updated = memories.map(m => m.id === updatedMem.id ? updatedMem : m);
     setMemories(updated);
-    saveMemoriesToStorage(updated);
-    
+
     // Sync current detail modal
     if (selectedMemory && selectedMemory.id === updatedMem.id) {
       setSelectedMemory(updatedMem);
     }
   };
 
-  const handleSaveMapMemory = async (updatedMem: Memory) => {
-    const { error } = await supabase.from('memories').update(memoryToDb(updatedMem)).eq('id', updatedMem.id);
-    if (error) throw error;
+  const handleSaveMemory = async (updatedMem: Memory) => {
+    await saveProductMemory(session, updatedMem);
     handleUpdateMemory(updatedMem);
   };
 
   const handleDeleteMemory = async (id: string) => {
+    await deleteProductMemory(id);
     const updated = memories.filter(m => m.id !== id);
     setMemories(updated);
-    saveMemoriesToStorage(updated);
     if (selectedMemory && selectedMemory.id === id) {
       setSelectedMemory(null);
     }
-    await supabase.from("memories").delete().eq("id", id);
+  };
+
+  const createSyncClient = () => {
+    if (!syncUrl.trim()) throw new Error('请输入密文服务地址。');
+    if (!syncToken.trim()) throw new Error('请先登录同步账号。');
+    return new MemoryRecallSyncClient({ baseUrl: syncUrl.trim(), token: syncToken.trim() });
+  };
+
+  const handleSyncLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSyncBusy(true);
+    setSyncError('');
+    setSyncStatus('');
+    try {
+      const login = await loginSyncSession(syncUrl.trim(), {
+        loginName: syncLoginName.trim(),
+        password: syncLoginPassword,
+        deviceId: 'web-product',
+      });
+      setSyncToken(login.accessToken);
+      setSyncLoginPassword('');
+      setSyncStatus('同步账号已登录。');
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : '同步账号登录失败。');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleUploadCiphertext = async () => {
+    setSyncBusy(true);
+    setSyncError('');
+    setSyncStatus('');
+    try {
+      const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
+      setSyncStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : '上传密文失败。');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleDownloadCiphertext = async () => {
+    setSyncBusy(true);
+    setSyncError('');
+    setSyncStatus('');
+    try {
+      const result = await downloadCiphertext({
+        client: createSyncClient(),
+        storage: cipherSyncStorage,
+        decryptMemory: async (memory) => (await decryptMemoryV2(session, memory)).memory,
+      });
+      setMemories(await loadProductMemories(session));
+      setSelectedMemory(null);
+      setSyncStatus(`下载完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : '下载密文失败。');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleSyncLogout = async () => {
+    setSyncBusy(true);
+    setSyncError('');
+    try {
+      await createSyncClient().logout();
+      setSyncToken('');
+      setSyncStatus('同步账号已退出，当前会话已撤销。');
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : '退出同步账号失败。');
+    } finally {
+      setSyncBusy(false);
+    }
   };
 
   // --- Filter active memories on the board matching selected timeline year ---
@@ -360,86 +396,6 @@ export default function App() {
   const isMobile = windowWidth < 1024;
   const targetW = Math.max(280, windowWidth * 0.94 - 16);
   const boardScale = isMobile ? Math.min(1, targetW / 1150) : 1;
-
-  // --- Auth handlers ---
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setAuthError(error.message);
-    }
-    setAuthSubmitting(false);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setMemories([]);
-  };
-
-  // --- Auth loading screen ---
-  if (authLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#1A1A18]">
-        <div className="text-5xl animate-bounce">🏕️</div>
-      </div>
-    );
-  }
-
-  // --- Login page ---
-  if (!session) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#1A1A18] p-4">
-        <form onSubmit={handleLogin} className="w-full max-w-sm bg-[#23211D] border border-[#3a352e] rounded-2xl p-8 shadow-2xl">
-          <div className="text-center mb-6">
-            <div className="text-5xl mb-3">🏕️</div>
-            <h1 className="text-2xl font-bold text-[#E8DEC8] font-display tracking-tight">Camp Memories</h1>
-            <p className="text-sm text-[#9C947C] mt-1 font-mono">Sign in to continue</p>
-          </div>
-          {authError && (
-            <div className="mb-4 p-2 bg-red-900/30 border border-red-800/40 rounded-lg text-red-300 text-xs text-center">
-              {authError}
-            </div>
-          )}
-          <div className="space-y-3 mb-5">
-            <div>
-              <label className="block text-xs font-mono text-[#9C947C] mb-1 tracking-wider uppercase">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full bg-[#1A1A18] border border-[#3a352e] rounded-lg px-3 py-2.5 text-[#E8DEC8] text-sm focus:outline-none focus:border-[#6b5d4a] transition-colors"
-                placeholder="your@email.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-mono text-[#9C947C] mb-1 tracking-wider uppercase">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full bg-[#1A1A18] border border-[#3a352e] rounded-lg px-3 py-2.5 text-[#E8DEC8] text-sm focus:outline-none focus:border-[#6b5d4a] transition-colors"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={authSubmitting}
-            className="w-full py-2.5 rounded-lg bg-[#E8DEC8] text-[#1A1A18] font-semibold text-sm hover:bg-[#d4c9ae] transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {authSubmitting ? "Signing in..." : "Enter Camp Memories"}
-          </button>
-          <p className="text-center text-[10px] text-[#6b5d4a] mt-4 font-mono">
-            Uses same Supabase account as ThinkPad
-          </p>
-        </form>
-      </div>
-    );
-  }
 
   return (
     <div 
@@ -502,11 +458,11 @@ export default function App() {
       </div>
 
       {/* Atmospheric sounds & explanation banner in Header */}
-      <header className="absolute top-4 inset-x-5 z-40 flex items-start justify-between">
+      <header className="absolute top-4 inset-x-5 z-[100] flex items-start justify-between">
         <div className="flex flex-col gap-1 text-left">
           <div className="flex items-center gap-2">
             <span className="text-xl font-bold font-display tracking-widest text-amber-500/90 uppercase">
-              Camp Memories
+              所忆
             </span>
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
           </div>
@@ -518,8 +474,36 @@ export default function App() {
         {/* Ambient Volume Synthesizer Panel */}
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setShowSync(true);
+            }}
+            className="p-2 bg-stone-900/60 hover:bg-stone-800 border border-amber-950/40 text-stone-300 rounded-lg text-xs font-display flex items-center gap-1.5 transition-all outline-hidden cursor-pointer shadow"
+          >
+            <Cloud className="h-4 w-4" />
+            <span className="hidden sm:inline">跨设备同步</span>
+          </button>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onLock();
+            }}
+            className="p-2 bg-stone-900/60 hover:bg-stone-800 border border-amber-950/40 text-stone-300 rounded-lg text-xs font-display flex items-center gap-1.5 transition-all outline-hidden cursor-pointer shadow"
+          >
+            <LockKeyhole className="h-4 w-4" />
+            <span className="hidden sm:inline">锁定</span>
+          </button>
+          <button
             id="btn-trigger-guide"
-            onClick={() => setShowGuide(true)}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setShowGuide(true);
+            }}
             className="p-2 bg-stone-900/60 hover:bg-stone-800 border border-amber-950/40 text-stone-300 rounded-lg text-xs font-display flex items-center gap-1.5 transition-all outline-hidden cursor-pointer shadow"
           >
             <HelpCircle className="h-4 w-4" />
@@ -533,7 +517,7 @@ export default function App() {
       {/* Right-Top hanging Camp Lantern Toggle Button (💡) */}
       <div 
         onClick={() => setIsLanternOn(!isLanternOn)}
-        className="absolute top-0 right-[22%] z-45 flex flex-col items-center cursor-pointer group select-none"
+        className="absolute top-0 right-[22%] z-[45] flex flex-col items-center cursor-pointer group select-none"
         title="点击旋钮或灯体开关营灯"
       >
         {/* Wire holding the lamp */}
@@ -887,7 +871,7 @@ export default function App() {
 
       {/* Footer copyright */}
       <footer className="absolute bottom-3 left-0 right-0 z-30 text-center text-[10px] text-stone-500 font-mono tracking-widest pointer-events-none">
-        <p>CAMP MEMORIES Ledger © 2026 · Places Pinned, People Grown</p>
+        <p>所忆 © 2026 · 你的记忆，只由你打开</p>
       </footer>
 
       {/* 时间线单独覆盖；地图在首次打开后保持挂载，避免重复初始化和重新下载瓦片。 */}
@@ -904,7 +888,7 @@ export default function App() {
             selectedMemory={selectedMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
-            onSaveMemory={handleSaveMapMemory}
+            onSaveMemory={handleSaveMemory}
           />
           <aside
                 id="places-primary-nav"
@@ -985,14 +969,66 @@ export default function App() {
       {/* ======================================================== */}
       {/* 5. MODALS & FLOATING DIALOG OVERLAYS */}
       {/* ======================================================== */}
+      {showSync && (
+          <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+            <div className="absolute inset-0" onClick={() => setShowSync(false)} />
+            <motion.section
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-[#8D7145]/40 bg-[#211D17] p-6 text-[#F0E7D5] shadow-2xl"
+            >
+              <button type="button" onClick={() => setShowSync(false)} className="absolute right-4 top-4 rounded-full p-1.5 text-[#9F927D] hover:bg-white/5 hover:text-white" aria-label="关闭同步面板">
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#342B20] text-[#D4AE67]"><Cloud /></span>
+                <div>
+                  <p className="text-[10px] tracking-[0.18em] text-[#A88C5C]">所忆 · 密文同步</p>
+                  <h2 className="mt-1 text-xl font-semibold">跨设备同步</h2>
+                </div>
+              </div>
+              <p className="mt-4 text-xs leading-6 text-[#BDB3A1]">服务器只接收已经加密的记忆和照片；私密空间密码不会发送到服务器。</p>
+              <form className="mt-5 space-y-3" onSubmit={handleSyncLogin}>
+                <label className="block text-xs text-[#B9AA91]">密文服务地址
+                  <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" value={syncUrl} onChange={(event) => setSyncUrl(event.target.value)} required />
+                </label>
+                {!syncToken && (
+                  <>
+                    <label className="block text-xs text-[#B9AA91]">同步账号
+                      <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" value={syncLoginName} onChange={(event) => setSyncLoginName(event.target.value)} autoComplete="username" required />
+                    </label>
+                    <label className="block text-xs text-[#B9AA91]">同步账号密码
+                      <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" type="password" value={syncLoginPassword} onChange={(event) => setSyncLoginPassword(event.target.value)} autoComplete="current-password" required />
+                    </label>
+                    <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#C29A54] px-4 py-2.5 font-semibold text-[#17130D] disabled:opacity-50" type="submit" disabled={syncBusy}>
+                      {syncBusy && <LoaderCircle className="h-4 w-4 animate-spin" />}登录同步账号
+                    </button>
+                  </>
+                )}
+              </form>
+              {syncToken && (
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <button type="button" onClick={handleUploadCiphertext} disabled={syncBusy} className="rounded-lg border border-[#98763E] bg-[#342B20] px-3 py-2.5 text-sm text-[#E2C78F] hover:bg-[#403427] disabled:opacity-50">上传本机密文</button>
+                  <button type="button" onClick={handleDownloadCiphertext} disabled={syncBusy} className="rounded-lg bg-[#C29A54] px-3 py-2.5 text-sm font-semibold text-[#17130D] hover:bg-[#D5B36F] disabled:opacity-50">下载服务器密文</button>
+                  <button type="button" onClick={handleSyncLogout} disabled={syncBusy} className="col-span-2 text-xs text-[#948671] hover:text-[#CFB98D] disabled:opacity-50">退出同步账号</button>
+                </div>
+              )}
+              {syncBusy && syncToken && <p className="mt-4 flex items-center gap-2 text-xs text-[#C7B89D]"><LoaderCircle className="h-4 w-4 animate-spin" />正在同步密文</p>}
+              {syncStatus && <p className="mt-4 rounded-lg border border-emerald-700/30 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-200">{syncStatus}</p>}
+              {syncError && <p className="mt-4 rounded-lg border border-red-700/30 bg-red-950/25 px-3 py-2 text-xs text-red-200">{syncError}</p>}
+            </motion.section>
+          </div>
+        )}
+
       <AnimatePresence>
-        
         {/* Memory Journal/Notebook Detailed Reader Panel */}
         {selectedMemory && viewMode !== 'places' && (
           <MemoryDetailPanel
             memory={selectedMemory}
             onClose={() => setSelectedMemory(null)}
             onUpdateMemory={handleUpdateMemory}
+            onSaveMemory={handleSaveMemory}
           />
         )}
 

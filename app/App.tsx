@@ -18,13 +18,13 @@ import {
 import {
   bytesToBase64,
   createVault,
-  decryptMemoryV1,
+  decryptMemoryV2,
   decryptPhoto,
   destroyVaultSession,
-  encryptMemoryV1,
+  encryptMemoryV2,
   encryptPhoto,
   unlockVault,
-  type MemoryV1,
+  type MemoryV2,
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from './src/crypto';
@@ -91,8 +91,8 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
-  const [memories, setMemories] = useState<MemoryV1[]>([]);
-  const [selectedMemory, setSelectedMemory] = useState<MemoryV1 | null>(null);
+  const [memories, setMemories] = useState<MemoryV2[]>([]);
+  const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [title, setTitle] = useState('');
@@ -150,12 +150,13 @@ export default function App() {
   async function refreshMemories(activeSession: VaultSessionV1): Promise<number> {
     const encrypted = await listEncryptedMemories();
     let migratedCount = 0;
-    const decrypted: MemoryV1[] = [];
+    const decrypted: MemoryV2[] = [];
     for (const item of encrypted) {
-      const result = await decryptMemoryV1(nativeCryptoPrimitives, activeSession, item);
+      if (item.deleted) continue;
+      const result = await decryptMemoryV2(nativeCryptoPrimitives, activeSession, item);
       decrypted.push(result.memory);
       if (result.migrated) {
-        await saveEncryptedMemory(await encryptMemoryV1(
+        await saveEncryptedMemory(await encryptMemoryV2(
           nativeCryptoPrimitives,
           activeSession,
           result.memory,
@@ -174,7 +175,7 @@ export default function App() {
     setMode('unlocked');
     setPassword('');
     const migratedCount = await refreshMemories(activeSession);
-    setStatus(migratedCount > 0 ? `${message} 已将 ${migratedCount} 条旧记忆升级为 MemoryV1。` : message);
+    setStatus(migratedCount > 0 ? `${message} 已将 ${migratedCount} 条旧记忆升级为 MemoryV2。` : message);
   }
 
   function lock(): void {
@@ -318,14 +319,18 @@ export default function App() {
     }
 
     const now = new Date().toISOString();
-    const memory: MemoryV1 = {
-      schemaVersion: 1,
+    const memory: MemoryV2 = {
+      schemaVersion: 2,
       id: nativeCryptoPrimitives.randomUUID(),
       title: title.trim() || '无标题',
-      text: body.trim(),
+      pastSelf: body.trim(),
+      presentSelf: '',
       date,
-      tags: tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
-      location: location.trim() ? { name: location.trim() } : null,
+      category: location.trim() ? 'travel' : 'growth',
+      tag: tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean).join(' · '),
+      pinnedBy: 'pin',
+      board: { px: 20, py: 20, rotation: 0 },
+      location: location.trim() ? { name: location.trim(), mx: 50, my: 50 } : null,
       photos: photoId && pendingPhoto
         ? [{ id: photoId, mimeType: pendingPhoto.mimeType }]
         : [],
@@ -333,7 +338,7 @@ export default function App() {
       updatedAt: now,
     };
     try {
-      const encryptedMemory = await encryptMemoryV1(
+      const encryptedMemory = await encryptMemoryV2(
         nativeCryptoPrimitives,
         session,
         memory,
@@ -359,7 +364,7 @@ export default function App() {
     setStatus(`记忆已加密保存${photoMetric}。`);
   }
 
-  async function showPhoto(memory: MemoryV1): Promise<void> {
+  async function showPhoto(memory: MemoryV2): Promise<void> {
     const photoId = memory.photos[0]?.id;
     if (!session || !photoId) return;
     const encrypted = await getEncryptedPhoto(photoId, 'preview')
@@ -372,7 +377,7 @@ export default function App() {
     setStatus(`照片只在内存中解密，用时 ${Math.round(performance.now() - startedAt)} ms。`);
   }
 
-  async function openMemory(memory: MemoryV1): Promise<void> {
+  async function openMemory(memory: MemoryV2): Promise<void> {
     setSelectedMemory(memory);
     setPreviewUri(null);
     if (memory.photos.length > 0) await showPhoto(memory);
@@ -462,7 +467,7 @@ export default function App() {
       client: createSyncClient(),
       storage: cipherSyncStorage,
       decryptMemory: session
-        ? async (memory) => (await decryptMemoryV1(
+        ? async (memory) => (await decryptMemoryV2(
           nativeCryptoPrimitives,
           session,
           memory,
@@ -689,9 +694,9 @@ export default function App() {
                   <Text style={styles.readerTitle}>{selectedMemory.title}</Text>
                   {selectedMemory.location && <Text style={styles.readerLocation}>⌖ {selectedMemory.location.name}</Text>}
                   {previewUri && <Image source={{ uri: previewUri }} style={styles.readerPhoto} resizeMode="cover" />}
-                  <Text selectable style={styles.readerBody}>{selectedMemory.text || '这段记忆没有正文。'}</Text>
-                  {selectedMemory.tags.length > 0 && (
-                    <View style={styles.tagRow}>{selectedMemory.tags.map((tag) => <Text key={tag} style={styles.tag}>#{tag}</Text>)}</View>
+                  <Text selectable style={styles.readerBody}>{selectedMemory.pastSelf || '这段记忆没有正文。'}</Text>
+                  {selectedMemory.tag && (
+                    <View style={styles.tagRow}>{selectedMemory.tag.split(' · ').map((tag) => <Text key={tag} style={styles.tag}>#{tag}</Text>)}</View>
                   )}
                   <Button title="返回记忆列表" onPress={() => { setSelectedMemory(null); setPreviewUri(null); }} />
                 </View>
@@ -701,7 +706,7 @@ export default function App() {
                   {memories.map((memory) => (
                     <Pressable key={memory.id} style={({ pressed }) => [styles.memoryCard, pressed && styles.memoryCardPressed]} onPress={() => void runTask(() => openMemory(memory))}>
                       <Text style={styles.memoryTitle}>{memory.title}</Text>
-                      <Text numberOfLines={3} style={styles.memoryBody}>{memory.text}</Text>
+                      <Text numberOfLines={3} style={styles.memoryBody}>{memory.pastSelf}</Text>
                       <Text style={styles.memoryMeta}>{memory.date}{memory.location ? ` · ${memory.location.name}` : ''}</Text>
                       <Text style={styles.readLink}>阅读完整记忆 →</Text>
                     </Pressable>

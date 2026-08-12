@@ -1,7 +1,13 @@
 import type { MemoryV1 } from './memoryV1';
+import type { MemoryV2 } from './memoryV2';
 import type { CategoryType, Memory, PinnedBy } from '../types';
 
 export interface VisibleMemoryV1 extends MemoryV1 {
+  photoUrls: string[];
+  thumbnailUrls: string[];
+}
+
+export interface VisibleMemoryV2 extends MemoryV2 {
   photoUrls: string[];
   thumbnailUrls: string[];
 }
@@ -19,8 +25,35 @@ function stableHash(value: string): number {
 }
 
 /** 把设备端解密后的正式 MemoryV1 转成现有地图/时间线的只读展示模型。 */
-export function toDisplayMemory(memory: VisibleMemoryV1): Memory {
+export function toDisplayMemory(memory: VisibleMemoryV1 | VisibleMemoryV2): Memory {
   const hash = stableHash(memory.id);
+
+  if (memory.schemaVersion === 2) {
+    const location = memory.location;
+    return {
+      id: memory.id,
+      title: memory.title,
+      date: memory.date,
+      year: Number(memory.date.slice(0, 4)),
+      category: memory.category,
+      tag: memory.tag,
+      image: memory.thumbnailUrls[0] ?? memory.photoUrls[0] ?? '',
+      gallery: memory.photoUrls,
+      pastSelf: memory.pastSelf,
+      presentSelf: memory.presentSelf,
+      pinnedBy: memory.pinnedBy,
+      px: memory.board.px,
+      py: memory.board.py,
+      rotation: memory.board.rotation,
+      location: location ? { name: location.name, mx: location.mx, my: location.my } : undefined,
+      country: location?.country,
+      city: location?.city,
+      lat: location?.lat,
+      lng: location?.lng,
+      detailLocation: location?.detail,
+    };
+  }
+
   const location = memory.location;
 
   return {

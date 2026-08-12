@@ -6,18 +6,22 @@ import {
   createVault,
   decryptMemory,
   decryptMemoryV1,
+  decryptMemoryV2,
   decryptPhoto,
   destroyVaultSession,
   encryptMemory,
   encryptMemoryV1,
+  encryptMemoryV2,
   encryptPhoto,
   MemorySchemaError,
   readMemoryV1,
+  readMemoryV2,
   unlockVault,
   VaultUnlockError,
   type EncryptedMemoryV1,
   type EncryptedPhotoV1,
   type MemoryV1,
+  type MemoryV2,
   type VaultEnvelopeV1,
 } from '../src/crypto';
 import { base64ToBytes } from '../src/crypto/encoding';
@@ -65,6 +69,32 @@ const sampleMemoryV1: MemoryV1 = {
   photos: [{ id: 'photo-v1-hangzhou-001', mimeType: 'image/png' }],
   createdAt: '2026-08-09T10:20:30.000Z',
   updatedAt: '2026-08-09T10:20:30.000Z',
+};
+
+const sampleMemoryV2: MemoryV2 = {
+  schemaVersion: 2,
+  id: 'memory-v2-hangzhou-001',
+  title: '雨后的西湖',
+  date: '2026-08-12',
+  category: 'travel',
+  tag: '杭州 · 散步',
+  pastSelf: '傍晚沿湖散步，树叶和石板路都很亮。',
+  presentSelf: '现在仍然记得雨后的气味。',
+  pinnedBy: 'tape',
+  board: { px: 18, py: 24, rotation: -3 },
+  location: {
+    name: '西湖边',
+    city: '杭州',
+    country: '中国',
+    lat: 30.246,
+    lng: 120.15,
+    mx: 42,
+    my: 55,
+    detail: '苏堤南口',
+  },
+  photos: [{ id: 'photo-v2-hangzhou-001', mimeType: 'image/jpeg' }],
+  createdAt: '2026-08-12T10:20:30.000Z',
+  updatedAt: '2026-08-12T10:20:30.000Z',
 };
 
 const ANDROID_MEMORY_V1_FIXTURE_PASSWORD = 'memory-v1-cross-client-password';
@@ -150,6 +180,28 @@ test('MemoryV1 加密后可以逐字段恢复', async () => {
 
   assert.equal(restored.migrated, false);
   assert.deepEqual(restored.memory, sampleMemoryV1);
+});
+
+test('MemoryV2 能无损保存正式界面的版面、地点、双时态正文和照片', async () => {
+  const { session } = await createTestVault();
+  const encrypted = await encryptMemoryV2(session, sampleMemoryV2);
+  const restored = await decryptMemoryV2(session, encrypted);
+
+  assert.equal(restored.migrated, false);
+  assert.deepEqual(restored.memory, sampleMemoryV2);
+  assert.equal(JSON.stringify(encrypted).includes(sampleMemoryV2.pastSelf), false);
+  assert.equal(JSON.stringify(encrypted).includes(sampleMemoryV2.location?.detail ?? ''), false);
+});
+
+test('MemoryV1 会补齐正式界面字段并迁移为 MemoryV2', () => {
+  const result = readMemoryV2(sampleMemoryV1);
+
+  assert.equal(result.migrated, true);
+  assert.equal(result.memory.schemaVersion, 2);
+  assert.equal(result.memory.pastSelf, sampleMemoryV1.text);
+  assert.equal(result.memory.tag, '杭州 · 散步');
+  assert.equal(result.memory.location?.name, '西湖边');
+  assert.deepEqual(result.memory.photos, sampleMemoryV1.photos);
 });
 
 test('Web 可以逐字段恢复 Android 生成的固定 MemoryV1 密文夹具', async () => {

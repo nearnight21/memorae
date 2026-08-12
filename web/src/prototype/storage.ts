@@ -206,6 +206,18 @@ export async function deleteEncryptedMemory(memoryId: string, photoIds: string[]
   });
 }
 
+export async function deleteEncryptedPhotoVariants(photoId: string): Promise<void> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(PHOTO_STORE, 'readwrite');
+    const photoStore = transaction.objectStore(PHOTO_STORE);
+    const keys = await requestResult(
+      photoStore.index(PHOTO_ID_INDEX).getAllKeys(photoId),
+    );
+    keys.forEach((key) => photoStore.delete(key));
+    await transactionComplete(transaction);
+  });
+}
+
 export function assertPrototypeBundle(value: unknown): asserts value is PrototypeBundleV1 {
   if (!value || typeof value !== 'object') {
     throw new Error('文件不是有效的密文包。');

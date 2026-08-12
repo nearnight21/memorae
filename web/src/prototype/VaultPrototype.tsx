@@ -21,15 +21,15 @@ import type { Memory } from '../types';
 import { toDisplayMemory } from '../memory/toDisplayMemory';
 import {
   createVault,
-  decryptMemoryV1,
+  decryptMemoryV2,
   decryptPhoto,
   destroyVaultSession,
-  encryptMemoryV1,
+  encryptMemoryV2,
   encryptPhoto,
   unlockVault,
   type EncryptedMemoryV1,
   type EncryptedPhotoV1,
-  type MemoryV1,
+  type MemoryV2,
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from '../crypto';
@@ -59,7 +59,7 @@ import './vault-prototype.css';
 type Phase = 'booting' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
 
-interface VisibleMemory extends MemoryV1 {
+interface VisibleMemory extends MemoryV2 {
   photoUrls: string[];
   thumbnailUrls: string[];
 }
@@ -201,11 +201,11 @@ export default function VaultPrototype() {
     };
 
     const visible = await Promise.all(
-      encryptedMemories.map(async (encryptedMemory) => {
-        const result = await decryptMemoryV1(activeSession, encryptedMemory);
+      encryptedMemories.filter((memory) => !memory.deleted).map(async (encryptedMemory) => {
+        const result = await decryptMemoryV2(activeSession, encryptedMemory);
         const memory = result.memory;
         if (result.migrated) {
-          await saveEncryptedMemory(await encryptMemoryV1(
+          await saveEncryptedMemory(await encryptMemoryV2(
             activeSession,
             memory,
             encryptedMemory.version + 1,
@@ -377,22 +377,27 @@ export default function VaultPrototype() {
         photoBytes.fill(0);
       }
       const now = new Date().toISOString();
-      const memory: MemoryV1 = {
-        schemaVersion: 1,
+      const memory: MemoryV2 = {
+        schemaVersion: 2,
         id: memoryId,
         title: title.trim(),
         date,
-        text: body.trim(),
-        location: location.trim() ? { name: location.trim() } : null,
-        tags: tags
+        category: location.trim() ? 'travel' : 'growth',
+        tag: tags
           .split(/[,，]/)
           .map((tag) => tag.trim())
-          .filter(Boolean),
+          .filter(Boolean)
+          .join(' · '),
+        pastSelf: body.trim(),
+        presentSelf: '',
+        pinnedBy: 'pin',
+        board: { px: 20, py: 20, rotation: 0 },
+        location: location.trim() ? { name: location.trim(), mx: 50, my: 50 } : null,
         photos: [{ id: photoId, mimeType: photo.type }],
         createdAt: now,
         updatedAt: now,
       };
-      const encryptedMemory = await encryptMemoryV1(session, memory);
+      const encryptedMemory = await encryptMemoryV2(session, memory);
 
       await saveEncryptedMemory(encryptedMemory);
       memorySaved = true;
@@ -635,7 +640,7 @@ export default function VaultPrototype() {
         client: createSyncClient(),
         storage: cipherSyncStorage,
         decryptMemory: session
-          ? async (memory) => (await decryptMemoryV1(session, memory)).memory
+          ? async (memory) => (await decryptMemoryV2(session, memory)).memory
           : undefined,
       });
 
@@ -907,8 +912,8 @@ export default function VaultPrototype() {
                           {memory.location && <span><MapPin size={13} />{memory.location.name}</span>}
                         </div>
                         <h3>{memory.title}</h3>
-                        <p>{memory.text}</p>
-                        {memory.tags.length > 0 && <div className="vault-tags">{memory.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                        <p>{memory.pastSelf}</p>
+                        {memory.tag && <div className="vault-tags">{memory.tag.split(' · ').map((tag) => <span key={tag}>{tag}</span>)}</div>}
                         <button type="button" className={deletingId === memory.id ? 'vault-confirm-delete' : 'vault-delete-link'} onClick={() => handleDelete(memory)} disabled={busy}>
                           <Trash2 size={14} />{deletingId === memory.id ? '再点一次删除密文' : '删除'}
                         </button>
@@ -944,7 +949,7 @@ export default function VaultPrototype() {
 
       <footer className="vault-footer">
         <span>只有主动点击同步时才连接本地密文服务</span>
-        <a href="?legacy=1">查看原 Memories 界面</a>
+        <a href="/">返回所忆正式界面</a>
       </footer>
     </main>
   );

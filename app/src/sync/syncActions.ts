@@ -1,7 +1,6 @@
 import type {
   EncryptedMemoryV1,
   EncryptedPhotoV1,
-  MemoryV1,
   VaultEnvelopeV1,
 } from '../crypto';
 import {
@@ -24,7 +23,7 @@ export interface CipherSyncStorage {
 export interface DownloadCiphertextOptions {
   client: MemoryRecallSyncClient;
   storage: CipherSyncStorage;
-  decryptMemory?: (memory: EncryptedMemoryV1) => Promise<MemoryV1>;
+  decryptMemory?: (memory: EncryptedMemoryV1) => Promise<{ photos: Array<{ id: string }> }>;
 }
 
 export interface CipherSyncResult {
@@ -107,8 +106,24 @@ export async function downloadCiphertext(
   }
 
   const memories = await options.client.listMemories();
+  const localMemories = new Map(
+    (await options.storage.listMemories()).map((memory) => [memory.id, memory]),
+  );
+  const acceptedMemories = memories.filter((remoteMemory) => {
+    const localMemory = localMemories.get(remoteMemory.id);
+    if (!localMemory) return true;
+    if (localMemory.version > remoteMemory.version) return false;
+    if (
+      localMemory.version === remoteMemory.version
+      && JSON.stringify(localMemory) !== JSON.stringify(remoteMemory)
+    ) {
+      throw new Error(`记忆 ${remoteMemory.id} 在本机和服务器存在同版本分叉，已停止下载。`);
+    }
+    return true;
+  });
   const photoIds = new Set<string>();
-  for (const encryptedMemory of memories) {
+  for (const encryptedMemory of acceptedMemories) {
+    if (encryptedMemory.deleted) continue;
     const memory = await options.decryptMemory(encryptedMemory);
     for (const photo of memory.photos) photoIds.add(photo.id);
   }
@@ -132,7 +147,7 @@ export async function downloadCiphertext(
     }
     downloadedPhotos += 1;
   }
-  for (const memory of memories) await options.storage.saveMemory(memory);
+  for (const memory of acceptedMemories) await options.storage.saveMemory(memory);
 
   return {
     memories: memories.length,

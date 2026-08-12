@@ -16,6 +16,12 @@ import {
   type MemoryV1,
   type ReadMemoryV1Result,
 } from '../memory/memoryV1';
+import {
+  assertMemoryV2,
+  readMemoryV2,
+  type MemoryV2,
+  type ReadMemoryV2Result,
+} from '../memory/memoryV2';
 
 export interface EncryptedMemoryV1 {
   id: string;
@@ -88,4 +94,22 @@ export async function decryptMemoryV1(
   encrypted: EncryptedMemoryV1,
 ): Promise<ReadMemoryV1Result> {
   return readMemoryV1(await decryptMemory<unknown>(primitives, session, encrypted));
+}
+
+export async function encryptMemoryV2(
+  primitives: CryptoPrimitives,
+  session: VaultSessionV1,
+  memory: MemoryV2,
+  version = 1,
+): Promise<EncryptedMemoryV1> {
+  assertMemoryV2(memory);
+  return encryptMemory(primitives, session, memory, version);
+}
+
+export async function decryptMemoryV2(
+  primitives: CryptoPrimitives,
+  session: VaultSessionV1,
+  encrypted: EncryptedMemoryV1,
+): Promise<ReadMemoryV2Result> {
+  return readMemoryV2(await decryptMemory<unknown>(primitives, session, encrypted));
 }

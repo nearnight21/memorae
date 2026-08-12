@@ -1,19 +1,17 @@
-import {lazy, StrictMode, Suspense} from 'react';
+import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import VaultPrototype from './prototype/VaultPrototype.tsx';
+import ProductGate from './product/ProductGate.tsx';
 import './index.css';
 
-const LegacyMemoriesApp = lazy(() => import('./App.tsx'));
-const showLegacyInterface = new URLSearchParams(window.location.search).get('legacy') === '1';
+const showDeveloperVault = new URLSearchParams(window.location.search).get('dev-vault') === '1';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {showLegacyInterface ? (
-      <Suspense fallback={<div className="vault-loading">正在加载原 Memories 界面</div>}>
-        <LegacyMemoriesApp />
-      </Suspense>
-    ) : (
+    {showDeveloperVault ? (
       <VaultPrototype />
+    ) : (
+      <ProductGate />
     )}
   </StrictMode>,
 );

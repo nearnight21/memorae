@@ -7,18 +7,22 @@ import {
   createVault,
   decryptMemory,
   decryptMemoryV1,
+  decryptMemoryV2,
   decryptPhoto,
   destroyVaultSession,
   encryptMemory,
   encryptMemoryV1,
+  encryptMemoryV2,
   encryptPhoto,
   MemorySchemaError,
   readMemoryV1,
+  readMemoryV2,
   unlockVault,
   VaultUnlockError,
   type EncryptedMemoryV1,
   type EncryptedPhotoV1,
   type MemoryV1,
+  type MemoryV2,
   type VaultEnvelopeV1,
 } from '../src/crypto';
 import { nodeCryptoPrimitives } from './support/nodePrimitives';
@@ -46,6 +50,23 @@ const sampleMemoryV1: MemoryV1 = {
   photos: [{ id: 'photo-v1-hangzhou-001', mimeType: 'image/png' }],
   createdAt: '2026-08-09T10:20:30.000Z',
   updatedAt: '2026-08-09T10:20:30.000Z',
+};
+
+const sampleMemoryV2: MemoryV2 = {
+  schemaVersion: 2,
+  id: 'memory-v2-hangzhou-001',
+  title: '雨后的西湖',
+  date: '2026-08-12',
+  category: 'travel',
+  tag: '杭州 · 散步',
+  pastSelf: '傍晚沿湖散步，树叶和石板路都很亮。',
+  presentSelf: '现在仍然记得雨后的气味。',
+  pinnedBy: 'tape',
+  board: { px: 18, py: 24, rotation: -3 },
+  location: { name: '西湖边', city: '杭州', country: '中国', lat: 30.246, lng: 120.15, mx: 42, my: 55, detail: '苏堤南口' },
+  photos: [{ id: 'photo-v2-hangzhou-001', mimeType: 'image/jpeg' }],
+  createdAt: '2026-08-12T10:20:30.000Z',
+  updatedAt: '2026-08-12T10:20:30.000Z',
 };
 
 const WEB_MEMORY_V1_FIXTURE_PASSWORD = 'memory-v1-cross-client-password';
@@ -281,6 +302,29 @@ test('MemoryV1 加密后可以逐字段恢复', async () => {
 
   assert.equal(restored.migrated, false);
   assert.deepEqual(restored.memory, sampleMemoryV1);
+});
+
+test('Android 可以无损恢复正式界面的 MemoryV2 密文', async () => {
+  const { session } = await createVault(
+    nodeCryptoPrimitives,
+    'memory-v2-password',
+    TEST_KDF,
+  );
+  const encrypted = await encryptMemoryV2(nodeCryptoPrimitives, session, sampleMemoryV2);
+  const restored = await decryptMemoryV2(nodeCryptoPrimitives, session, encrypted);
+
+  assert.equal(restored.migrated, false);
+  assert.deepEqual(restored.memory, sampleMemoryV2);
+  assert.equal(JSON.stringify(encrypted).includes(sampleMemoryV2.pastSelf), false);
+});
+
+test('Android 会把 MemoryV1 补齐并迁移成 MemoryV2', () => {
+  const result = readMemoryV2(sampleMemoryV1);
+
+  assert.equal(result.migrated, true);
+  assert.equal(result.memory.schemaVersion, 2);
+  assert.equal(result.memory.pastSelf, sampleMemoryV1.text);
+  assert.deepEqual(result.memory.photos, sampleMemoryV1.photos);
 });
 
 test('旧原型结构会迁移到 MemoryV1', () => {

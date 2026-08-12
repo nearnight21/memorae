@@ -2,23 +2,24 @@ import React, { useState } from "react";
 import { motion } from "motion/react";
 import { X, Calendar, MapPin, Edit3, Check, Plus, Image as ImageIcon, Upload } from "lucide-react";
 import { Memory } from "../types";
-import { supabase, memoryToDb, uploadImage } from "../supabase";
+import { selectLocalPhoto } from '../product/selectPhoto';
 import LocationPicker from "./LocationPicker";
 
 interface MemoryDetailPanelProps {
   memory: Memory;
   onClose: () => void;
   onUpdateMemory: (updatedMemory: Memory) => void;
+  onSaveMemory: (updatedMemory: Memory) => Promise<void>;
 }
 
 export default function MemoryDetailPanel({
   memory,
   onClose,
   onUpdateMemory,
+  onSaveMemory,
 }: MemoryDetailPanelProps) {
   const [isEditingPresent, setIsEditingPresent] = useState(false);
   const [presentText, setPresentText] = useState(memory.presentSelf);
-  const [newImageUrl, setNewImageUrl] = useState("");
   const [showAddImage, setShowAddImage] = useState(false);
   // 新增记忆的首图是封面；默认先展示封面，再由用户选择随附照片。
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -43,21 +44,12 @@ export default function MemoryDetailPanel({
     setIsEditingPresent(false);
   };
 
-  const handleAddGalleryImage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newImageUrl) {
-      onUpdateMemory({ ...memory, gallery: [...memory.gallery, newImageUrl] });
-      setNewImageUrl("");
-      setShowAddImage(false);
-    }
-  };
-
   const handleR2Upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadImage(file, "gallery-");
+      const url = await selectLocalPhoto(file);
       onUpdateMemory({ ...memory, gallery: [...memory.gallery, url] });
     } catch (err) {
       console.error(err);
@@ -107,10 +99,7 @@ export default function MemoryDetailPanel({
   const handleSaveToDb = async () => {
     setSaveStatus("saving");
     try {
-      const { error } = await supabase
-        .from("memories")
-        .upsert(memoryToDb(memory));
-      if (error) throw error;
+      await onSaveMemory(memory);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 2000);
     } catch (err) {
@@ -295,20 +284,8 @@ export default function MemoryDetailPanel({
             </div>
 
             {showAddImage && (
-              <form
-                onSubmit={handleAddGalleryImage}
-                className="mb-3 flex items-center gap-2 bg-[#fcf9f2] pl-3 pr-2 py-2 rounded-xl border border-amber-200/30 shadow-sm"
-              >
-                <input
-                  id="gallery-input-url"
-                  type="url"
-                  required
-                  placeholder="粘贴网络图片URL…"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  className="flex-1 bg-transparent text-xs outline-hidden border-0 font-mono placeholder:text-stone-400/70"
-                />
-                {/* R2 Upload */}
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200/30 bg-[#fcf9f2] px-3 py-2 shadow-sm">
+                <span className="text-[10px] text-stone-500">选择后先在本机预览，点击底部“保存”时加密。</span>
                 <label
                   className={
                     "flex items-center justify-center w-8 h-8 rounded-lg bg-amber-800 hover:bg-amber-700 text-[#fcf9f2] cursor-pointer transition-all hover:scale-105 active:scale-95 shrink-0" +
@@ -316,6 +293,7 @@ export default function MemoryDetailPanel({
                   }
                 >
                   <Upload className="h-4 w-4" />
+                  <span className="text-[10px]">选择照片</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -324,13 +302,7 @@ export default function MemoryDetailPanel({
                     onChange={handleR2Upload}
                   />
                 </label>
-                <button
-                  type="submit"
-                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-800 hover:bg-amber-700 text-[#fcf9f2] cursor-pointer transition-all hover:scale-105 active:scale-95 shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </form>
+              </div>
             )}
 
             {/* Filmstrip */}
