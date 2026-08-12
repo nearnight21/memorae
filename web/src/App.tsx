@@ -459,20 +459,22 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
 
       {/* Atmospheric sounds & explanation banner in Header */}
       <header className="absolute top-4 inset-x-5 z-[100] flex items-start justify-between">
-        <div className="flex flex-col gap-1 text-left">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold font-display tracking-widest text-amber-500/90 uppercase">
-              所忆
-            </span>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+        {viewMode === 'board' && (
+          <div className="flex flex-col gap-1 text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-bold font-display tracking-widest text-amber-500/90 uppercase">
+                所忆
+              </span>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span>
+            </div>
+            <p className="text-[10.5px] font-mono tracking-wider italic text-stone-400">
+              "Every photo marks a place I once stood."
+            </p>
           </div>
-          <p className="text-[10.5px] font-mono tracking-wider italic text-stone-400">
-            "Every photo marks a place I once stood."
-          </p>
-        </div>
+        )}
 
         {/* Ambient Volume Synthesizer Panel */}
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3">
           <button
             type="button"
             onPointerDown={(event) => event.stopPropagation()}
