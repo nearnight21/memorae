@@ -12,7 +12,7 @@
       "bundleIdentifier": "com.nearnight21.memoryrecall.prototype"
     },
     "android": {
-      "package": "com.nearnight21.memoryrecall.prototype",
+      "package": "com.memorae.cn",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
