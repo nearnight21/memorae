@@ -1,4 +1,14 @@
 import type { EncryptedMemoryV1, EncryptedPhotoV1, VaultEnvelopeV1 } from '../crypto';
+import {
+  isStoredAccountSession,
+  type StoredAccountSession,
+} from '../sync/accountSession';
+import {
+  completeCipherSyncQueueVersion,
+  markCipherSyncQueuePending,
+  readCipherSyncQueueState,
+  type CipherSyncQueueState,
+} from '../sync/syncQueue';
 
 const DATABASE_NAME = 'memory-recall-vmk-prototype';
 const DATABASE_VERSION = 2;
@@ -8,6 +18,8 @@ const LEGACY_PHOTO_STORE = 'photos';
 const PHOTO_STORE = 'photo-variants';
 const PHOTO_ID_INDEX = 'photo-id';
 const VAULT_KEY = 'vault-v1';
+const ACCOUNT_SESSION_KEY = 'account-session-v1';
+const CIPHER_SYNC_QUEUE_KEY = 'cipher-sync-queue-v1';
 const ENCRYPTED_PHOTO_CACHE_LIMIT_BYTES = 96 * 1024 * 1024;
 
 interface StoredEncryptedPhoto extends EncryptedPhotoV1 {
@@ -115,6 +127,70 @@ export async function listEncryptedPhotos(): Promise<EncryptedPhotoV1[]> {
       transaction.objectStore(PHOTO_STORE).getAll() as IDBRequest<StoredEncryptedPhoto[]>,
     );
     return stored.map(({ cacheStoredAt: _cacheStoredAt, cacheBytes: _cacheBytes, ...photo }) => photo);
+  });
+}
+
+export async function getStoredAccountSession(): Promise<StoredAccountSession | null> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readonly');
+    const value = await requestResult(
+      transaction.objectStore(META_STORE).get(ACCOUNT_SESSION_KEY),
+    );
+    return isStoredAccountSession(value) ? value : null;
+  });
+}
+
+export async function saveStoredAccountSession(session: StoredAccountSession): Promise<void> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readwrite');
+    transaction.objectStore(META_STORE).put(session, ACCOUNT_SESSION_KEY);
+    await transactionComplete(transaction);
+  });
+}
+
+export async function clearStoredAccountSession(): Promise<void> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readwrite');
+    transaction.objectStore(META_STORE).delete(ACCOUNT_SESSION_KEY);
+    await transactionComplete(transaction);
+  });
+}
+
+export async function getCipherSyncQueueState(): Promise<CipherSyncQueueState> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readonly');
+    const value = await requestResult(
+      transaction.objectStore(META_STORE).get(CIPHER_SYNC_QUEUE_KEY),
+    );
+    return readCipherSyncQueueState(value);
+  });
+}
+
+export async function markCipherSyncPending(): Promise<CipherSyncQueueState> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readwrite');
+    const store = transaction.objectStore(META_STORE);
+    const current = readCipherSyncQueueState(await requestResult(store.get(CIPHER_SYNC_QUEUE_KEY)));
+    const next = markCipherSyncQueuePending(current);
+    store.put(next, CIPHER_SYNC_QUEUE_KEY);
+    await transactionComplete(transaction);
+    return next;
+  });
+}
+
+export async function markCipherSyncCompleted(uploadedVersion: number): Promise<CipherSyncQueueState> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readwrite');
+    const store = transaction.objectStore(META_STORE);
+    const current = readCipherSyncQueueState(await requestResult(store.get(CIPHER_SYNC_QUEUE_KEY)));
+    const next = completeCipherSyncQueueVersion(
+      current,
+      uploadedVersion,
+      new Date().toISOString(),
+    );
+    store.put(next, CIPHER_SYNC_QUEUE_KEY);
+    await transactionComplete(transaction);
+    return next;
   });
 }
 

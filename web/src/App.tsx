@@ -19,26 +19,15 @@ import {
   Footprints,
   ChevronRight,
   X,
-  Cloud,
-  LoaderCircle,
   LockKeyhole,
 } from 'lucide-react';
 
 // Data & Types
 import { Memory } from './types';
-import { decryptMemoryV2, type VaultSessionV1 } from './crypto';
-import {
-  getVaultEnvelope,
-  listEncryptedMemories,
-  listEncryptedPhotos,
-  saveCachedEncryptedPhoto,
-  saveEncryptedMemory,
-  saveEncryptedPhoto,
-  saveVaultEnvelope,
-} from './prototype/storage';
+import { type VaultSessionV1 } from './crypto';
 import { deleteProductMemory, loadProductMemories, saveProductMemory } from './product/productStore';
-import { downloadCiphertext, uploadCiphertext } from './sync/syncActions';
-import { loginSyncSession, MemoryRecallSyncClient } from './sync/syncClient';
+import type { StoredAccountSession } from './sync/accountSession';
+import { useSilentCipherSync } from './sync/useSilentCipherSync';
 
 // Subcomponents
 import CampfireSynthPlayer from './components/CampfireSynthPlayer';
@@ -49,31 +38,25 @@ import AddMemoryDialog from './components/AddMemoryDialog';
 import TimelineView from './components/TimelineView';
 import MapView from './components/MapView';
 
-const cipherSyncStorage = {
-  getVault: getVaultEnvelope,
-  saveVault: saveVaultEnvelope,
-  listMemories: listEncryptedMemories,
-  listPhotos: listEncryptedPhotos,
-  saveMemory: saveEncryptedMemory,
-  savePhoto: saveEncryptedPhoto,
-  saveCachedPhoto: saveCachedEncryptedPhoto,
-};
-
 interface AppProps {
   session: VaultSessionV1;
+  accountSession: StoredAccountSession | null;
   initialMemories: Memory[];
+  onAccountSessionExpired: () => void;
   onLock: () => void;
 }
 
-export default function App({ session, initialMemories, onLock }: AppProps) {
-  const [showSync, setShowSync] = useState(false);
-  const [syncUrl, setSyncUrl] = useState(import.meta.env.VITE_MEMORY_RECALL_API_URL?.trim() || 'http://127.0.0.1:8788');
-  const [syncLoginName, setSyncLoginName] = useState('');
-  const [syncLoginPassword, setSyncLoginPassword] = useState('');
-  const [syncToken, setSyncToken] = useState('');
-  const [syncStatus, setSyncStatus] = useState('');
-  const [syncError, setSyncError] = useState('');
-  const [syncBusy, setSyncBusy] = useState(false);
+export default function App({
+  session,
+  accountSession,
+  initialMemories,
+  onAccountSessionExpired,
+  onLock,
+}: AppProps) {
+  const enqueueSilentSync = useSilentCipherSync({
+    accountSession,
+    onSessionExpired: onAccountSessionExpired,
+  });
 
   // --- Persistent States ---
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
@@ -277,6 +260,7 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
     };
 
     await saveProductMemory(session, completedMemory);
+    await enqueueSilentSync();
     const updated = [completedMemory, ...memories];
     setMemories(updated);
 
@@ -303,90 +287,17 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
 
   const handleSaveMemory = async (updatedMem: Memory) => {
     await saveProductMemory(session, updatedMem);
+    await enqueueSilentSync();
     handleUpdateMemory(updatedMem);
   };
 
   const handleDeleteMemory = async (id: string) => {
     await deleteProductMemory(id);
+    await enqueueSilentSync();
     const updated = memories.filter(m => m.id !== id);
     setMemories(updated);
     if (selectedMemory && selectedMemory.id === id) {
       setSelectedMemory(null);
-    }
-  };
-
-  const createSyncClient = () => {
-    if (!syncUrl.trim()) throw new Error('请输入密文服务地址。');
-    if (!syncToken.trim()) throw new Error('请先登录同步账号。');
-    return new MemoryRecallSyncClient({ baseUrl: syncUrl.trim(), token: syncToken.trim() });
-  };
-
-  const handleSyncLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSyncBusy(true);
-    setSyncError('');
-    setSyncStatus('');
-    try {
-      const login = await loginSyncSession(syncUrl.trim(), {
-        loginName: syncLoginName.trim(),
-        password: syncLoginPassword,
-        deviceId: 'web-product',
-      });
-      setSyncToken(login.accessToken);
-      setSyncLoginPassword('');
-      setSyncStatus('同步账号已登录。');
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : '同步账号登录失败。');
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const handleUploadCiphertext = async () => {
-    setSyncBusy(true);
-    setSyncError('');
-    setSyncStatus('');
-    try {
-      const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
-      setSyncStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : '上传密文失败。');
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const handleDownloadCiphertext = async () => {
-    setSyncBusy(true);
-    setSyncError('');
-    setSyncStatus('');
-    try {
-      const result = await downloadCiphertext({
-        client: createSyncClient(),
-        storage: cipherSyncStorage,
-        decryptMemory: async (memory) => (await decryptMemoryV2(session, memory)).memory,
-      });
-      setMemories(await loadProductMemories(session));
-      setSelectedMemory(null);
-      setSyncStatus(`下载完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : '下载密文失败。');
-    } finally {
-      setSyncBusy(false);
-    }
-  };
-
-  const handleSyncLogout = async () => {
-    setSyncBusy(true);
-    setSyncError('');
-    try {
-      await createSyncClient().logout();
-      setSyncToken('');
-      setSyncStatus('同步账号已退出，当前会话已撤销。');
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : '退出同步账号失败。');
-    } finally {
-      setSyncBusy(false);
     }
   };
 
@@ -475,18 +386,6 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
 
         {/* Ambient Volume Synthesizer Panel */}
         <div className="ml-auto flex items-center gap-3">
-          <button
-            type="button"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowSync(true);
-            }}
-            className="p-2 bg-stone-900/60 hover:bg-stone-800 border border-amber-950/40 text-stone-300 rounded-lg text-xs font-display flex items-center gap-1.5 transition-all outline-hidden cursor-pointer shadow"
-          >
-            <Cloud className="h-4 w-4" />
-            <span className="hidden sm:inline">跨设备同步</span>
-          </button>
           <button
             type="button"
             onPointerDown={(event) => event.stopPropagation()}
@@ -971,58 +870,6 @@ export default function App({ session, initialMemories, onLock }: AppProps) {
       {/* ======================================================== */}
       {/* 5. MODALS & FLOATING DIALOG OVERLAYS */}
       {/* ======================================================== */}
-      {showSync && (
-          <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-            <div className="absolute inset-0" onClick={() => setShowSync(false)} />
-            <motion.section
-              initial={{ opacity: 0, scale: 0.96, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              className="relative z-10 w-full max-w-md rounded-2xl border border-[#8D7145]/40 bg-[#211D17] p-6 text-[#F0E7D5] shadow-2xl"
-            >
-              <button type="button" onClick={() => setShowSync(false)} className="absolute right-4 top-4 rounded-full p-1.5 text-[#9F927D] hover:bg-white/5 hover:text-white" aria-label="关闭同步面板">
-                <X className="h-4 w-4" />
-              </button>
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#342B20] text-[#D4AE67]"><Cloud /></span>
-                <div>
-                  <p className="text-[10px] tracking-[0.18em] text-[#A88C5C]">所忆 · 密文同步</p>
-                  <h2 className="mt-1 text-xl font-semibold">跨设备同步</h2>
-                </div>
-              </div>
-              <p className="mt-4 text-xs leading-6 text-[#BDB3A1]">服务器只接收已经加密的记忆和照片；私密空间密码不会发送到服务器。</p>
-              <form className="mt-5 space-y-3" onSubmit={handleSyncLogin}>
-                <label className="block text-xs text-[#B9AA91]">密文服务地址
-                  <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" value={syncUrl} onChange={(event) => setSyncUrl(event.target.value)} required />
-                </label>
-                {!syncToken && (
-                  <>
-                    <label className="block text-xs text-[#B9AA91]">同步账号
-                      <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" value={syncLoginName} onChange={(event) => setSyncLoginName(event.target.value)} autoComplete="username" required />
-                    </label>
-                    <label className="block text-xs text-[#B9AA91]">同步账号密码
-                      <input className="mt-1.5 w-full rounded-lg border border-[#645235] bg-[#15120E] px-3 py-2.5 text-sm text-[#F6EEDC] outline-none focus:border-[#C39D59]" type="password" value={syncLoginPassword} onChange={(event) => setSyncLoginPassword(event.target.value)} autoComplete="current-password" required />
-                    </label>
-                    <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#C29A54] px-4 py-2.5 font-semibold text-[#17130D] disabled:opacity-50" type="submit" disabled={syncBusy}>
-                      {syncBusy && <LoaderCircle className="h-4 w-4 animate-spin" />}登录同步账号
-                    </button>
-                  </>
-                )}
-              </form>
-              {syncToken && (
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <button type="button" onClick={handleUploadCiphertext} disabled={syncBusy} className="rounded-lg border border-[#98763E] bg-[#342B20] px-3 py-2.5 text-sm text-[#E2C78F] hover:bg-[#403427] disabled:opacity-50">上传本机密文</button>
-                  <button type="button" onClick={handleDownloadCiphertext} disabled={syncBusy} className="rounded-lg bg-[#C29A54] px-3 py-2.5 text-sm font-semibold text-[#17130D] hover:bg-[#D5B36F] disabled:opacity-50">下载服务器密文</button>
-                  <button type="button" onClick={handleSyncLogout} disabled={syncBusy} className="col-span-2 text-xs text-[#948671] hover:text-[#CFB98D] disabled:opacity-50">退出同步账号</button>
-                </div>
-              )}
-              {syncBusy && syncToken && <p className="mt-4 flex items-center gap-2 text-xs text-[#C7B89D]"><LoaderCircle className="h-4 w-4 animate-spin" />正在同步密文</p>}
-              {syncStatus && <p className="mt-4 rounded-lg border border-emerald-700/30 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-200">{syncStatus}</p>}
-              {syncError && <p className="mt-4 rounded-lg border border-red-700/30 bg-red-950/25 px-3 py-2 text-xs text-red-200">{syncError}</p>}
-            </motion.section>
-          </div>
-        )}
-
       <AnimatePresence>
         {/* Memory Journal/Notebook Detailed Reader Panel */}
         {selectedMemory && viewMode !== 'places' && (

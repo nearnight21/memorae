@@ -33,6 +33,13 @@ export interface CipherSyncResult {
   importedVault: boolean;
 }
 
+export class VaultMismatchError extends Error {
+  constructor(message = '这个所忆账号与本机私密空间不一致。') {
+    super(message);
+    this.name = 'VaultMismatchError';
+  }
+}
+
 function sameVault(left: VaultEnvelopeV1, right: VaultEnvelopeV1): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -57,7 +64,7 @@ export async function uploadCiphertext(
 
   const remoteVault = await getRemoteVaultIfPresent(client);
   if (remoteVault && !sameVault(localVault, remoteVault)) {
-    throw new Error('服务器属于另一个私密空间，已停止上传以免覆盖钥匙信封。');
+    throw new VaultMismatchError();
   }
 
   const [memories, photos] = await Promise.all([
@@ -99,7 +106,7 @@ export async function downloadCiphertext(
     return { memories: 0, photos: 0, requiresUnlock: true, importedVault: true };
   }
   if (!sameVault(localVault, remoteVault)) {
-    throw new Error('服务器与本机不是同一个私密空间，已停止下载。');
+    throw new VaultMismatchError();
   }
   if (!options.decryptMemory) {
     return { memories: 0, photos: 0, requiresUnlock: true, importedVault: false };
@@ -113,11 +120,11 @@ export async function downloadCiphertext(
     const localMemory = localMemories.get(remoteMemory.id);
     if (!localMemory) return true;
     if (localMemory.version > remoteMemory.version) return false;
-    if (
-      localMemory.version === remoteMemory.version
-      && JSON.stringify(localMemory) !== JSON.stringify(remoteMemory)
-    ) {
-      throw new Error(`记忆 ${remoteMemory.id} 在本机和服务器存在同版本分叉，已停止下载。`);
+    if (localMemory.version === remoteMemory.version) {
+      if (JSON.stringify(localMemory) !== JSON.stringify(remoteMemory)) {
+        throw new Error(`记忆 ${remoteMemory.id} 在本机和服务器存在同版本分叉，已停止下载。`);
+      }
+      return false;
     }
     return true;
   });
