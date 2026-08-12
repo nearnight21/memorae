@@ -338,6 +338,12 @@ export default function App() {
     }
   };
 
+  const handleSaveMapMemory = async (updatedMem: Memory) => {
+    const { error } = await supabase.from('memories').update(memoryToDb(updatedMem)).eq('id', updatedMem.id);
+    if (error) throw error;
+    handleUpdateMemory(updatedMem);
+  };
+
   const handleDeleteMemory = async (id: string) => {
     const updated = memories.filter(m => m.id !== id);
     setMemories(updated);
@@ -898,7 +904,7 @@ export default function App() {
             selectedMemory={selectedMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
-            onUpdateMemory={handleUpdateMemory}
+            onSaveMemory={handleSaveMapMemory}
           />
           <aside
                 id="places-primary-nav"

@@ -11,10 +11,14 @@ import {
   LoaderCircle,
   Lock,
   MapPin,
+  Map as MapIcon,
   ShieldCheck,
   Trash2,
   Upload,
 } from 'lucide-react';
+import MapView from '../components/MapView';
+import type { Memory } from '../types';
+import { toDisplayMemory } from '../memory/toDisplayMemory';
 import {
   createVault,
   decryptMemoryV1,
@@ -57,6 +61,7 @@ type SyncAuthMode = 'account' | 'token';
 
 interface VisibleMemory extends MemoryV1 {
   photoUrls: string[];
+  thumbnailUrls: string[];
 }
 
 interface CipherStats {
@@ -105,6 +110,8 @@ export default function VaultPrototype() {
   const [envelope, setEnvelope] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
   const [memories, setMemories] = useState<VisibleMemory[]>([]);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedMapMemory, setSelectedMapMemory] = useState<Memory | null>(null);
   const [cipherStats, setCipherStats] = useState<CipherStats>({
     memoryCount: 0,
     photoCount: 0,
@@ -139,6 +146,7 @@ export default function VaultPrototype() {
   const passwordType = showPassword ? 'text' : 'password';
   const canCreateVault = password.length >= 8 && password === confirmPassword && !busy;
   const canSaveMemory = Boolean(session && title.trim() && body.trim() && photo && !busy);
+  const mapMemories = useMemo(() => memories.map(toDisplayMemory), [memories]);
 
   const revokePhotoUrls = () => {
     objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -178,13 +186,19 @@ export default function VaultPrototype() {
       listEncryptedPhotos(),
     ]);
     const photoMap = new Map<string, EncryptedPhotoV1>();
-    const photoKindRank = { thumbnail: 0, original: 1, preview: 2 } as const;
     for (const item of encryptedPhotos) {
-      const current = photoMap.get(item.id);
-      if (!current || photoKindRank[item.kind] > photoKindRank[current.kind]) {
-        photoMap.set(item.id, item);
-      }
+      photoMap.set(`${item.id}:${item.kind}`, item);
     }
+
+    const decryptPhotoUrl = async (encryptedPhoto: EncryptedPhotoV1): Promise<string> => {
+      const decryptedPhoto = await decryptPhoto(activeSession, encryptedPhoto);
+      const photoUrl = URL.createObjectURL(
+        new Blob([decryptedPhoto.bytes], { type: decryptedPhoto.metadata.mimeType }),
+      );
+      decryptedPhoto.bytes.fill(0);
+      objectUrlsRef.current.push(photoUrl);
+      return photoUrl;
+    };
 
     const visible = await Promise.all(
       encryptedMemories.map(async (encryptedMemory) => {
@@ -197,19 +211,25 @@ export default function VaultPrototype() {
             encryptedMemory.version + 1,
           ));
         }
-        const photoUrls = await Promise.all(memory.photos.map(async ({ id }) => {
-          const encryptedPhoto = photoMap.get(id);
-          if (!encryptedPhoto) {
+        const variants = await Promise.all(memory.photos.map(async ({ id }) => {
+          const thumbnail = photoMap.get(`${id}:thumbnail`);
+          const display = photoMap.get(`${id}:preview`)
+            ?? photoMap.get(`${id}:original`)
+            ?? thumbnail;
+          if (!display) {
             throw new Error(`记忆“${memory.title}”缺少照片密文：${id}。`);
           }
-          const decryptedPhoto = await decryptPhoto(activeSession, encryptedPhoto);
-          const photoUrl = URL.createObjectURL(
-            new Blob([decryptedPhoto.bytes], { type: decryptedPhoto.metadata.mimeType }),
-          );
-          objectUrlsRef.current.push(photoUrl);
-          return photoUrl;
+          const displayUrl = await decryptPhotoUrl(display);
+          const thumbnailUrl = thumbnail && thumbnail !== display
+            ? await decryptPhotoUrl(thumbnail)
+            : displayUrl;
+          return { displayUrl, thumbnailUrl };
         }));
-        return { ...memory, photoUrls };
+        return {
+          ...memory,
+          photoUrls: variants.map(({ displayUrl }) => displayUrl),
+          thumbnailUrls: variants.map(({ thumbnailUrl }) => thumbnailUrl),
+        };
       }),
     );
 
@@ -302,6 +322,8 @@ export default function VaultPrototype() {
     revokePhotoUrls();
     setSession(null);
     setMemories([]);
+    setShowMap(false);
+    setSelectedMapMemory(null);
     setPassword('');
     setConfirmPassword('');
     setPhase(envelope ? 'locked' : 'setup');
@@ -657,6 +679,30 @@ export default function VaultPrototype() {
     );
   }
 
+  if (phase === 'unlocked' && showMap) {
+    return (
+      <main className="fixed inset-0 bg-[#dbe3e8]">
+        <MapView
+          memories={mapMemories}
+          selectedMemory={selectedMapMemory}
+          onSelectMemory={setSelectedMapMemory}
+          onCloseMemory={() => setSelectedMapMemory(null)}
+          readerMode="journal"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedMapMemory(null);
+            setShowMap(false);
+          }}
+          className="fixed bottom-5 right-5 z-[1400] rounded-full border border-[#8E846F] bg-[#FAF7EF]/95 px-5 py-3 text-sm font-semibold text-[#3E3A32] shadow-xl backdrop-blur-md hover:bg-white"
+        >
+          返回私密空间
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main className="vault-shell">
       <header className="vault-header">
@@ -798,6 +844,7 @@ export default function VaultPrototype() {
         <>
           <nav className="vault-actions" aria-label="私密空间操作">
             <button type="button" onClick={() => lockPrivateSpace()} disabled={busy}><Lock size={16} />锁定</button>
+            <button type="button" onClick={() => setShowMap(true)} disabled={busy}><MapIcon size={16} />地图阅读</button>
             <button type="button" onClick={handleExport} disabled={busy}><Download size={16} />导出密文包</button>
             <button type="button" onClick={() => importInputRef.current?.click()} disabled={busy}><Upload size={16} />导入并替换</button>
             <button type="button" className={resetArmed ? 'vault-danger-button' : ''} onClick={handleReset} disabled={busy}>

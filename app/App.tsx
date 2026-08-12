@@ -8,6 +8,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -69,6 +70,10 @@ type SyncAuthMode = 'account' | 'token';
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
 
+function todayValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -87,10 +92,14 @@ export default function App() {
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
   const [memories, setMemories] = useState<MemoryV1[]>([]);
+  const [selectedMemory, setSelectedMemory] = useState<MemoryV1 | null>(null);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [date, setDate] = useState(todayValue());
+  const [location, setLocation] = useState('');
+  const [tags, setTags] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
@@ -155,6 +164,7 @@ export default function App() {
         migratedCount += 1;
       }
     }
+    decrypted.sort((left, right) => right.date.localeCompare(left.date));
     setMemories(decrypted);
     return migratedCount;
   }
@@ -171,6 +181,7 @@ export default function App() {
     if (session) destroyVaultSession(session);
     setSession(null);
     setMemories([]);
+    setSelectedMemory(null);
     setPreviewUri(null);
     setPendingPhoto(null);
     setMode(vault ? 'locked' : 'setup');
@@ -251,6 +262,7 @@ export default function App() {
   async function saveMemory(): Promise<void> {
     if (!session) throw new Error('请先解锁。');
     if (!title.trim() && !body.trim()) throw new Error('标题和正文不能同时为空。');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
     setStatus('正在加密并保存……');
 
     let photoId: string | undefined;
@@ -311,9 +323,9 @@ export default function App() {
       id: nativeCryptoPrimitives.randomUUID(),
       title: title.trim() || '无标题',
       text: body.trim(),
-      date: now.slice(0, 10),
-      tags: [],
-      location: null,
+      date,
+      tags: tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
+      location: location.trim() ? { name: location.trim() } : null,
       photos: photoId && pendingPhoto
         ? [{ id: photoId, mimeType: pendingPhoto.mimeType }]
         : [],
@@ -339,6 +351,9 @@ export default function App() {
     }
     setTitle('');
     setBody('');
+    setDate(todayValue());
+    setLocation('');
+    setTags('');
     setPendingPhoto(null);
     await refreshMemories(session);
     setStatus(`记忆已加密保存${photoMetric}。`);
@@ -357,6 +372,12 @@ export default function App() {
     setStatus(`照片只在内存中解密，用时 ${Math.round(performance.now() - startedAt)} ms。`);
   }
 
+  async function openMemory(memory: MemoryV1): Promise<void> {
+    setSelectedMemory(memory);
+    setPreviewUri(null);
+    if (memory.photos.length > 0) await showPhoto(memory);
+  }
+
   async function exportBundle(): Promise<void> {
     if (!vault) throw new Error('没有可导出的私密空间。');
     await shareEncryptedBundle(vault);
@@ -372,6 +393,7 @@ export default function App() {
     setVault(bundle.vault);
     setSession(null);
     setMemories([]);
+    setSelectedMemory(null);
     setPreviewUri(null);
     setDeviceUnlockEnabled(false);
     setMode('locked');
@@ -481,6 +503,7 @@ export default function App() {
             setVault(null);
             setSession(null);
             setMemories([]);
+            setSelectedMemory(null);
             setPreviewUri(null);
             setDeviceUnlockEnabled(false);
             setMode('setup');
@@ -501,7 +524,7 @@ export default function App() {
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>VMK V1 · ANDROID TEST</Text>
-            <Text style={styles.heading}>Memory Recall</Text>
+            <Text style={styles.heading}>所忆</Text>
           </View>
           <Text style={styles.state}>{stateLabel}</Text>
         </View>
@@ -640,6 +663,9 @@ export default function App() {
                 value={body}
                 onChangeText={setBody}
               />
+              <TextInput style={styles.input} placeholder="日期（YYYY-MM-DD）" value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
+              <TextInput style={styles.input} placeholder="地点（例如：杭州西湖）" value={location} onChangeText={setLocation} />
+              <TextInput style={styles.input} placeholder="标签（用逗号分隔）" value={tags} onChangeText={setTags} />
               <Button title={pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择一张真实照片'} disabled={busy} onPress={() => void runTask(choosePhoto)} />
               <View style={styles.spacer} />
               <Button title="加密并保存" disabled={busy} onPress={() => void runTask(saveMemory)} />
@@ -656,23 +682,31 @@ export default function App() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>已解密记忆（{memories.length}）</Text>
-              {memories.length === 0 && <Text style={styles.hint}>还没有测试记录。</Text>}
-              {memories.map((memory) => (
-                <View key={memory.id} style={styles.memoryCard}>
-                  <Text style={styles.memoryTitle}>{memory.title}</Text>
-                  <Text style={styles.memoryBody}>{memory.text}</Text>
-                  <Text style={styles.memoryMeta}>{memory.date} · {memory.id.slice(0, 8)}</Text>
-                  {memory.photos.length > 0 && (
-                    <Button title="在内存中解密照片" disabled={busy} onPress={() => void runTask(() => showPhoto(memory))} />
+              <Text style={styles.sectionTitle}>{selectedMemory ? '记忆详情' : `已解密记忆（${memories.length}）`}</Text>
+              {selectedMemory ? (
+                <View style={styles.readerCard}>
+                  <Text style={styles.readerDate}>{selectedMemory.date}</Text>
+                  <Text style={styles.readerTitle}>{selectedMemory.title}</Text>
+                  {selectedMemory.location && <Text style={styles.readerLocation}>⌖ {selectedMemory.location.name}</Text>}
+                  {previewUri && <Image source={{ uri: previewUri }} style={styles.readerPhoto} resizeMode="cover" />}
+                  <Text selectable style={styles.readerBody}>{selectedMemory.text || '这段记忆没有正文。'}</Text>
+                  {selectedMemory.tags.length > 0 && (
+                    <View style={styles.tagRow}>{selectedMemory.tags.map((tag) => <Text key={tag} style={styles.tag}>#{tag}</Text>)}</View>
                   )}
+                  <Button title="返回记忆列表" onPress={() => { setSelectedMemory(null); setPreviewUri(null); }} />
                 </View>
-              ))}
-              {previewUri && (
-                <View style={styles.previewBox}>
-                  <Image source={{ uri: previewUri }} style={styles.preview} resizeMode="contain" />
-                  <Button title="清除内存预览" onPress={() => setPreviewUri(null)} />
-                </View>
+              ) : (
+                <>
+                  {memories.length === 0 && <Text style={styles.hint}>还没有记忆。</Text>}
+                  {memories.map((memory) => (
+                    <Pressable key={memory.id} style={({ pressed }) => [styles.memoryCard, pressed && styles.memoryCardPressed]} onPress={() => void runTask(() => openMemory(memory))}>
+                      <Text style={styles.memoryTitle}>{memory.title}</Text>
+                      <Text numberOfLines={3} style={styles.memoryBody}>{memory.text}</Text>
+                      <Text style={styles.memoryMeta}>{memory.date}{memory.location ? ` · ${memory.location.name}` : ''}</Text>
+                      <Text style={styles.readLink}>阅读完整记忆 →</Text>
+                    </Pressable>
+                  ))}
+                </>
               )}
             </View>
 
@@ -710,9 +744,19 @@ const styles = StyleSheet.create({
   spacer: { height: 2 },
   centerText: { textAlign: 'center', padding: 24 },
   memoryCard: { backgroundColor: '#f6f7f2', borderRadius: 10, padding: 12, gap: 6 },
+  memoryCardPressed: { opacity: 0.72, transform: [{ scale: 0.995 }] },
   memoryTitle: { fontSize: 16, fontWeight: '700', color: '#1e241b' },
   memoryBody: { color: '#3f473b', lineHeight: 20 },
   memoryMeta: { color: '#818779', fontSize: 12 },
+  readLink: { marginTop: 4, color: '#58634c', fontSize: 13, fontWeight: '700' },
+  readerCard: { gap: 12, paddingVertical: 4 },
+  readerDate: { color: '#7c7464', fontSize: 12, letterSpacing: 0.8 },
+  readerTitle: { color: '#1d251a', fontSize: 27, lineHeight: 34, fontWeight: '800' },
+  readerLocation: { color: '#58634c', fontSize: 14 },
+  readerPhoto: { width: '100%', height: 300, borderRadius: 12, backgroundColor: '#161916' },
+  readerBody: { color: '#343a30', fontSize: 17, lineHeight: 29 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { color: '#58634c', backgroundColor: '#edf1e7', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12 },
   previewBox: { gap: 8, marginTop: 4 },
   preview: { width: '100%', height: 260, backgroundColor: '#151515', borderRadius: 10 },
   dangerSection: { paddingTop: 4 },

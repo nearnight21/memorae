@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, Check, ChevronLeft, ChevronRight, Cloud, Edit3, X } from 'lucide-react';
 import { Memory } from '../types';
-import { memoryToDb, supabase } from '../supabase';
 
 interface ScreenPoint {
   x: number;
@@ -14,7 +13,8 @@ interface MapMemoryOverlayProps {
   anchor: ScreenPoint | null;
   viewport: { width: number; height: number };
   onClose: () => void;
-  onUpdateMemory: (memory: Memory) => void;
+  onSaveMemory?: (memory: Memory) => Promise<void>;
+  readerMode?: 'reflection' | 'journal';
 }
 
 export default function MapMemoryOverlay({
@@ -22,11 +22,15 @@ export default function MapMemoryOverlay({
   anchor,
   viewport,
   onClose,
-  onUpdateMemory,
+  onSaveMemory,
+  readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
   const photos = useMemo(
-    () => Array.from(new Set([memory.image, ...memory.gallery].filter(Boolean))),
-    [memory.image, memory.gallery]
+    () => Array.from(new Set(
+      (readerMode === 'journal' ? [...memory.gallery, memory.image] : [memory.image, ...memory.gallery])
+        .filter(Boolean),
+    )),
+    [memory.image, memory.gallery, readerMode]
   );
   const [photoIdx, setPhotoIdx] = useState(0);
   const [failedPhotos, setFailedPhotos] = useState<string[]>([]);
@@ -67,18 +71,16 @@ export default function MapMemoryOverlay({
   };
 
   const commitText = () => {
-    onUpdateMemory({ ...memory, presentSelf: presentDraft });
     setIsEditing(false);
     setSaveStatus('idle');
   };
 
   const saveMemory = async () => {
+    if (!onSaveMemory) return;
     const updated = { ...memory, presentSelf: presentDraft };
-    onUpdateMemory(updated);
     setSaveStatus('saving');
     try {
-      const { error } = await supabase.from('memories').update(memoryToDb(updated)).eq('id', memory.id);
-      if (error) throw error;
+      await onSaveMemory(updated);
       setSaveStatus('saved');
       window.setTimeout(() => setSaveStatus('idle'), 2400);
     } catch (error) {
@@ -200,24 +202,26 @@ export default function MapMemoryOverlay({
             <span className="font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-[#A88646]/60 bg-[#F7F2E7]/72 text-sm text-[#8F6F34]">
               昔
             </span>
-            <h3 className="font-editorial-serif text-[16px] tracking-[0.12em] text-[#8F6F34]">当时的我</h3>
+            <h3 className="font-editorial-serif text-[16px] tracking-[0.12em] text-[#8F6F34]">
+              {readerMode === 'journal' ? '记忆正文' : '当时的我'}
+            </h3>
             <p className="mt-3 whitespace-pre-wrap text-[13px] leading-7 text-[#46423B]">{memory.pastSelf}</p>
           </section>
 
-          <section className="relative">
+          {readerMode === 'reflection' && <section className="relative">
             <span className="font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-[#A88646]/60 bg-[#F7F2E7]/72 text-sm text-[#8F6F34]">
               今
             </span>
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-editorial-serif text-[16px] tracking-[0.12em] text-[#8F6F34]">现在的我</h3>
-              <button
+              {onSaveMemory && <button
                 type="button"
                 onClick={isEditing ? commitText : () => setIsEditing(true)}
                 className="flex items-center gap-1.5 text-[10px] text-[#9A7738] transition-colors hover:text-[#6F5227] cursor-pointer"
               >
                 {isEditing ? <Check className="h-3.5 w-3.5" /> : <Edit3 className="h-3.5 w-3.5" />}
                 {isEditing ? '完成' : '编辑'}
-              </button>
+              </button>}
             </div>
             {isEditing ? (
               <textarea
@@ -229,10 +233,10 @@ export default function MapMemoryOverlay({
             ) : (
               <p className="mt-3 whitespace-pre-wrap text-[13px] leading-7 text-[#46423B]">{presentDraft}</p>
             )}
-          </section>
+          </section>}
         </div>
 
-        <div className="mt-8 flex items-center gap-3 text-[11px]">
+        {onSaveMemory && <div className="mt-8 flex items-center gap-3 text-[11px]">
           <button
             type="button"
             onClick={saveMemory}
@@ -247,7 +251,7 @@ export default function MapMemoryOverlay({
             <Cloud className="h-4 w-4" strokeWidth={1.5} />
             {saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存'}
           </span>
-        </div>
+        </div>}
       </motion.article>
 
       <button

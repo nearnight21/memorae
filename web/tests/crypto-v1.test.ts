@@ -23,6 +23,7 @@ import {
 import { base64ToBytes } from '../src/crypto/encoding';
 import { assertPrototypeBundle } from '../src/prototype/storage';
 import { fitPhotoWithin } from '../src/photos/photoVariants';
+import { toDisplayMemory } from '../src/memory/toDisplayMemory';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -290,4 +291,35 @@ test('导入时拒绝未知或不完整的密文包', () => {
     () => assertPrototypeBundle({ format: 'plain-text-export', memories: [] }),
     /密文包格式或版本不受支持/,
   );
+});
+
+test('正式 MemoryV1 可无损映射到地图阅读模型', () => {
+  const memory: MemoryV1 = {
+    schemaVersion: 1,
+    id: 'map-memory-001',
+    title: '西湖边的傍晚',
+    text: '雨停以后沿着湖边慢慢走。',
+    date: '2026-08-12',
+    tags: ['散步', '杭州'],
+    location: { name: '西湖', city: '杭州', country: '中国', lat: 30.246, lng: 120.15 },
+    photos: [{ id: 'photo-001', mimeType: 'image/jpeg' }],
+    createdAt: '2026-08-12T10:00:00.000Z',
+    updatedAt: '2026-08-12T10:00:00.000Z',
+  };
+
+  const display = toDisplayMemory({
+    ...memory,
+    photoUrls: ['blob:preview'],
+    thumbnailUrls: ['blob:thumbnail'],
+  });
+  assert.equal(display.title, memory.title);
+  assert.equal(display.pastSelf, memory.text);
+  assert.equal(display.date, memory.date);
+  assert.equal(display.year, 2026);
+  assert.equal(display.country, '中国');
+  assert.equal(display.city, '杭州');
+  assert.equal(display.lat, 30.246);
+  assert.equal(display.lng, 120.15);
+  assert.equal(display.image, 'blob:thumbnail');
+  assert.deepEqual(display.gallery, ['blob:preview']);
 });

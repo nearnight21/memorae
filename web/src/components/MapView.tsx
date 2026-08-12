@@ -20,7 +20,8 @@ interface MapViewProps {
   selectedMemory: Memory | null;
   onSelectMemory: (m: Memory) => void;
   onCloseMemory: () => void;
-  onUpdateMemory: (memory: Memory) => void;
+  onSaveMemory?: (memory: Memory) => Promise<void>;
+  readerMode?: 'reflection' | 'journal';
 }
 
 interface PanelState {
@@ -141,7 +142,8 @@ export default function MapView({
   selectedMemory,
   onSelectMemory,
   onCloseMemory,
-  onUpdateMemory,
+  onSaveMemory,
+  readerMode,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -917,7 +919,8 @@ export default function MapView({
             anchor={selectedAnchor}
             viewport={mapViewport}
             onClose={onCloseMemory}
-            onUpdateMemory={onUpdateMemory}
+            onSaveMemory={onSaveMemory}
+            readerMode={readerMode}
           />
         )}
       </AnimatePresence>
