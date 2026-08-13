@@ -1,0 +1,226 @@
+.crystal-timeline-prototype {
+  --glass-opacity: 0.082;
+  --glass-blur: 1.7px;
+  --glass-brightness: 1.045;
+  --glass-saturation: 1.1;
+  --highlight-opacity: 0.72;
+  --shade-opacity: 0.42;
+  --focus-brightness: 1.085;
+  --focus-saturation: 1.17;
+  position: absolute;
+  left: calc(50% + 43px);
+  bottom: 82px;
+  z-index: 1001;
+  width: min(900px, calc(100vw - 150px));
+  height: 70px;
+  transform: translateX(-50%);
+  color: #0b2850;
+  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+.crystal-timeline-body {
+  position: relative;
+  width: 100%;
+  height: 70px;
+  overflow: visible;
+  border-radius: 999px;
+  outline: none;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.crystal-timeline-body:focus-visible {
+  outline: 1px solid rgba(78, 148, 207, 0.46);
+  outline-offset: 4px;
+}
+
+.crystal-glass-base,
+.crystal-optical-highlight,
+.crystal-optical-shade,
+.crystal-edge-lens,
+.crystal-current-focus,
+.crystal-timeline-content {
+  position: absolute;
+  pointer-events: none;
+}
+
+.crystal-glass-base {
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg,
+      rgba(238, 249, 255, 0.19) 0%,
+      rgba(255, 255, 255, var(--glass-opacity)) 22%,
+      rgba(220, 240, 251, 0.038) 58%,
+      rgba(73, 116, 146, 0.092) 100%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation)) brightness(var(--glass-brightness));
+  box-shadow:
+    inset 0 2px 2px rgba(250, 254, 255, 0.54),
+    inset 0 -2px 2px rgba(31, 82, 116, 0.17),
+    inset 3px 0 3px rgba(205, 238, 255, 0.3),
+    inset -3px 0 3px rgba(205, 238, 255, 0.3),
+    0 2px 5px rgba(41, 82, 110, 0.075);
+}
+
+.crystal-optical-highlight {
+  top: 1px;
+  right: 25px;
+  left: 25px;
+  height: 24px;
+  border-radius: 999px 999px 42% 42%;
+  opacity: var(--highlight-opacity);
+  background: linear-gradient(180deg, rgba(250, 254, 255, 0.92), rgba(234, 247, 255, 0.26) 38%, transparent 92%);
+  filter: blur(0.45px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 7%, black 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 7%, black 93%, transparent);
+}
+
+.crystal-optical-shade {
+  right: 22px;
+  bottom: 1px;
+  left: 22px;
+  height: 21px;
+  border-radius: 35% 35% 999px 999px;
+  opacity: var(--shade-opacity);
+  background: linear-gradient(180deg, transparent, rgba(51, 103, 138, 0.13) 48%, rgba(25, 72, 106, 0.31));
+  filter: blur(0.65px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+}
+
+.crystal-edge-lens {
+  top: 3px;
+  bottom: 3px;
+  width: 82px;
+  opacity: 0.84;
+  filter: saturate(1.1) brightness(1.035);
+}
+
+.crystal-edge-lens-left {
+  left: 2px;
+  border-radius: 999px 48% 48% 999px;
+  background: radial-gradient(ellipse at 12% 50%, rgba(245, 252, 255, 0.65), rgba(164, 211, 239, 0.18) 32%, rgba(91, 151, 188, 0.07) 55%, transparent 74%);
+}
+
+.crystal-edge-lens-right {
+  right: 2px;
+  border-radius: 48% 999px 999px 48%;
+  background: radial-gradient(ellipse at 88% 50%, rgba(245, 252, 255, 0.65), rgba(164, 211, 239, 0.18) 32%, rgba(91, 151, 188, 0.07) 55%, transparent 74%);
+}
+
+.crystal-current-focus {
+  top: 1px;
+  left: var(--crystal-position);
+  width: clamp(76px, 9.5%, 92px);
+  height: 68px;
+  overflow: hidden;
+  border-radius: 46% 46% 48% 48%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 46%, rgba(225, 246, 255, 0.27), rgba(153, 213, 249, 0.11) 42%, rgba(94, 171, 220, 0.035) 67%, transparent 84%);
+  -webkit-backdrop-filter: blur(0.8px) saturate(var(--focus-saturation)) brightness(var(--focus-brightness));
+  backdrop-filter: blur(0.8px) saturate(var(--focus-saturation)) brightness(var(--focus-brightness));
+  box-shadow:
+    inset 0 2px 2px rgba(250, 254, 255, 0.46),
+    inset 0 -2px 3px rgba(42, 101, 139, 0.14),
+    0 0 5px rgba(91, 176, 229, 0.08);
+  transition: left 70ms linear;
+}
+
+.crystal-timeline-body.is-dragging .crystal-current-focus,
+.crystal-timeline-body.is-dragging .crystal-current-time-label {
+  transition: none;
+}
+
+.crystal-current-focus-core {
+  position: absolute;
+  inset: 7px 16px;
+  border-radius: 48%;
+  background: radial-gradient(ellipse, rgba(238, 250, 255, 0.24), rgba(161, 217, 250, 0.065) 52%, transparent 76%);
+}
+
+.crystal-timeline-content { inset: 0; }
+
+.crystal-year-labels span {
+  position: absolute;
+  top: 14px;
+  left: var(--year-position);
+  transform: translateX(-50%);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: 0.01em;
+  color: rgba(7, 38, 78, 0.88);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.34);
+  transition: color 150ms ease, opacity 150ms ease, font-weight 150ms ease;
+}
+
+.crystal-year-labels span.is-near-current { color: rgba(8, 57, 112, 0.98); font-weight: 600; }
+
+.crystal-timeline-track {
+  position: absolute;
+  right: 46px;
+  bottom: 19.5px;
+  left: 46px;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(17, 57, 88, 0.16);
+}
+
+.crystal-timeline-track-past { display: block; width: var(--crystal-progress); height: 100%; background: linear-gradient(90deg, rgba(35, 105, 160, 0.1), rgba(29, 122, 194, 0.3)); }
+
+.crystal-timeline-handle {
+  position: absolute;
+  left: var(--crystal-position);
+  bottom: 14px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 38% 32%, #f8fcff 0 21%, #4389c6 24% 48%, #0d5d9e 72%);
+  box-shadow: 0 1px 3px rgba(15, 75, 119, 0.2);
+}
+
+.crystal-timeline-hit-target { position: absolute; left: var(--crystal-position); bottom: 0; width: 40px; height: 40px; transform: translateX(-50%); }
+
+.crystal-current-time-label {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: var(--crystal-position);
+  min-width: 82px;
+  transform: translateX(-50%);
+  border-radius: 11px;
+  padding: 6px 10px;
+  color: rgba(8, 42, 77, 0.92);
+  background: rgba(239, 248, 253, 0.16);
+  -webkit-backdrop-filter: blur(2px) saturate(1.08) brightness(1.025);
+  backdrop-filter: blur(2px) saturate(1.08) brightness(1.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 10px rgba(28, 58, 80, 0.08);
+  text-align: center;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  transition: left 70ms linear, min-width 150ms ease;
+}
+
+.crystal-current-time-full { display: none; }
+.crystal-current-time-label.is-expanded { min-width: 112px; }
+.crystal-current-time-label.is-expanded .crystal-current-time-short { display: none; }
+.crystal-current-time-label.is-expanded .crystal-current-time-full { display: inline; }
+.crystal-timeline-prototype.is-material-only .crystal-current-focus,
+.crystal-timeline-prototype.is-material-only .crystal-timeline-content { display: none; }
+
+@media (max-width: 720px) {
+  .crystal-timeline-prototype { left: calc(50% + 28px); bottom: 76px; width: calc(100vw - 84px); }
+  .crystal-year-labels span { font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crystal-current-focus, .crystal-current-time-label, .crystal-year-labels span { transition: none; }
+}

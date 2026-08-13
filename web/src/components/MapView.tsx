@@ -7,6 +7,7 @@ import { Memory } from '../types';
 import { resolvePlace, geocodeAddress } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
 import MapMemoryOverlay from './MapMemoryOverlay';
+import CrystalTimelinePrototype from '../prototype/CrystalTimelinePrototype';
 
 // 底图模式：'amap' = 高德瓦片（国内直连、中文标注、浅色）；'dark' = CARTO 深色无标注 + 自绘中文标注层
 const TILE_MODE: 'amap' | 'dark' = 'amap';
@@ -14,6 +15,13 @@ const TILE_MODE: 'amap' | 'dark' = 'amap';
 // 自适应层级阈值：zoom < CITY_ZOOM → 国家气泡；CITY_ZOOM ≤ zoom < POINT_ZOOM → 城市气泡；zoom ≥ POINT_ZOOM → 具体点位
 const CITY_ZOOM = 5;
 const POINT_ZOOM = 9;
+
+const finiteQueryNumber = (params: URLSearchParams, name: string): number | undefined => {
+  const raw = params.get(name);
+  if (raw === null || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+};
 
 interface MapViewProps {
   memories: Memory[];
@@ -145,6 +153,25 @@ export default function MapView({
   onSaveMemory,
   readerMode,
 }: MapViewProps) {
+  const crystalPrototypeParams = new URLSearchParams(window.location.search);
+  const showCrystalTimelinePrototype = import.meta.env.DEV
+    && crystalPrototypeParams.get('crystal-timeline') === '1';
+  const crystalMaterialOnly = crystalPrototypeParams.get('crystal-state') === 'base';
+  const requestedCrystalPosition = finiteQueryNumber(crystalPrototypeParams, 'crystal-position');
+  const crystalInitialProgress = requestedCrystalPosition !== undefined
+    ? Math.min(1, Math.max(0, requestedCrystalPosition / 100))
+    : undefined;
+  const requestedCrystalLat = finiteQueryNumber(crystalPrototypeParams, 'crystal-lat');
+  const requestedCrystalLng = finiteQueryNumber(crystalPrototypeParams, 'crystal-lng');
+  const requestedCrystalZoom = finiteQueryNumber(crystalPrototypeParams, 'crystal-zoom');
+  const crystalMapCenter: L.LatLngExpression = showCrystalTimelinePrototype
+    && requestedCrystalLat !== undefined
+    && requestedCrystalLng !== undefined
+    ? [requestedCrystalLat, requestedCrystalLng]
+    : [35, 100];
+  const crystalMapZoom = showCrystalTimelinePrototype && requestedCrystalZoom !== undefined
+    ? Math.min(14, Math.max(2, requestedCrystalZoom))
+    : 4;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -238,8 +265,8 @@ export default function MapView({
     const readyFallbackTimer = window.setTimeout(markBaseMapReady, 2600);
     // 地区页初始展示亚洲尺度，优先呈现国家聚合与跨地区路径
     const map = L.map(containerRef.current, {
-      center: [35, 100],
-      zoom: 4,
+      center: crystalMapCenter,
+      zoom: crystalMapZoom,
       zoomControl: false,
       zoomAnimation: true,
       markerZoomAnimation: true,
@@ -778,7 +805,7 @@ export default function MapView({
       </div>}
 
       {/* 设计稿中的浅色主时间轴，始终作为地区页第二视觉重心 */}
-      {allYears.length > 0 && !selectedMemory && (
+      {allYears.length > 0 && !selectedMemory && !showCrystalTimelinePrototype && (
         <motion.section
           initial={{ y: 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -846,6 +873,13 @@ export default function MapView({
             </div>
           </div>
         </motion.section>
+      )}
+
+      {showCrystalTimelinePrototype && !selectedMemory && (
+        <CrystalTimelinePrototype
+          initialProgress={crystalInitialProgress}
+          materialOnly={crystalMaterialOnly}
+        />
       )}
 
       {/* 城市 / 未标注记忆面板 */}
