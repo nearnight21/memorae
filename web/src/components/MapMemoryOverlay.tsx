@@ -103,7 +103,7 @@ export default function MapMemoryOverlay({
           <motion.path
             d={connectorPath}
             fill="none"
-            stroke="#9F7D3B"
+            stroke="var(--color-accent-fill)"
             strokeWidth="1.4"
             strokeDasharray="3 7"
             strokeLinecap="round"
@@ -111,7 +111,14 @@ export default function MapMemoryOverlay({
             animate={{ pathLength: 1, opacity: 0.78 }}
             transition={{ duration: 0.65, delay: 0.16, ease: 'easeOut' }}
           />
-          <circle cx={anchor.x} cy={anchor.y} r="4" fill="#A58443" stroke="#FAF7EF" strokeWidth="2" />
+          <circle
+            cx={anchor.x}
+            cy={anchor.y}
+            r="4"
+            fill="var(--color-accent-fill)"
+            stroke="var(--color-bg-surface)"
+            strokeWidth="2"
+          />
         </svg>
       )}
 
@@ -152,12 +159,12 @@ export default function MapMemoryOverlay({
         </AnimatePresence>
 
         {availablePhotos.length > 1 && (
-          <div className="pointer-events-auto absolute bottom-[7%] left-1/2 z-20 flex -translate-x-1/2 items-center gap-5 text-[#F8F3E8]">
+          <div className="map-photo-toolbar pointer-events-auto absolute bottom-[7%] left-1/2 z-20 flex -translate-x-1/2 items-center gap-5">
             <button
               type="button"
               onClick={() => goPhoto(-1)}
               aria-label="上一张照片"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/60 bg-[#3D3932]/28 backdrop-blur-sm transition-colors hover:bg-[#3D3932]/48 cursor-pointer"
+              className="map-photo-nav-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-sm transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -168,7 +175,7 @@ export default function MapMemoryOverlay({
               type="button"
               onClick={() => goPhoto(1)}
               aria-label="下一张照片"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/60 bg-[#3D3932]/28 backdrop-blur-sm transition-colors hover:bg-[#3D3932]/48 cursor-pointer"
+              className="map-photo-nav-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-sm transition-colors cursor-pointer"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -177,7 +184,7 @@ export default function MapMemoryOverlay({
       </motion.div>
 
       <motion.article
-        className="map-memory-copy-feather pointer-events-auto absolute right-[2.5%] top-[15%] z-20 max-h-[72%] w-[43%] overflow-y-auto px-[5%] py-10 text-[#302E29] sm:right-[3.5%] sm:w-[40%]"
+        className="map-memory-copy-feather map-ui-body pointer-events-auto absolute right-[2.5%] top-[15%] z-20 max-h-[72%] w-[43%] overflow-y-auto px-[5%] py-10 sm:right-[3.5%] sm:w-[40%]"
         initial={{ opacity: 0, x: 28 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 20 }}
@@ -185,39 +192,39 @@ export default function MapMemoryOverlay({
       >
         <div className="mb-7">
           {memory.tag && (
-            <span className="inline-flex rounded-full border border-[#A88646]/55 px-3 py-1 text-[10px] tracking-[0.12em] text-[#8F6F34]">
+            <span className="map-ui-accent map-ui-accent-border inline-flex rounded-full border px-3 py-1 text-[10px] tracking-[0.12em]">
               {memory.tag}
             </span>
           )}
-          {locationText && <p className="mt-3 text-[11px] tracking-[0.08em] text-[#686257]">{locationText}</p>}
-          <p className="mt-2 font-mono text-[10px] text-[#6F695E]">{memory.date}</p>
+          {locationText && <p className="map-ui-muted mt-3 text-[11px] tracking-[0.08em]">{locationText}</p>}
+          <p className="map-ui-muted mt-2 font-mono text-[10px]">{memory.date}</p>
         </div>
 
         <h2 className="font-editorial-serif text-[32px] leading-tight tracking-[0.08em] sm:text-[42px]">
           {memory.title}
         </h2>
 
-        <div className="mt-7 border-l border-[#A88646]/70 pl-7">
+        <div className="map-ui-accent-border mt-7 border-l pl-7">
           <section className="relative pb-7">
-            <span className="font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-[#A88646]/60 bg-[#F7F2E7]/72 text-sm text-[#8F6F34]">
+            <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
               昔
             </span>
-            <h3 className="font-editorial-serif text-[16px] tracking-[0.12em] text-[#8F6F34]">
+            <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">
               {readerMode === 'journal' ? '记忆正文' : '当时的我'}
             </h3>
-            <p className="mt-3 whitespace-pre-wrap text-[13px] leading-7 text-[#46423B]">{memory.pastSelf}</p>
+            <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.pastSelf}</p>
           </section>
 
           {readerMode === 'reflection' && <section className="relative">
-            <span className="font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-[#A88646]/60 bg-[#F7F2E7]/72 text-sm text-[#8F6F34]">
+            <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
               今
             </span>
             <div className="flex items-center justify-between gap-3">
-              <h3 className="font-editorial-serif text-[16px] tracking-[0.12em] text-[#8F6F34]">现在的我</h3>
+              <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">现在的我</h3>
               {onSaveMemory && <button
                 type="button"
                 onClick={isEditing ? commitText : () => setIsEditing(true)}
-                className="flex items-center gap-1.5 text-[10px] text-[#9A7738] transition-colors hover:text-[#6F5227] cursor-pointer"
+                className="map-ui-accent map-ui-accent-hover flex items-center gap-1.5 text-[10px] transition-colors cursor-pointer"
               >
                 {isEditing ? <Check className="h-3.5 w-3.5" /> : <Edit3 className="h-3.5 w-3.5" />}
                 {isEditing ? '完成' : '编辑'}
@@ -227,11 +234,11 @@ export default function MapMemoryOverlay({
               <textarea
                 value={presentDraft}
                 onChange={(event) => setPresentDraft(event.target.value)}
-                className="mt-3 min-h-32 w-full resize-y border-0 border-b border-[#A88646]/45 bg-white/22 px-0 py-2 text-[13px] leading-7 text-[#3F3B35] outline-none"
+                className="map-memory-inline-textarea map-ui-body-text map-ui-accent-border mt-3 min-h-32 w-full resize-y border-0 border-b px-0 py-2 text-[13px] leading-7 outline-none"
                 aria-label="编辑现在的我"
               />
             ) : (
-              <p className="mt-3 whitespace-pre-wrap text-[13px] leading-7 text-[#46423B]">{presentDraft}</p>
+              <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{presentDraft}</p>
             )}
           </section>}
         </div>
@@ -241,13 +248,13 @@ export default function MapMemoryOverlay({
             type="button"
             onClick={saveMemory}
             disabled={saveStatus === 'saving'}
-            className="flex items-center gap-2 text-[#8D6D32] transition-colors hover:text-[#634A24] disabled:opacity-50 cursor-pointer"
+            className="map-ui-accent map-ui-accent-hover flex items-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Bookmark className="h-4.5 w-4.5" strokeWidth={1.5} />
             {saveStatus === 'saving' ? '保存中…' : '保存记忆'}
           </button>
-          <span className="text-[#9A9387]">|</span>
-          <span className={`flex items-center gap-1.5 ${saveStatus === 'error' ? 'text-red-700' : 'text-[#647A52]'}`}>
+          <span className="map-ui-muted">|</span>
+          <span className={`map-ui-save-status flex items-center gap-1.5 ${saveStatus === 'error' ? 'is-error' : ''}`}>
             <Cloud className="h-4 w-4" strokeWidth={1.5} />
             {saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存'}
           </span>
@@ -259,7 +266,7 @@ export default function MapMemoryOverlay({
         type="button"
         onClick={onClose}
         aria-label="收起记忆"
-        className="pointer-events-auto absolute right-5 top-6 z-30 flex h-10 items-center gap-2 rounded-full border border-[#AFA99B]/65 bg-[#FAF7EF]/90 px-3.5 text-[11px] text-[#403D37] shadow-[0_6px_18px_rgba(52,48,41,0.13)] backdrop-blur-md transition-colors hover:bg-white cursor-pointer"
+        className="map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 items-center gap-2 rounded-full border px-3.5 text-[11px] backdrop-blur-md transition-colors cursor-pointer"
       >
         <X className="h-4.5 w-4.5" strokeWidth={1.5} />
         收起记忆

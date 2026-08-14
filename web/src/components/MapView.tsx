@@ -486,7 +486,7 @@ export default function MapView({
           L.polyline(
             routePoints.sort((a, b) => a.order - b.order).map((point) => point.coords),
             {
-              color: '#A88646',
+              className: 'map-memory-route',
               weight: 1.6,
               opacity: 0.72,
               dashArray: '2 7',
@@ -531,7 +531,7 @@ export default function MapView({
           L.polyline(
             routePoints.sort((a, b) => a.order - b.order).map((point) => point.coords),
             {
-              color: '#A88646',
+              className: 'map-memory-route',
               weight: 1.4,
               opacity: 0.62,
               dashArray: '2 7',
@@ -640,24 +640,25 @@ export default function MapView({
   };
 
   return (
-    <div className="h-screen w-screen relative overflow-hidden bg-[#dbe3e8] text-[#2E2C28]">
+    <div className="map-experience-root h-screen w-screen relative overflow-hidden">
       {/* 瓦片首屏占位：先给用户稳定的地图轮廓，真实瓦片就绪后淡出。 */}
       <div
         className={`map-loading-poster absolute inset-0 z-[1] ${baseMapReady ? 'is-ready' : ''}`}
         aria-hidden="true"
       />
       {/* 地图本体 */}
+      {/* Leaflet 会在此节点运行时追加 class；React className 必须保持静态。 */}
       <div ref={containerRef} className="map-editorial-canvas absolute inset-0 z-0" />
 
       {/* 页面标题与地区层级 */}
       <header
-        className={`pointer-events-none absolute z-[1002] text-[#302F2B] ${
+        className={`map-ui-header pointer-events-none absolute z-[1002] ${
           selectedMemory ? 'left-[82px] top-8' : 'map-page-heading left-[112px] top-8'
         }`}
       >
         {selectedMemory ? (
-          <nav className="pointer-events-auto flex items-center gap-2 font-editorial-serif text-[13px] tracking-[0.12em] text-[#7E6230]" aria-label="地点层级">
-            <button type="button" onClick={onCloseMemory} className="transition-colors hover:text-[#513B1C] cursor-pointer">足迹</button>
+          <nav className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[13px] tracking-[0.12em]" aria-label="地点层级">
+            <button type="button" onClick={onCloseMemory} className="map-ui-accent-hover transition-colors cursor-pointer">足迹</button>
             {[selectedMemory.country, selectedMemory.city, selectedMemory.location?.name]
               .map((part) => part?.trim())
               .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
@@ -665,8 +666,8 @@ export default function MapView({
           </nav>
         ) : (
           <>
-            <div className="pointer-events-auto flex items-center gap-2 font-editorial-serif text-[11px] tracking-[0.16em] text-[#927846]">
-              <button type="button" onClick={backToWorld} className="transition-colors hover:text-[#6F572E] cursor-pointer">
+            <div className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[11px] tracking-[0.16em]">
+              <button type="button" onClick={backToWorld} className="map-ui-accent-hover transition-colors cursor-pointer">
                 MEMORIES / PLACES
               </button>
               {viewCountry && <span>/ {viewCountry}</span>}
@@ -674,7 +675,7 @@ export default function MapView({
             <h1 className="font-editorial-serif mt-2 text-[38px] leading-none tracking-[0.08em] sm:text-[48px]">
               走过的地方
             </h1>
-            <p className="mt-3 text-[12px] tracking-[0.1em] text-[#4F4C45]">
+            <p className="map-ui-muted mt-3 text-[12px] tracking-[0.1em]">
               {enriched.length} 段记忆&nbsp;&nbsp;·&nbsp;&nbsp;{availableCountries.length} 个国家&nbsp;&nbsp;·&nbsp;&nbsp;{yearSpan} 年
             </p>
           </>
@@ -693,7 +694,7 @@ export default function MapView({
             }}
             aria-label="选择时间"
             aria-expanded={timeMenuOpen}
-            className="flex h-10 items-center gap-2 rounded-full border border-[#AFA99B]/65 bg-[#FAF7EF]/94 px-4 text-[12px] text-[#37352F] shadow-[0_5px_16px_rgba(52,48,41,0.14)] backdrop-blur-md transition-colors hover:bg-white cursor-pointer"
+            className="map-ui-control flex h-10 items-center gap-2 rounded-full border px-4 text-[12px] backdrop-blur-md transition-colors cursor-pointer"
           >
             <CalendarDays className="h-4 w-4" strokeWidth={1.6} />
             <span>{timeFilter === 'all' ? '全部时间' : `${timeFilter} 年`}</span>
@@ -705,7 +706,7 @@ export default function MapView({
                 initial={{ y: -6, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -4, opacity: 0 }}
-                className="absolute right-0 mt-2 w-36 overflow-hidden rounded-xl border border-[#B8B1A2]/65 bg-[#FAF7EF]/98 p-1.5 shadow-[0_12px_30px_rgba(50,46,39,0.18)] backdrop-blur-md"
+                className="map-ui-popover absolute right-0 mt-2 w-36 overflow-hidden rounded-xl border p-1.5 backdrop-blur-md"
               >
                 <button
                   type="button"
@@ -713,10 +714,10 @@ export default function MapView({
                     setTimeFilter('all');
                     setTimeMenuOpen(false);
                   }}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] hover:bg-[#EDE7DA] cursor-pointer"
+                  className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
                 >
                   全部时间
-                  {timeFilter === 'all' && <Check className="h-3.5 w-3.5 text-[#9B7A38]" />}
+                  {timeFilter === 'all' && <Check className="map-ui-accent h-3.5 w-3.5" />}
                 </button>
                 {allYears.map((year) => (
                   <button
@@ -726,10 +727,10 @@ export default function MapView({
                       setTimeFilter(year);
                       setTimeMenuOpen(false);
                     }}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-mono text-[11px] hover:bg-[#EDE7DA] cursor-pointer"
+                    className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-mono text-[11px] cursor-pointer"
                   >
                     {year}
-                    {timeFilter === year && <Check className="h-3.5 w-3.5 text-[#9B7A38]" />}
+                    {timeFilter === year && <Check className="map-ui-accent h-3.5 w-3.5" />}
                   </button>
                 ))}
               </motion.div>
@@ -747,7 +748,7 @@ export default function MapView({
             }}
             aria-label="筛选地区"
             aria-expanded={filterMenuOpen}
-            className="flex h-10 items-center gap-2 rounded-full border border-[#AFA99B]/65 bg-[#FAF7EF]/94 px-4 text-[12px] text-[#37352F] shadow-[0_5px_16px_rgba(52,48,41,0.14)] backdrop-blur-md transition-colors hover:bg-white cursor-pointer"
+            className="map-ui-control flex h-10 items-center gap-2 rounded-full border px-4 text-[12px] backdrop-blur-md transition-colors cursor-pointer"
           >
             <Filter className="h-4 w-4" strokeWidth={1.6} />
             <span>{countryFilter === 'all' ? '筛选' : countryFilter}</span>
@@ -758,7 +759,7 @@ export default function MapView({
                 initial={{ y: -6, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -4, opacity: 0 }}
-                className="absolute right-0 mt-2 w-40 overflow-hidden rounded-xl border border-[#B8B1A2]/65 bg-[#FAF7EF]/98 p-1.5 shadow-[0_12px_30px_rgba(50,46,39,0.18)] backdrop-blur-md"
+                className="map-ui-popover absolute right-0 mt-2 w-40 overflow-hidden rounded-xl border p-1.5 backdrop-blur-md"
               >
                 <button
                   type="button"
@@ -766,10 +767,10 @@ export default function MapView({
                     setCountryFilter('all');
                     setFilterMenuOpen(false);
                   }}
-                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] hover:bg-[#EDE7DA] cursor-pointer"
+                  className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
                 >
                   全部地区
-                  {countryFilter === 'all' && <Check className="h-3.5 w-3.5 text-[#9B7A38]" />}
+                  {countryFilter === 'all' && <Check className="map-ui-accent h-3.5 w-3.5" />}
                 </button>
                 {availableCountries.map((country) => (
                   <button
@@ -779,10 +780,10 @@ export default function MapView({
                       setCountryFilter(country);
                       setFilterMenuOpen(false);
                     }}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] hover:bg-[#EDE7DA] cursor-pointer"
+                    className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
                   >
                     {country}
-                    {countryFilter === country && <Check className="h-3.5 w-3.5 text-[#9B7A38]" />}
+                    {countryFilter === country && <Check className="map-ui-accent h-3.5 w-3.5" />}
                   </button>
                 ))}
                 {filteredUnlabeled.length > 0 && (
@@ -792,7 +793,7 @@ export default function MapView({
                       setPanel({ title: '未标注地区', list: filteredUnlabeled });
                       setFilterMenuOpen(false);
                     }}
-                    className="mt-1 flex w-full items-center gap-2 border-t border-[#D4CDBF] px-3 pt-2.5 pb-2 text-left text-[10px] text-[#756F63] hover:text-[#9B7A38] cursor-pointer"
+                    className="map-ui-divider-top map-ui-muted map-ui-accent-hover mt-1 flex w-full items-center gap-2 border-t px-3 pt-2.5 pb-2 text-left text-[10px] cursor-pointer"
                   >
                     <MapPin className="h-3.5 w-3.5" />
                     未标注地区（{filteredUnlabeled.length}）
@@ -811,21 +812,21 @@ export default function MapView({
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
           aria-label="地区记忆时间轴"
-          className="map-timeline-panel absolute bottom-6 left-[calc(50%+43px)] z-[1000] w-[calc(100vw-130px)] max-w-[900px] -translate-x-1/2 overflow-hidden rounded-2xl border border-[#B9B1A2]/70 bg-[#FAF7EF]/95 text-[#302E29] shadow-[0_14px_36px_rgba(67,61,51,0.2)] backdrop-blur-lg"
+          className="map-timeline-panel absolute bottom-6 left-[calc(50%+43px)] z-[1000] w-[calc(100vw-130px)] max-w-[900px] -translate-x-1/2 overflow-hidden rounded-2xl border backdrop-blur-lg"
         >
           <div className="grid min-h-[126px] grid-cols-[112px_minmax(0,1fr)_78px] items-center gap-4 px-5 py-4 sm:grid-cols-[160px_minmax(0,1fr)_106px] sm:gap-6 sm:px-8">
             <div>
               <h2 className="font-editorial-serif text-[24px] leading-none tracking-[0.05em] sm:text-[30px]" aria-live="polite">
                 {timeFilter === 'all' ? '全部时光' : timeFilter}
               </h2>
-              <p className="mt-3 text-[11px] tracking-[0.08em] text-[#655F55]">{filtered.length} 段记忆</p>
+              <p className="map-ui-muted mt-3 text-[11px] tracking-[0.08em]">{filtered.length} 段记忆</p>
             </div>
 
             <div className="min-w-0">
               <div className="relative">
                 <div className="pointer-events-none absolute inset-x-[11px] top-1/2 flex -translate-y-1/2 items-center justify-between">
                   {allYears.map((year) => (
-                    <span key={year} className="h-1.5 w-1.5 rounded-full bg-[#A98A4A]/55" />
+                    <span key={year} className="map-ui-tick h-1.5 w-1.5 rounded-full" />
                   ))}
                 </div>
                 <input
@@ -846,13 +847,13 @@ export default function MapView({
                   aria-valuetext={allYears[rangeVal] ? `${allYears[rangeVal]} 年` : undefined}
                 />
               </div>
-              <div className="mt-1 flex items-center justify-between font-mono text-[9px] text-[#615C52] sm:text-[10px]">
+              <div className="map-ui-muted mt-1 flex items-center justify-between font-mono text-[9px] sm:text-[10px]">
                 {allYears.map((year) => (
                   <button
                     key={year}
                     type="button"
                     onClick={() => setTimeFilter(year)}
-                    className={`transition-colors cursor-pointer ${timeFilter === year ? 'font-bold text-[#9B762E]' : 'hover:text-[#9B762E]'}`}
+                    className={`map-ui-year transition-colors cursor-pointer ${timeFilter === year ? 'is-active font-bold' : 'map-ui-accent-hover'}`}
                   >
                     {year}
                   </button>
@@ -860,11 +861,11 @@ export default function MapView({
               </div>
             </div>
 
-            <div className="flex h-16 items-center justify-end border-l border-[#CFC7B8] pl-3 sm:pl-5">
+            <div className="map-ui-divider-left flex h-16 items-center justify-end border-l pl-3 sm:pl-5">
               <button
                 type="button"
                 onClick={() => setPanel({ title: timeFilter === 'all' ? '全部记忆' : `${timeFilter} 年`, list: filtered })}
-                className="flex items-center gap-1.5 whitespace-nowrap text-[10px] tracking-[0.08em] text-[#514D45] transition-colors hover:text-[#9B762E] cursor-pointer sm:text-[11px]"
+                className="map-ui-muted map-ui-accent-hover flex items-center gap-1.5 whitespace-nowrap text-[10px] tracking-[0.08em] transition-colors cursor-pointer sm:text-[11px]"
               >
                 <List className="h-3.5 w-3.5 sm:hidden" />
                 <span className="hidden sm:inline">查看列表</span>
@@ -890,19 +891,19 @@ export default function MapView({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 320, opacity: 0 }}
             transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-            className="absolute top-0 right-0 z-[1003] h-full w-[300px] overflow-y-auto border-l border-[#BDB5A7] bg-[#F8F4EA]/96 text-[#302E29] shadow-[-16px_0_36px_rgba(55,50,42,0.14)] backdrop-blur-md"
+            className="map-memory-list-panel absolute top-0 right-0 z-[1003] h-full w-[300px] overflow-y-auto border-l backdrop-blur-md"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#D2CABD] bg-[#F8F4EA]/96 px-4 py-4 backdrop-blur-md">
+            <div className="map-memory-list-header sticky top-0 z-10 flex items-center justify-between border-b px-4 py-4 backdrop-blur-md">
               <h3 className="font-editorial-serif flex items-center gap-1.5 text-sm font-bold">
-                <MapPin className="h-4 w-4 text-[#A5823D]" />
+                <MapPin className="map-ui-accent h-4 w-4" />
                 {panel.title}
-                <span className="font-mono text-[10px] font-normal text-[#7A746A]">
+                <span className="map-ui-muted font-mono text-[10px] font-normal">
                   {panel.list.length} 条
                 </span>
               </h3>
               <button
                 onClick={() => setPanel(null)}
-                className="rounded-full p-1 text-[#7A746A] transition-colors hover:bg-[#E9E3D7] hover:text-[#302E29] cursor-pointer"
+                className="map-ui-panel-close rounded-full p-1 transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -915,7 +916,7 @@ export default function MapView({
                     setPanel(null);
                     onSelectMemory(m);
                   }}
-                  className="group flex w-full gap-3 rounded-lg border border-[#D8D0C2] bg-white/45 p-2.5 text-left transition-colors hover:border-[#A98A4A]/70 hover:bg-white/70 cursor-pointer"
+                  className="map-memory-list-card group flex w-full gap-3 rounded-lg border p-2.5 text-left transition-colors cursor-pointer"
                 >
                     <img
                       src={m.image || fallbackImageOf(m) || ''}
@@ -930,11 +931,11 @@ export default function MapView({
                           e.currentTarget.style.visibility = 'hidden';
                         }
                       }}
-                      className="h-14 w-14 shrink-0 rounded-md bg-[#DDD5C6] object-cover transition-transform group-hover:scale-[1.03]"
+                      className="map-memory-thumb h-14 w-14 shrink-0 rounded-md object-cover transition-transform group-hover:scale-[1.03]"
                     />
                   <div className="min-w-0 flex flex-col justify-center">
                     <div className="font-editorial-serif line-clamp-1 text-xs font-semibold">{m.title}</div>
-                    <div className="mt-1 font-mono text-[10px] text-[#7A746A]">
+                    <div className="map-ui-muted mt-1 font-mono text-[10px]">
                       {m.date}
                       {m.tag ? ` · ${m.tag}` : ''}
                     </div>
