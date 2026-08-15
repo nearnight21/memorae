@@ -224,20 +224,54 @@
 .memory-editor-photo-frame {
   position: relative;
   display: grid;
-  min-height: 540px;
+  height: clamp(420px, calc(100vh - 190px), 620px);
+  min-height: 0;
+  aspect-ratio: 836 / 620;
   place-items: center;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--color-bg-surface, #fffdf8) 68%, transparent);
-  box-shadow: 0 7px 17px rgba(61, 54, 44, 0.24);
+  overflow: visible;
+  isolation: isolate;
 }
 
-.memory-editor-photo-frame > img {
-  width: 100%;
-  height: 100%;
+.memory-editor-photo-frame::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: '';
+  background: var(--color-bg-surface, #fffdf8);
+  clip-path: polygon(
+    2.5% 4%, 7% 1.8%, 13% 2.7%, 19% 1.4%, 26% 2.1%, 32% 1.2%, 39% 2.4%, 46% 1.5%,
+    53% 2.2%, 61% 1.3%, 68% 2.3%, 75% 1.6%, 82% 2.5%, 89% 1.8%, 96% 4.5%,
+    98.1% 10%, 96.8% 16%, 98% 23%, 96.9% 30%, 98.2% 37%, 96.8% 44%, 98% 51%,
+    96.7% 58%, 98% 65%, 96.9% 72%, 98.1% 80%, 96.7% 89%, 94.5% 96%, 87% 97.4%,
+    80% 96.3%, 72% 98%, 65% 96.4%, 58% 97.5%, 50% 96.2%, 42% 97.6%, 34% 96.5%,
+    26% 98%, 18% 96.6%, 10% 97.5%, 3.3% 94%, 1.8% 86%, 3% 78%, 1.8% 70%,
+    3.1% 62%, 1.8% 54%, 3% 46%, 1.8% 38%, 3.1% 30%, 1.8% 22%, 3% 14%
+  );
+  filter: drop-shadow(0 7px 17px rgba(61, 54, 44, 0.24));
+}
+
+.memory-editor-photo-frame > img.memory-editor-photo-image {
+  position: absolute;
+  top: 2.8%;
+  left: 2.2%;
+  z-index: 1;
+  width: 95.6%;
+  height: 92.4%;
   object-fit: cover;
+  clip-path: polygon(
+    1.5% 2.2%, 8% 0.7%, 16% 1.8%, 24% 0.8%, 32% 1.7%, 40% 0.9%, 49% 1.6%,
+    58% 0.8%, 67% 1.7%, 76% 0.8%, 85% 1.6%, 98% 2.4%, 99.2% 12%, 98.1% 21%,
+    99.3% 30%, 98% 40%, 99.2% 50%, 98.1% 60%, 99.1% 70%, 98% 80%, 99% 90%,
+    97% 98%, 88% 97%, 78% 99%, 68% 97.5%, 58% 99%, 48% 97.6%, 38% 99%, 28% 97.4%,
+    18% 98.8%, 8% 97%, 1.5% 95%, 2.3% 85%, 0.8% 75%, 2% 65%, 0.8% 55%, 2% 45%,
+    0.8% 35%, 2% 25%, 0.9% 15%
+  );
+  filter: saturate(0.96) contrast(0.98);
 }
 
 .memory-editor-photo-empty {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 9px;
   place-items: center;
@@ -255,6 +289,7 @@
 
 .memory-editor-change-photo {
   position: absolute;
+  z-index: 2;
   right: 20px;
   bottom: 20px;
   min-height: 36px;
@@ -558,7 +593,10 @@
   }
 
   .memory-editor-photo-frame {
+    width: 100%;
+    height: auto;
     min-height: 330px;
+    aspect-ratio: 836 / 620;
   }
 
   .memory-editor-copy-column {

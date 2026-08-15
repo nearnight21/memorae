@@ -113,6 +113,8 @@ export interface GeoResult {
   lng: number;
   country?: string;
   city?: string;
+  /** 反向地理编码返回的可读地点名。 */
+  label?: string;
 }
 
 /**
@@ -165,6 +167,56 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
     /* network / parse errors -> null */
   }
   return null;
+}
+
+/**
+ * 用照片 EXIF GPS 坐标尝试补全地点名。
+ * 失败时调用方仍可保留原始坐标，不把照片元数据丢掉。
+ */
+export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const ck = `reverse_geocode_${lat.toFixed(5)}_${lng.toFixed(5)}`;
+  try {
+    const cached = localStorage.getItem(ck);
+    if (cached) return JSON.parse(cached) as GeoResult;
+  } catch {
+    /* ignore cache errors */
+  }
+
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&format=json&addressdetails=1&accept-language=zh`
+    );
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as {
+      display_name?: string;
+      name?: string;
+      address?: {
+        country?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        county?: string;
+        state?: string;
+      };
+    };
+    const address = data.address ?? {};
+    const result: GeoResult = {
+      lat,
+      lng,
+      country: address.country,
+      city: address.city || address.town || address.village || address.county || address.state,
+      label: data.name || data.display_name?.split(',')[0],
+    };
+    try {
+      localStorage.setItem(ck, JSON.stringify(result));
+    } catch {
+      /* ignore cache errors */
+    }
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 export interface PlaceCandidate {

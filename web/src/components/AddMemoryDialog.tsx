@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import type { CategoryType, Memory, PinnedBy } from '../types';
 import { selectLocalPhoto } from '../product/selectPhoto';
-import { geocodeAddress } from '../lib/geo';
+import { readPhotoMetadata } from '../product/photoMetadata';
+import { geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import LocationMapPicker from './LocationMapPicker';
 import LocationPicker from './LocationPicker';
 import './AddMemoryDialog.css';
@@ -39,6 +40,13 @@ function defaultTag(category: CategoryType) {
   return '瞬间';
 }
 
+function dateFromFileTimestamp(timestamp: number): string | undefined {
+  const value = new Date(timestamp);
+  if (Number.isNaN(value.getTime())) return undefined;
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
 export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialogProps) {
   const [step, setStep] = useState<CreateStep>('source');
   const [title, setTitle] = useState('');
@@ -63,6 +71,11 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const dateAutoRef = useRef(false);
+  const locationAutoRef = useRef(false);
+  const dateValueRef = useRef('');
+  const locationValueRef = useRef('');
+  const photoMetadataRequestRef = useRef(0);
 
   useEffect(() => {
     const submitWithShortcut = (event: KeyboardEvent) => {
@@ -82,12 +95,40 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
     setLng(result.lng);
   };
 
+  const applyPhotoMetadata = async (file: File) => {
+    const requestId = photoMetadataRequestRef.current + 1;
+    photoMetadataRequestRef.current = requestId;
+    const metadata = await readPhotoMetadata(file);
+    if (requestId !== photoMetadataRequestRef.current) return;
+
+    const detectedDate = metadata.date || dateFromFileTimestamp(file.lastModified);
+    if (detectedDate && (!dateValueRef.current.trim() || dateAutoRef.current)) {
+      dateAutoRef.current = true;
+      dateValueRef.current = detectedDate;
+      setDate(detectedDate);
+    }
+
+    const hasGps = metadata.latitude !== undefined && metadata.longitude !== undefined;
+    if (hasGps && (!locationValueRef.current.trim() || locationAutoRef.current)) {
+      const latitude = metadata.latitude as number;
+      const longitude = metadata.longitude as number;
+      const reverse = await reverseGeocodeCoordinates(latitude, longitude);
+      if (requestId !== photoMetadataRequestRef.current || (!locationAutoRef.current && locationValueRef.current.trim())) return;
+      const label = reverse?.label || reverse?.city || reverse?.country || `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      locationValueRef.current = label;
+      setLocationName(label);
+      locationAutoRef.current = true;
+      applyLocationCoordinates(reverse ?? { lat: latitude, lng: longitude });
+    }
+  };
+
   const selectCover = async (file: File | undefined, openEditor = false) => {
     if (!file) return;
     setIsCoverUploading(true);
     try {
       setImageUrl(await selectLocalPhoto(file));
       if (openEditor) setStep('editor');
+      void applyPhotoMetadata(file);
     } catch (error) {
       console.error(error);
       window.alert(error instanceof Error ? error.message : '照片处理失败，请重试。');
@@ -219,7 +260,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
         <section className="memory-editor-photo-column" aria-label="记忆照片">
           <div className="memory-editor-photo-frame">
             {imageUrl ? (
-              <img src={imageUrl} alt="新记忆照片预览" referrerPolicy="no-referrer" className="map-memory-photo-mask" />
+            <img src={imageUrl} alt="新记忆照片预览" referrerPolicy="no-referrer" className="memory-editor-photo-image" />
             ) : (
               <button type="button" className="memory-editor-photo-empty" onClick={() => coverInputRef.current?.click()}>
                 <ImagePlus size={32} aria-hidden="true" />
@@ -274,10 +315,22 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
           />
 
           <div className="memory-editor-metadata">
-            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} aria-label="日期" required />
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => {
+                dateAutoRef.current = false;
+                dateValueRef.current = event.target.value;
+                setDate(event.target.value);
+              }}
+              aria-label="日期"
+              required
+            />
             <LocationPicker
               value={locationName}
               onChange={(value) => {
+                locationAutoRef.current = false;
+                locationValueRef.current = value;
                 setLocationName(value);
                 setCountry('');
                 setCity('');
@@ -285,6 +338,8 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
                 setLng(null);
               }}
               onSelect={(candidate) => {
+                locationAutoRef.current = false;
+                locationValueRef.current = candidate.shortName;
                 setLocationName(candidate.shortName);
                 applyLocationCoordinates(candidate);
               }}
