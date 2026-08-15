@@ -1,0 +1,47 @@
+.crystal-timeline-formal {
+  position: absolute;
+  left: calc(50% + 43px);
+  bottom: 0;
+  z-index: 1001;
+  width: min(1120px, calc(100vw - 120px));
+  height: 48px;
+  transform: translateX(-50%);
+  color: #092b50;
+  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  pointer-events: none;
+}
+.crystal-timeline-formal.is-expanded { height: 170px; }
+.crystal-timeline-formal-body {
+  position: relative;
+  width: 100%;
+  height: 88px;
+  overflow: visible;
+  border-radius: 999px;
+  outline: none;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+  transform: translateY(40px);
+  transition: transform 180ms ease;
+}
+.crystal-timeline-formal.is-expanded .crystal-timeline-formal-body { transform: translateY(0); }
+.crystal-timeline-formal-body:focus-visible { outline: 1px solid rgba(78,148,207,.5); outline-offset: 4px; }
+.crystal-formal-glass,.crystal-formal-highlight,.crystal-formal-shade,.crystal-formal-focus,.crystal-formal-content { position:absolute; pointer-events:none; }
+.crystal-formal-glass { inset:0; overflow:hidden; border-radius:inherit; background:linear-gradient(180deg,rgba(238,249,255,.19),rgba(255,255,255,.08) 22%,rgba(220,240,251,.038) 58%,rgba(73,116,146,.092)); backdrop-filter:blur(1.7px) saturate(1.1) brightness(1.045); box-shadow:inset 0 2px 2px rgba(250,254,255,.54),inset 0 -2px 2px rgba(31,82,116,.17),0 2px 5px rgba(41,82,110,.08); }
+.crystal-formal-highlight { top:1px;left:25px;right:25px;height:24px;border-radius:999px 999px 42% 42%; background:linear-gradient(180deg,rgba(250,254,255,.92),rgba(234,247,255,.26) 38%,transparent 92%);filter:blur(.45px); }
+.crystal-formal-shade { left:22px;right:22px;bottom:1px;height:21px;border-radius:35% 35% 999px 999px;background:linear-gradient(180deg,transparent,rgba(51,103,138,.13) 48%,rgba(25,72,106,.31));filter:blur(.65px); }
+.crystal-formal-focus { top:1px;left:var(--crystal-position);width:clamp(76px,9.5%,92px);height:86px;transform:translateX(-50%);border-radius:46%;background:radial-gradient(ellipse at 50% 46%,rgba(225,246,255,.27),rgba(153,213,249,.11) 42%,transparent 84%);backdrop-filter:blur(.8px) saturate(1.17) brightness(1.085);box-shadow:inset 0 2px 2px rgba(250,254,255,.46),0 0 5px rgba(91,176,229,.08);transition:left 70ms linear; }
+.crystal-formal-focus span { position:absolute;inset:7px 16px;border-radius:48%;background:radial-gradient(ellipse,rgba(238,250,255,.24),rgba(161,217,250,.065) 52%,transparent 76%); }
+.crystal-formal-content { inset:0; }
+.crystal-formal-years span { position:absolute;top:18px;transform:translateX(-50%);font-size:16px;font-weight:500;line-height:22px;color:rgba(7,38,78,.88);text-shadow:0 1px 1px rgba(255,255,255,.34); }
+.crystal-formal-track { position:absolute;right:46px;bottom:19.5px;left:46px;height:3px;border-radius:999px;background:rgba(17,57,88,.2);overflow:hidden; }
+.crystal-formal-track span { display:block;width:var(--crystal-progress);height:100%;background:linear-gradient(90deg,rgba(35,105,160,.16),rgba(29,122,194,.62)); }
+.crystal-formal-handle { position:absolute;left:var(--crystal-position);bottom:14px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle at 38% 32%,#f8fcff 0 21%,#4389c6 24% 48%,#0d5d9e 72%);box-shadow:0 1px 3px rgba(15,75,119,.2); }
+.crystal-formal-popover { position:absolute;top:96px;left:var(--crystal-position);min-width:130px;transform:translateX(-50%);display:flex;flex-direction:column;gap:4px;padding:9px 13px;border-radius:12px;color:rgba(8,42,77,.92);background:rgba(239,248,253,.72);backdrop-filter:blur(3px) saturate(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 10px rgba(28,58,80,.08);text-align:center;font-size:11px;line-height:16px;white-space:nowrap;opacity:0;transition:opacity 160ms ease,left 70ms linear; }
+.crystal-formal-popover.is-visible { opacity:1; }
+.crystal-formal-popover-month,.crystal-formal-popover-date { display:flex;align-items:center;justify-content:center;gap:6px; }
+.crystal-formal-popover-month { font-size:15px;font-weight:600; }
+.crystal-formal-clear { position:absolute;right:18px;bottom:-27px;pointer-events:auto;border:0;background:transparent;color:#68635b;font-size:11px;cursor:pointer; }
+@media (max-width:720px) { .crystal-timeline-formal { left:50%;width:calc(100vw - 32px); } .crystal-formal-years span { font-size:12px; } }

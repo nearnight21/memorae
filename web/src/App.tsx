@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -23,11 +23,13 @@ import {
 } from 'lucide-react';
 
 // Data & Types
-import { Memory } from './types';
+import { Memory, type MemoryFilters } from './types';
 import { type VaultSessionV1 } from './crypto';
 import { deleteProductMemory, loadProductMemories, saveProductMemory } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
+import { geocodeAddress } from './lib/geo';
+import { EMPTY_MEMORY_FILTERS, filterMemories } from './lib/memoryFilters';
 
 // Subcomponents
 import CampfireSynthPlayer from './components/CampfireSynthPlayer';
@@ -37,6 +39,7 @@ import MemoryDetailPanel from './components/MemoryDetailPanel';
 import AddMemoryDialog from './components/AddMemoryDialog';
 import TimelineView from './components/TimelineView';
 import MapView from './components/MapView';
+import SimpleRecallV2 from './components/SimpleRecallV2';
 
 interface AppProps {
   session: VaultSessionV1;
@@ -60,6 +63,44 @@ export default function App({
 
   // --- Persistent States ---
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
+  const [filters, setFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
+  const [enrichedMemories, setEnrichedMemories] = useState<Memory[]>(initialMemories);
+
+  // Keep geocoded country/city data in the shared source used by every future view.
+  // Filtering must happen after this enrichment so a location-only memory is not
+  // missing from the region results.
+  useEffect(() => {
+    setEnrichedMemories(memories);
+    let cancelled = false;
+    const run = async () => {
+      const next = [...memories];
+      let changed = false;
+      for (let index = 0; index < next.length; index += 1) {
+        const memory = next[index];
+        if (memory.country?.trim() || !memory.location?.name?.trim()) continue;
+        const geo = await geocodeAddress(memory.location.name);
+        if (cancelled || !geo?.country) continue;
+        next[index] = {
+          ...memory,
+          country: geo.country,
+          city: memory.city?.trim() ? memory.city : geo.city,
+          lat: memory.lat ?? geo.lat,
+          lng: memory.lng ?? geo.lng,
+        };
+        changed = true;
+      }
+      if (changed && !cancelled) setEnrichedMemories(next);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [memories]);
+
+  const filteredMemories = useMemo(
+    () => filterMemories(enrichedMemories, filters),
+    [enrichedMemories, filters],
+  );
 
   // --- Board Scenery States (Continuous Timeline) ---
   const [scrollX, setScrollX] = useState<number>(0);
@@ -71,15 +112,12 @@ export default function App({
   const [isLanternOn, setIsLanternOn] = useState<boolean>(true);
   const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [showRecall, setShowRecall] = useState(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
-  const [viewMode, setViewMode] = useState<'board' | 'timeline' | 'places'>('board');
-  // 地区页首次打开后保留地图实例，切换视图时不重复初始化 Leaflet 和瓦片。
-  const [hasOpenedPlaces, setHasOpenedPlaces] = useState(false);
-
-  const switchViewMode = (mode: 'board' | 'timeline' | 'places') => {
-    if (mode === 'places') setHasOpenedPlaces(true);
-    setViewMode(mode);
-  };
+  // Formal product entry is the footprint map. Legacy view state remains in the
+  // source for comparison while its navigation is disconnected from the UI.
+  const [viewMode] = useState<'board' | 'timeline' | 'places'>('places');
+  const hasOpenedPlaces = true;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -316,31 +354,6 @@ export default function App({
           : 'bg-[#04060d] select-none text-blue-100 shadow-[inset_0_0_200px_rgba(0,0,10,0.95)]'
       }`}
     >
-      {/* 软木板 / 时间线沿用紧凑切换器；地区页使用设计稿中的左侧主导航 */}
-      {viewMode !== 'places' && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-1 bg-stone-900/85 backdrop-blur-md rounded-full border border-stone-700/50 p-1 shadow-xl">
-          {([
-            { key: 'board', icon: '🗺️', name: '软木板' },
-            { key: 'timeline', icon: '📖', name: '时间线' },
-            { key: 'places', icon: '🌏', name: '地区' },
-          ] as const).map((v) => (
-            <button
-              key={v.key}
-              onClick={() => switchViewMode(v.key)}
-              aria-label={v.name}
-              title={v.name}
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-all cursor-pointer ${
-                viewMode === v.key
-                  ? 'bg-amber-500 text-stone-950 shadow'
-                  : 'text-stone-300 hover:text-amber-300'
-              }`}
-            >
-              <span aria-hidden="true">{v.icon}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Background Twinkling Night Stars when lantern is toggled off */}
       {!isLanternOn && (
         <div id="starfield" className="absolute inset-0 pointer-events-none opacity-80 transition-opacity duration-1000">
@@ -368,8 +381,8 @@ export default function App({
         ></div>
       </div>
 
-      {/* Atmospheric sounds & explanation banner in Header */}
-      <header className="absolute top-4 inset-x-5 z-[100] flex items-start justify-between">
+      {/* Legacy board-only controls stay in source but are not part of the map entry. */}
+      {viewMode !== 'places' && <header className="absolute top-4 inset-x-5 z-[100] flex items-start justify-between">
         {viewMode === 'board' && (
           <div className="flex flex-col gap-1 text-left">
             <div className="flex items-center gap-2">
@@ -413,7 +426,7 @@ export default function App({
           
           <CampfireSynthPlayer />
         </div>
-      </header>
+      </header>}
 
       {/* Right-Top hanging Camp Lantern Toggle Button (💡) */}
       <div 
@@ -785,85 +798,28 @@ export default function App({
       {hasOpenedPlaces && (
         <div className={`fixed inset-0 z-50 ${viewMode === 'places' ? '' : 'invisible pointer-events-none'}`}>
           <MapView
-            memories={memories}
+            memories={enrichedMemories}
+            filteredMemories={filteredMemories}
+            filters={filters}
+            onFiltersChange={setFilters}
             selectedMemory={selectedMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
+            onAddMemory={() => setShowAddMemory(true)}
+            onLock={onLock}
+            onOpenRecall={() => setShowRecall(true)}
           />
-          <aside
-                id="places-primary-nav"
-                className={`fixed inset-y-0 left-0 z-[1200] flex flex-col border-r border-white/10 bg-[#202322]/96 text-[#D9D4C8] shadow-[12px_0_32px_rgba(28,31,30,0.12)] backdrop-blur-md transition-[width] duration-300 ${
-                  selectedMemory ? 'w-14' : 'w-[86px]'
-                }`}
-                aria-label="地区页主导航"
-              >
-                {selectedMemory ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMemory(null)}
-                    aria-label="收起记忆"
-                    title="收起记忆"
-                    className="my-auto flex h-16 w-full items-center justify-center text-[#C9A552] transition-colors hover:bg-white/[0.045] hover:text-[#E2C16D] cursor-pointer"
-                  >
-                    <ChevronRight className="h-6 w-6" strokeWidth={1.4} />
-                  </button>
-                ) : (
-                  <>
-                    <div className="flex h-[118px] shrink-0 flex-col items-center justify-center">
-                      <span className="font-editorial-serif text-[32px] leading-none text-[#C3A35D]">M</span>
-                      <span className="mt-2 h-px w-7 bg-[#C3A35D]/65" />
-                      <span className="mt-1 h-1 w-1 rounded-full bg-[#C3A35D]" />
-                    </div>
-
-                    <nav className="mt-10 flex flex-col" aria-label="页面切换">
-                      {([
-                        { key: 'board', icon: BookOpen, name: '回忆' },
-                        { key: 'timeline', icon: Clock3, name: '时间线' },
-                        { key: 'places', icon: Footprints, name: '足迹' },
-                      ] as const).map((item) => {
-                        const Icon = item.icon;
-                        const active = viewMode === item.key;
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMemory(null);
-                              switchViewMode(item.key);
-                            }}
-                            aria-label={item.name}
-                            aria-current={active ? 'page' : undefined}
-                            className={`relative flex h-[98px] flex-col items-center justify-center gap-2 text-[11px] tracking-[0.08em] transition-colors cursor-pointer ${
-                              active
-                                ? 'bg-white/[0.055] text-[#D2B15F]'
-                                : 'text-[#A9AAA6] hover:bg-white/[0.035] hover:text-[#E8E3D7]'
-                            }`}
-                          >
-                            {active && <span className="absolute inset-y-0 left-0 w-[2px] bg-[#C3A35D]" />}
-                            <Icon className="h-6 w-6" strokeWidth={1.45} />
-                            <span>{item.name}</span>
-                          </button>
-                        );
-                      })}
-                    </nav>
-
-                    <div className="mt-auto flex flex-col items-center pb-7">
-                      <button
-                        id="btn-add-memory-from-map"
-                        type="button"
-                        onClick={() => setShowAddMemory(true)}
-                        aria-label="添加回忆"
-                        title="添加回忆"
-                        className="flex h-12 w-12 items-center justify-center rounded-full border border-[#C3A35D]/55 bg-[#A8843E] text-[#FFF9EA] shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#B8944C] cursor-pointer"
-                      >
-                        <Plus className="h-6 w-6" strokeWidth={1.6} />
-                      </button>
-                      <span className="mt-2.5 text-[10px] tracking-[0.06em] text-[#A9AAA6]">添加回忆</span>
-                    </div>
-                  </>
-                )}
-          </aside>
+          {showRecall && (
+            <SimpleRecallV2
+              memories={filteredMemories}
+              onClose={() => setShowRecall(false)}
+              onSelectMemory={(memory) => {
+                setShowRecall(false);
+                setSelectedMemory(memory);
+              }}
+            />
+          )}
         </div>
       )}
 

@@ -1,0 +1,10 @@
+.simple-recall-v2 { background: var(--color-bg-canvas, #f2efe8); color: var(--color-text-primary, #282623); }
+.simple-recall-header { background: rgba(255,253,248,.9); border-color: var(--color-border-subtle,#cfc7b8); backdrop-filter: blur(16px); }
+.simple-recall-kicker { color: var(--color-accent-fill,#a76b3e); font: 10px/1.2 Inter, "Noto Sans SC", sans-serif; letter-spacing: .16em; }
+.simple-recall-muted { color: var(--color-text-secondary,#68635b); }
+.simple-recall-accent { color: var(--color-accent-fill,#a76b3e); }
+.simple-recall-action,.simple-recall-icon,.simple-recall-memory,.simple-recall-theme,.simple-recall-empty { border-color: var(--color-border-subtle,#cfc7b8); background: var(--color-bg-surface,#fffdf8); }
+.simple-recall-action:hover,.simple-recall-icon:hover,.simple-recall-back:hover { color: var(--color-accent-fill,#a76b3e); }
+.simple-recall-back { color: var(--color-text-secondary,#68635b); }
+.simple-recall-theme-scrim { background: linear-gradient(180deg, transparent 22%, rgba(16,25,28,.78) 100%); }
+.simple-recall-year + .simple-recall-year { border-top: 1px solid var(--color-border-subtle,#cfc7b8); padding-top: 3rem; }

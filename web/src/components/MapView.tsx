@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { CalendarDays, Check, ChevronDown, Filter, List, MapPin, X } from 'lucide-react';
-import { Memory } from '../types';
+import { Check, Filter, LockKeyhole, MapPin, Plus, X } from 'lucide-react';
+import { Memory, type MemoryFilters } from '../types';
 import { resolvePlace, geocodeAddress } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
+import {
+  EMPTY_MEMORY_FILTERS,
+  filterMemories,
+  isMemoryFiltersActive,
+} from '../lib/memoryFilters';
 import MapMemoryOverlay from './MapMemoryOverlay';
-import CrystalTimelinePrototype from '../prototype/CrystalTimelinePrototype';
+import CrystalTimeline from './CrystalTimeline';
 
 // 底图模式：'amap' = 高德瓦片（国内直连、中文标注、浅色）；'dark' = CARTO 深色无标注 + 自绘中文标注层
 const TILE_MODE: 'amap' | 'dark' = 'amap';
@@ -16,19 +21,18 @@ const TILE_MODE: 'amap' | 'dark' = 'amap';
 const CITY_ZOOM = 5;
 const POINT_ZOOM = 9;
 
-const finiteQueryNumber = (params: URLSearchParams, name: string): number | undefined => {
-  const raw = params.get(name);
-  if (raw === null || raw.trim() === '') return undefined;
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : undefined;
-};
-
 interface MapViewProps {
   memories: Memory[];
+  filteredMemories?: Memory[];
+  filters?: MemoryFilters;
+  onFiltersChange?: (filters: MemoryFilters) => void;
   selectedMemory: Memory | null;
   onSelectMemory: (m: Memory) => void;
   onCloseMemory: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
+  onAddMemory?: () => void;
+  onLock?: () => void;
+  onOpenRecall?: () => void;
   readerMode?: 'reflection' | 'journal';
 }
 
@@ -40,6 +44,13 @@ interface PanelState {
 const countryOf = (m: Memory): string => m.country?.trim() || '';
 // 城市为空时回退用「地点」名（如 "大理古城"），保证只填地点的记忆也能上图
 const cityOf = (m: Memory): string => m.city?.trim() || m.location?.name?.trim() || '';
+
+const THEME_OPTIONS = [
+  { value: 'travel' as const, label: '旅行' },
+  { value: 'growth' as const, label: '成长' },
+  { value: 'motorcycle' as const, label: '日常' },
+  { value: 'photography' as const, label: '日常 · 瞬间' },
+];
 
 function groupBy<T>(list: T[], keyFn: (item: T) => string): Record<string, T[]> {
   const out: Record<string, T[]> = {};
@@ -147,31 +158,20 @@ function bubbleIcon(img: string, count: number, label: string, fallback?: string
 
 export default function MapView({
   memories,
+  filteredMemories: controlledFilteredMemories,
+  filters: controlledFilters,
+  onFiltersChange,
   selectedMemory,
   onSelectMemory,
   onCloseMemory,
   onSaveMemory,
+  onAddMemory,
+  onLock,
+  onOpenRecall,
   readerMode,
 }: MapViewProps) {
-  const crystalPrototypeParams = new URLSearchParams(window.location.search);
-  const showCrystalTimelinePrototype = import.meta.env.DEV
-    && crystalPrototypeParams.get('crystal-timeline') === '1';
-  const crystalMaterialOnly = crystalPrototypeParams.get('crystal-state') === 'base';
-  const requestedCrystalPosition = finiteQueryNumber(crystalPrototypeParams, 'crystal-position');
-  const crystalInitialProgress = requestedCrystalPosition !== undefined
-    ? Math.min(1, Math.max(0, requestedCrystalPosition / 100))
-    : undefined;
-  const requestedCrystalLat = finiteQueryNumber(crystalPrototypeParams, 'crystal-lat');
-  const requestedCrystalLng = finiteQueryNumber(crystalPrototypeParams, 'crystal-lng');
-  const requestedCrystalZoom = finiteQueryNumber(crystalPrototypeParams, 'crystal-zoom');
-  const crystalMapCenter: L.LatLngExpression = showCrystalTimelinePrototype
-    && requestedCrystalLat !== undefined
-    && requestedCrystalLng !== undefined
-    ? [requestedCrystalLat, requestedCrystalLng]
-    : [35, 100];
-  const crystalMapZoom = showCrystalTimelinePrototype && requestedCrystalZoom !== undefined
-    ? Math.min(14, Math.max(2, requestedCrystalZoom))
-    : 4;
+  const crystalMapCenter: L.LatLngExpression = [35, 100];
+  const crystalMapZoom = 4;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -184,29 +184,21 @@ export default function MapView({
   const [enriched, setEnriched] = useState<Memory[]>(memories);
   // zoom 变化后 +1，触发气泡按当前缩放级别重建（自适应层级）
   const [zoomTick, setZoomTick] = useState(0);
-  // 地区线时间筛选：'all' 显示全部年份，否则只显示该年份的记忆
-  const [timeFilter, setTimeFilter] = useState<'all' | number>('all');
-  const [timeMenuOpen, setTimeMenuOpen] = useState(false);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
-  const [countryFilter, setCountryFilter] = useState<'all' | string>('all');
-  // range 本地值（跟手拖动），外部状态变化时由 effect 同步
-  const [rangeVal, setRangeVal] = useState(0);
+  const [localFilters, setLocalFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
+
+  const activeFilters = controlledFilters ?? localFilters;
+  const updateFilters = (patch: Partial<MemoryFilters>) => {
+    const next = { ...activeFilters, ...patch };
+    if (onFiltersChange) onFiltersChange(next);
+    else setLocalFilters(next);
+  };
 
   // 全部可用年份作为滑块的固定刻度；不能从 filtered 计算，否则选中一年后滑块会塌缩成单值
   const allYears: number[] = useMemo(
     () => Array.from(new Set<number>(enriched.map((m) => m.year))).sort((a, b) => a - b),
     [enriched]
   );
-
-  // 外部改变筛选（点「全部时间」/年份按钮）时同步滑块位置
-  useEffect(() => {
-    setRangeVal(
-      timeFilter === 'all'
-        ? Math.max(0, allYears.length - 1)
-        : Math.max(0, allYears.indexOf(timeFilter))
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeFilter]);
 
   // 只填了「地点」没填「国家」的记忆：地理编码自动归组到国家/城市气泡（结果有 localStorage 缓存）
   useEffect(() => {
@@ -238,21 +230,15 @@ export default function MapView({
     [enriched]
   );
 
-  // 时间与地区筛选后的数据源（气泡/面板/未标注计数共用）
-  const timeFiltered = useMemo(
-    () => timeFilter === 'all' ? enriched : enriched.filter((m) => m.year === timeFilter),
-    [enriched, timeFilter]
+  // App owns the canonical result. Prototype callers without the controlled
+  // result still get the same filtering semantics locally.
+  const localFiltered = useMemo(
+    () => filterMemories(enriched, activeFilters),
+    [enriched, activeFilters]
   );
-  const filtered = useMemo(
-    () => countryFilter === 'all'
-      ? timeFiltered
-      : timeFiltered.filter((m) => countryOf(m) === countryFilter),
-    [timeFiltered, countryFilter]
-  );
+  const filtered = controlledFilteredMemories ?? localFiltered;
   const filteredUnlabeled = useMemo(() => filtered.filter((m) => !countryOf(m)), [filtered]);
-  const timelineProgress = allYears.length <= 1
-    ? 100
-    : (rangeVal / (allYears.length - 1)) * 100;
+  const filtersActive = isMemoryFiltersActive(activeFilters);
   const firstYear = allYears[0];
   const lastYear = allYears[allYears.length - 1];
   const yearSpan = firstYear && lastYear ? Math.max(1, lastYear - firstYear) : 0;
@@ -428,6 +414,15 @@ export default function MapView({
     const previousLayer = layerRef.current;
     const nextLayer = L.layerGroup();
 
+    if (filtersActive) {
+      if (previousLayer && map.hasLayer(previousLayer)) map.removeLayer(previousLayer);
+      previousLayer?.clearLayers();
+      layerRef.current = null;
+      return () => {
+        nextLayer.clearLayers();
+      };
+    }
+
     let cancelled = false;
 
     const build = async () => {
@@ -439,7 +434,7 @@ export default function MapView({
           if (list.length === 1) onSelectMemory(list[0]);
           return;
         }
-        setPanel(null);
+        setPanel({ title: shortPlaceLabel(country), list });
         setViewCountry(country);
         map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
       };
@@ -624,19 +619,12 @@ export default function MapView({
     return () => {
       cancelled = true;
     };
-  }, [zoomTick, filtered]);
+  }, [zoomTick, filtered, filtersActive]);
 
   const backToWorld = () => {
     setPanel(null);
     setViewCountry(null);
     mapRef.current?.flyTo([35, 100], CITY_ZOOM - 1, { duration: 0.8 });
-  };
-
-  const handleTimeSliderInput = (e: FormEvent<HTMLInputElement>) => {
-    const index = Number(e.currentTarget.value);
-    setRangeVal(index);
-    const year = allYears[index];
-    if (typeof year === 'number') setTimeFilter(year);
   };
 
   return (
@@ -653,7 +641,7 @@ export default function MapView({
       {/* 页面标题与地区层级 */}
       <header
         className={`map-ui-header pointer-events-none absolute z-[1002] ${
-          selectedMemory ? 'left-[82px] top-8' : 'map-page-heading left-[112px] top-8'
+          selectedMemory ? 'left-[96px] top-8' : 'map-page-heading left-[96px] top-8'
         }`}
       >
         {selectedMemory ? (
@@ -666,222 +654,49 @@ export default function MapView({
           </nav>
         ) : (
           <>
-            <div className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[11px] tracking-[0.16em]">
+            <div className={`map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[11px] tracking-[0.16em] ${viewCountry ? 'map-context-card' : ''}`}>
               <button type="button" onClick={backToWorld} className="map-ui-accent-hover transition-colors cursor-pointer">
                 MEMORIES / PLACES
               </button>
               {viewCountry && <span>/ {viewCountry}</span>}
             </div>
-            <h1 className="font-editorial-serif mt-2 text-[38px] leading-none tracking-[0.08em] sm:text-[48px]">
-              走过的地方
-            </h1>
-            <p className="map-ui-muted mt-3 text-[12px] tracking-[0.1em]">
-              {enriched.length} 段记忆&nbsp;&nbsp;·&nbsp;&nbsp;{availableCountries.length} 个国家&nbsp;&nbsp;·&nbsp;&nbsp;{yearSpan} 年
-            </p>
+             {viewCountry ? <div className="map-context-card-body"><h1 className="font-editorial-serif text-[22px] leading-tight tracking-[0.04em]">{viewCountry}</h1><p className="map-ui-muted mt-1 text-[12px]">{panel?.list.length ?? 0} 段记忆 · {firstYear ?? ''}-{lastYear ?? ''}</p></div> : <><h1 className="font-editorial-serif mt-2 text-[38px] leading-none tracking-[0.08em] sm:text-[48px]">走过的地方</h1><p className="map-ui-muted mt-3 text-[12px] tracking-[0.1em]">{enriched.length} 段记忆&nbsp;&nbsp;·&nbsp;&nbsp;{availableCountries.length} 个国家&nbsp;&nbsp;·&nbsp;&nbsp;{yearSpan} 年</p></>}
           </>
         )}
       </header>
 
       {/* 顶部时间与地区筛选 */}
       {!selectedMemory && <div className="absolute right-5 top-6 z-[1002] flex items-start gap-2.5">
+        {onAddMemory && <button type="button" onClick={onAddMemory} aria-label="添加记忆" title="添加记忆" className="map-ui-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors cursor-pointer"><Plus className="h-4 w-4" strokeWidth={1.7} /></button>}
+        {onLock && <button type="button" onClick={onLock} aria-label="锁定私密空间" title="锁定私密空间" className="map-ui-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors cursor-pointer"><LockKeyhole className="h-4 w-4" strokeWidth={1.6} /></button>}
         <div className="relative">
-          <button
-            id="btn-toggle-map-time"
-            type="button"
-            onClick={() => {
-              setTimeMenuOpen((open) => !open);
-              setFilterMenuOpen(false);
-            }}
-            aria-label="选择时间"
-            aria-expanded={timeMenuOpen}
-            className="map-ui-control flex h-10 items-center gap-2 rounded-full border px-4 text-[12px] backdrop-blur-md transition-colors cursor-pointer"
-          >
-            <CalendarDays className="h-4 w-4" strokeWidth={1.6} />
-            <span>{timeFilter === 'all' ? '全部时间' : `${timeFilter} 年`}</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${timeMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <AnimatePresence>
-            {timeMenuOpen && (
-              <motion.div
-                initial={{ y: -6, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -4, opacity: 0 }}
-                className="map-ui-popover absolute right-0 mt-2 w-36 overflow-hidden rounded-xl border p-1.5 backdrop-blur-md"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimeFilter('all');
-                    setTimeMenuOpen(false);
-                  }}
-                  className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
-                >
-                  全部时间
-                  {timeFilter === 'all' && <Check className="map-ui-accent h-3.5 w-3.5" />}
-                </button>
-                {allYears.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => {
-                      setTimeFilter(year);
-                      setTimeMenuOpen(false);
-                    }}
-                    className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left font-mono text-[11px] cursor-pointer"
-                  >
-                    {year}
-                    {timeFilter === year && <Check className="map-ui-accent h-3.5 w-3.5" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="relative">
-          <button
-            id="btn-toggle-map-filter"
-            type="button"
-            onClick={() => {
-              setFilterMenuOpen((open) => !open);
-              setTimeMenuOpen(false);
-            }}
-            aria-label="筛选地区"
-            aria-expanded={filterMenuOpen}
-            className="map-ui-control flex h-10 items-center gap-2 rounded-full border px-4 text-[12px] backdrop-blur-md transition-colors cursor-pointer"
-          >
+          <button id="btn-toggle-map-filter" type="button" onClick={() => setFilterMenuOpen((open) => !open)} aria-label="打开筛选" aria-expanded={filterMenuOpen} className="map-ui-control flex h-10 items-center gap-2 rounded-full border px-4 text-[12px] backdrop-blur-md transition-colors cursor-pointer">
             <Filter className="h-4 w-4" strokeWidth={1.6} />
-            <span>{countryFilter === 'all' ? '筛选' : countryFilter}</span>
+            <span>{filtersActive ? `筛选中 · ${filtered.length}` : '筛选'}</span>
           </button>
           <AnimatePresence>
-            {filterMenuOpen && (
-              <motion.div
-                initial={{ y: -6, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -4, opacity: 0 }}
-                className="map-ui-popover absolute right-0 mt-2 w-40 overflow-hidden rounded-xl border p-1.5 backdrop-blur-md"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCountryFilter('all');
-                    setFilterMenuOpen(false);
-                  }}
-                  className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
-                >
-                  全部地区
-                  {countryFilter === 'all' && <Check className="map-ui-accent h-3.5 w-3.5" />}
-                </button>
-                {availableCountries.map((country) => (
-                  <button
-                    key={country}
-                    type="button"
-                    onClick={() => {
-                      setCountryFilter(country);
-                      setFilterMenuOpen(false);
-                    }}
-                    className="map-ui-option flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] cursor-pointer"
-                  >
-                    {country}
-                    {countryFilter === country && <Check className="map-ui-accent h-3.5 w-3.5" />}
-                  </button>
-                ))}
-                {filteredUnlabeled.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPanel({ title: '未标注地区', list: filteredUnlabeled });
-                      setFilterMenuOpen(false);
-                    }}
-                    className="map-ui-divider-top map-ui-muted map-ui-accent-hover mt-1 flex w-full items-center gap-2 border-t px-3 pt-2.5 pb-2 text-left text-[10px] cursor-pointer"
-                  >
-                    <MapPin className="h-3.5 w-3.5" />
-                    未标注地区（{filteredUnlabeled.length}）
-                  </button>
-                )}
-              </motion.div>
-            )}
+            {filterMenuOpen && <motion.div initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -4, opacity: 0 }} className="map-ui-popover absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border p-3 backdrop-blur-md">
+              <div className="mb-2 flex items-center justify-between"><span className="font-editorial-serif text-sm">筛选足迹</span><button type="button" onClick={() => updateFilters({ dateRange: null, regions: [], themes: [] })} className="map-ui-muted map-ui-accent-hover text-[10px] cursor-pointer">清除全部</button></div>
+              <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">地区</p>
+              <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                {availableCountries.map((country) => { const active = activeFilters.regions.includes(country); return <button key={country} type="button" onClick={() => updateFilters({ regions: active ? activeFilters.regions.filter((value) => value !== country) : [...activeFilters.regions, country] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{country}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
+                {availableCountries.length === 0 && <span className="map-ui-muted text-[11px]">暂无地区</span>}
+              </div>
+              <p className="map-ui-muted mb-1.5 mt-3 text-[10px] tracking-[0.12em]">主题</p>
+              <div className="flex flex-wrap gap-1.5">
+                {THEME_OPTIONS.map((theme) => { const active = activeFilters.themes.includes(theme.value); return <button key={theme.value} type="button" onClick={() => updateFilters({ themes: active ? activeFilters.themes.filter((value) => value !== theme.value) : [...activeFilters.themes, theme.value] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{theme.label}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
+              </div>
+              <p className="map-ui-muted mt-3 text-[10px]">时间由底部水晶时间轴控制</p>
+            </motion.div>}
           </AnimatePresence>
         </div>
       </div>}
 
-      {/* 设计稿中的浅色主时间轴，始终作为地区页第二视觉重心 */}
-      {allYears.length > 0 && !selectedMemory && !showCrystalTimelinePrototype && (
-        <motion.section
-          initial={{ y: 24, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          aria-label="地区记忆时间轴"
-          className="map-timeline-panel absolute bottom-6 left-[calc(50%+43px)] z-[1000] w-[calc(100vw-130px)] max-w-[900px] -translate-x-1/2 overflow-hidden rounded-2xl border backdrop-blur-lg"
-        >
-          <div className="grid min-h-[126px] grid-cols-[112px_minmax(0,1fr)_78px] items-center gap-4 px-5 py-4 sm:grid-cols-[160px_minmax(0,1fr)_106px] sm:gap-6 sm:px-8">
-            <div>
-              <h2 className="font-editorial-serif text-[24px] leading-none tracking-[0.05em] sm:text-[30px]" aria-live="polite">
-                {timeFilter === 'all' ? '全部时光' : timeFilter}
-              </h2>
-              <p className="map-ui-muted mt-3 text-[11px] tracking-[0.08em]">{filtered.length} 段记忆</p>
-            </div>
+      {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
 
-            <div className="min-w-0">
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-x-[11px] top-1/2 flex -translate-y-1/2 items-center justify-between">
-                  {allYears.map((year) => (
-                    <span key={year} className="map-ui-tick h-1.5 w-1.5 rounded-full" />
-                  ))}
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(0, allYears.length - 1)}
-                  step={1}
-                  value={rangeVal}
-                  onInput={handleTimeSliderInput}
-                  onChange={handleTimeSliderInput}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="map-timeline-range relative z-10 w-full"
-                  style={{
-                    touchAction: 'none',
-                    '--timeline-progress': `${timelineProgress}%`,
-                  } as CSSProperties}
-                  aria-label="按年份筛选"
-                  aria-valuetext={allYears[rangeVal] ? `${allYears[rangeVal]} 年` : undefined}
-                />
-              </div>
-              <div className="map-ui-muted mt-1 flex items-center justify-between font-mono text-[9px] sm:text-[10px]">
-                {allYears.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => setTimeFilter(year)}
-                    className={`map-ui-year transition-colors cursor-pointer ${timeFilter === year ? 'is-active font-bold' : 'map-ui-accent-hover'}`}
-                  >
-                    {year}
-                  </button>
-                ))}
-              </div>
-            </div>
+      {!selectedMemory && filtersActive && <div className="map-filter-status absolute bottom-[66px] left-5 z-[1002] rounded-full border px-3 py-2 text-[11px] backdrop-blur-md">筛选中 · 地图标记已隐藏 · {filtered.length} 段记忆</div>}
 
-            <div className="map-ui-divider-left flex h-16 items-center justify-end border-l pl-3 sm:pl-5">
-              <button
-                type="button"
-                onClick={() => setPanel({ title: timeFilter === 'all' ? '全部记忆' : `${timeFilter} 年`, list: filtered })}
-                className="map-ui-muted map-ui-accent-hover flex items-center gap-1.5 whitespace-nowrap text-[10px] tracking-[0.08em] transition-colors cursor-pointer sm:text-[11px]"
-              >
-                <List className="h-3.5 w-3.5 sm:hidden" />
-                <span className="hidden sm:inline">查看列表</span>
-                <ChevronDown className="hidden h-3.5 w-3.5 -rotate-90 sm:block" />
-              </button>
-            </div>
-          </div>
-        </motion.section>
-      )}
-
-      {showCrystalTimelinePrototype && !selectedMemory && (
-        <CrystalTimelinePrototype
-          initialProgress={crystalInitialProgress}
-          materialOnly={crystalMaterialOnly}
-        />
-      )}
+      {!selectedMemory && onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-tab absolute right-0 top-1/2 z-[1002] -translate-y-1/2 rounded-l-xl border border-r-0 px-3 py-4 text-[12px] tracking-[0.1em] shadow-sm backdrop-blur-md cursor-pointer">简易回顾</button>}
 
       {/* 城市 / 未标注记忆面板 */}
       <AnimatePresence>
@@ -891,22 +706,11 @@ export default function MapView({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 320, opacity: 0 }}
             transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-            className="map-memory-list-panel absolute top-0 right-0 z-[1003] h-full w-[300px] overflow-y-auto border-l backdrop-blur-md"
+            className="map-memory-list-panel absolute top-0 right-0 z-[1003] h-full w-[min(510px,calc(100vw-24px))] overflow-y-auto border-l backdrop-blur-md"
           >
             <div className="map-memory-list-header sticky top-0 z-10 flex items-center justify-between border-b px-4 py-4 backdrop-blur-md">
-              <h3 className="font-editorial-serif flex items-center gap-1.5 text-sm font-bold">
-                <MapPin className="map-ui-accent h-4 w-4" />
-                {panel.title}
-                <span className="map-ui-muted font-mono text-[10px] font-normal">
-                  {panel.list.length} 条
-                </span>
-              </h3>
-              <button
-                onClick={() => setPanel(null)}
-                className="map-ui-panel-close rounded-full p-1 transition-colors cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-3"><button type="button" onClick={backToWorld} className="map-ui-muted map-ui-accent-hover text-[11px] tracking-[0.08em] cursor-pointer">全部足迹</button><span className="map-ui-divider-left h-5 border-l" /><h3 className="font-editorial-serif flex items-center gap-1.5 text-sm font-bold"><MapPin className="map-ui-accent h-4 w-4" />{panel.title}<span className="map-ui-muted font-mono text-[10px] font-normal">{panel.list.length} 条</span></h3></div>
+              <button type="button" onClick={() => setPanel(null)} aria-label="关闭地区面板" className="map-ui-panel-close rounded-full p-1 transition-colors cursor-pointer"><X className="h-4 w-4" /></button>
             </div>
             <div className="p-3 space-y-2.5">
               {panel.list.map((m) => (

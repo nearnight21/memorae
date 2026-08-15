@@ -2,6 +2,17 @@ export type PinnedBy = 'pin' | 'magnet' | 'clip' | 'tape';
 
 export type CategoryType = 'travel' | 'growth' | 'motorcycle' | 'photography';
 
+export interface MemoryDateRange {
+  start: string | null;
+  end: string | null;
+}
+
+export interface MemoryFilters {
+  dateRange: MemoryDateRange | null;
+  regions: string[];
+  themes: CategoryType[];
+}
+
 export interface Memory {
   id: string;
   title: string;

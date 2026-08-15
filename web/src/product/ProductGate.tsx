@@ -228,7 +228,7 @@ export default function ProductGate() {
             ? '登录后，记忆会在你的设备之间自动保持一致。'
             : phase === 'setup'
             ? '记忆和照片会先在这台设备加密。密码不会上传，也无法由服务器重置。'
-            : '在这台设备上解锁后，直接进入你的软木板、时间线和足迹地图。'}
+            : '在这台设备上解锁后，直接进入你的足迹地图。'}
         </p>
         {error && <p className="mt-4 rounded-xl border border-red-700/35 bg-red-950/25 px-4 py-3 text-sm text-red-200">{error}</p>}
         {phase === 'booting' ? (
