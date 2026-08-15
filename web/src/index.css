@@ -592,6 +592,114 @@
   color: var(--color-text-primary) !important;
 }
 
+.map-memory-breadcrumb {
+  text-shadow: 0 1px 12px rgba(255, 253, 248, 0.9);
+}
+
+.map-memory-meta-row {
+  min-height: 30px;
+}
+
+.map-memory-meta-chip,
+.map-memory-edit-chip {
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--color-accent-fill) 58%, transparent);
+  border-radius: 7px;
+  background: var(--color-accent-fill);
+  color: var(--color-bg-surface);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+.map-memory-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+}
+
+.map-memory-edit-chip {
+  box-sizing: border-box;
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.map-memory-edit-chip:focus-within,
+.map-memory-edit-chip:focus {
+  border-color: var(--color-accent-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-fill) 20%, transparent);
+}
+
+.map-memory-edit-date {
+  width: 104px;
+}
+
+.map-memory-edit-location {
+  width: 124px;
+  padding: 0 9px;
+}
+
+.map-memory-edit-location .relative {
+  width: 100%;
+}
+
+.map-memory-edit-chip-input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 28px;
+}
+
+.map-memory-edit-chip-input::placeholder {
+  color: color-mix(in srgb, var(--color-bg-surface) 84%, transparent);
+}
+
+.map-memory-edit-select {
+  width: 68px;
+  cursor: pointer;
+}
+
+.map-memory-edit-textarea {
+  border: 1px solid color-mix(in srgb, var(--color-accent-fill) 25%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-bg-surface) 24%, transparent);
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+}
+
+.map-memory-edit-textarea:focus {
+  border-color: color-mix(in srgb, var(--color-accent-fill) 68%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-fill) 12%, transparent);
+}
+
+.map-memory-inline-title {
+  border-color: color-mix(in srgb, var(--color-accent-fill) 45%, transparent) !important;
+}
+
+.map-memory-complete {
+  min-width: 82px;
+}
+
+@media (max-width: 900px) {
+  .map-memory-breadcrumb {
+    left: 24px;
+    top: 20px;
+    max-width: calc(100% - 150px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .map-memory-edit-location {
+    width: 112px;
+  }
+}
+
 .map-ui-save-status {
   color: var(--color-text-secondary) !important;
 }

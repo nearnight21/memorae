@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, Check, ChevronLeft, ChevronRight, Cloud, Edit3, Trash2, X } from 'lucide-react';
-import { Memory } from '../types';
+import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, Trash2, X } from 'lucide-react';
+import { CategoryType, Memory } from '../types';
+import LocationPicker from './LocationPicker';
 
 interface ScreenPoint {
   x: number;
@@ -17,6 +18,21 @@ interface MapMemoryOverlayProps {
   onDeleteMemory?: (id: string) => Promise<void>;
   readerMode?: 'reflection' | 'journal';
 }
+
+const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
+  { value: 'travel', label: '旅行' },
+  { value: 'growth', label: '成长' },
+  { value: 'motorcycle', label: '日常' },
+  { value: 'photography', label: '瞬间' },
+];
+
+const categoryLabel = (category: CategoryType) =>
+  CATEGORY_OPTIONS.find((option) => option.value === category)?.label ?? '未分类';
+
+const yearFromDate = (date: string, fallback: number) => {
+  const year = Number.parseInt(date.trim().slice(0, 4), 10);
+  return Number.isInteger(year) && year >= 1900 && year <= 2100 ? year : fallback;
+};
 
 export default function MapMemoryOverlay({
   memory,
@@ -37,7 +53,7 @@ export default function MapMemoryOverlay({
   const [photoIdx, setPhotoIdx] = useState(0);
   const [failedPhotos, setFailedPhotos] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [presentDraft, setPresentDraft] = useState(memory.presentSelf);
+  const [draftMemory, setDraftMemory] = useState<Memory>(memory);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -46,15 +62,16 @@ export default function MapMemoryOverlay({
     setPhotoIdx(0);
     setFailedPhotos([]);
     setIsEditing(false);
-    setPresentDraft(memory.presentSelf);
+    setDraftMemory(memory);
     setSaveStatus('idle');
     setDeleteArmed(false);
     setIsDeleting(false);
-  }, [memory.id, memory.presentSelf]);
+  }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
   const currentPhoto = availablePhotos[photoIdx] || availablePhotos[0] || '';
-  const locationParts = [memory.country, memory.city, memory.location?.name]
+  const activeMemory = isEditing ? draftMemory : memory;
+  const locationParts = [activeMemory.country, activeMemory.city, activeMemory.location?.name]
     .map((part) => part?.trim())
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index);
   const locationText = locationParts.join(' · ');
@@ -76,24 +93,65 @@ export default function MapMemoryOverlay({
     setPhotoIdx((index) => (index + direction + availablePhotos.length) % availablePhotos.length);
   };
 
-  const commitText = () => {
-    setIsEditing(false);
+  const beginEditing = () => {
+    setDraftMemory(memory);
     setSaveStatus('idle');
+    setIsEditing(true);
   };
 
-  const saveMemory = async () => {
-    if (!onSaveMemory) return;
-    const updated = { ...memory, presentSelf: presentDraft };
+  const updateDraft = <K extends keyof Memory>(key: K, value: Memory[K]) => {
+    setDraftMemory((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateDraftLocationName = (name: string) => {
+    setDraftMemory((current) => ({
+      ...current,
+      location: name.trim() || current.location
+        ? { ...(current.location ?? { mx: 50, my: 50, name: '' }), name }
+        : undefined,
+    }));
+  };
+
+  const saveMemory = async (): Promise<boolean> => {
+    if (!onSaveMemory || saveStatus === 'saving') return false;
+    const updated = {
+      ...draftMemory,
+      year: yearFromDate(draftMemory.date, memory.year),
+      title: draftMemory.title.trim(),
+      date: draftMemory.date.trim(),
+      pastSelf: draftMemory.pastSelf.trim(),
+      presentSelf: draftMemory.presentSelf.trim(),
+      location: draftMemory.location?.name.trim()
+        ? { ...draftMemory.location, name: draftMemory.location.name.trim() }
+        : undefined,
+    };
     setSaveStatus('saving');
     try {
       await onSaveMemory(updated);
+      setDraftMemory(updated);
       setSaveStatus('saved');
       window.setTimeout(() => setSaveStatus('idle'), 2400);
+      return true;
     } catch (error) {
       console.error(error);
       setSaveStatus('error');
+      return false;
     }
   };
+
+  const completeEditing = async () => {
+    if (await saveMemory()) setIsEditing(false);
+  };
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (!isEditing || (!event.ctrlKey && !event.metaKey) || event.key !== 'Enter') return;
+      event.preventDefault();
+      void completeEditing();
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [isEditing, draftMemory]);
 
   const deleteMemory = async () => {
     if (!onDeleteMemory || isDeleting) return;
@@ -201,6 +259,19 @@ export default function MapMemoryOverlay({
         )}
       </motion.div>
 
+      <p className="map-memory-breadcrumb map-ui-muted pointer-events-none absolute left-12 top-8 z-30 text-[11px] tracking-[0.08em]">
+        足迹 / {locationText || '未标注地点'}
+      </p>
+
+      {isEditing && onSaveMemory && <button
+        type="button"
+        onClick={() => void completeEditing()}
+        disabled={saveStatus === 'saving'}
+        className="map-memory-complete map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 min-w-[82px] items-center justify-center rounded-full border px-4 text-[12px] transition-colors disabled:opacity-60 cursor-pointer"
+      >
+        {saveStatus === 'saving' ? '保存中…' : '完成'}
+      </button>}
+
       <motion.article
         className="map-memory-copy-feather map-ui-body pointer-events-auto absolute right-[2.5%] top-[15%] z-20 max-h-[72%] w-[43%] overflow-y-auto px-[5%] py-10 sm:right-[3.5%] sm:w-[40%]"
         initial={{ opacity: 0, x: 28 }}
@@ -209,72 +280,128 @@ export default function MapMemoryOverlay({
         transition={{ duration: 0.38, delay: 0.14 }}
       >
         <div className="mb-7">
-          {memory.tag && (
-            <span className="map-ui-accent map-ui-accent-border inline-flex rounded-full border px-3 py-1 text-[10px] tracking-[0.12em]">
-              {memory.tag}
-            </span>
+          {isEditing ? (
+            <input
+              value={draftMemory.title}
+              onChange={(event) => updateDraft('title', event.target.value)}
+              className="map-memory-inline-title map-ui-body w-full border-0 border-b bg-transparent pb-2 font-editorial-serif text-[30px] leading-tight outline-none sm:text-[38px]"
+              aria-label="编辑记忆标题"
+            />
+          ) : (
+            <h2 className="font-editorial-serif text-[32px] leading-tight tracking-[0.08em] sm:text-[42px]">
+              {memory.title}
+            </h2>
           )}
-          {locationText && <p className="map-ui-muted mt-3 text-[11px] tracking-[0.08em]">{locationText}</p>}
-          <p className="map-ui-muted mt-2 font-mono text-[10px]">{memory.date}</p>
-        </div>
 
-        <h2 className="font-editorial-serif text-[32px] leading-tight tracking-[0.08em] sm:text-[42px]">
-          {memory.title}
-        </h2>
+          <div className="map-memory-meta-row mt-5 flex flex-wrap items-center gap-2">
+            {isEditing ? (
+              <input
+                value={draftMemory.date}
+                onChange={(event) => updateDraft('date', event.target.value)}
+                className="map-memory-edit-chip map-memory-edit-date"
+                aria-label="编辑记忆日期"
+                placeholder="YYYY.MM.DD"
+              />
+            ) : <span className="map-memory-meta-chip">{memory.date}</span>}
+
+            {isEditing ? (
+              <div className="map-memory-edit-chip map-memory-edit-location">
+                <LocationPicker
+                  value={draftMemory.location?.name ?? ''}
+                  onChange={updateDraftLocationName}
+                  onSelect={(candidate) => setDraftMemory((current) => ({
+                    ...current,
+                    location: {
+                      name: candidate.shortName,
+                      mx: current.location?.mx ?? 50,
+                      my: current.location?.my ?? 50,
+                    },
+                    country: candidate.country ?? current.country,
+                    city: candidate.city ?? current.city,
+                    lat: candidate.lat,
+                    lng: candidate.lng,
+                  }))}
+                  placeholder="地点"
+                  inputClassName="map-memory-edit-chip-input"
+                />
+              </div>
+            ) : (memory.location?.name || locationText) && (
+              <span className="map-memory-meta-chip">{memory.location?.name || locationText}</span>
+            )}
+
+            {isEditing ? (
+              <select
+                value={draftMemory.category}
+                onChange={(event) => updateDraft('category', event.target.value as CategoryType)}
+                className="map-memory-edit-chip map-memory-edit-select"
+                aria-label="编辑记忆主题"
+              >
+                {CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            ) : <span className="map-memory-meta-chip">{categoryLabel(memory.category)}</span>}
+          </div>
+        </div>
 
         <div className="map-ui-accent-border mt-7 border-l pl-7">
           <section className="relative pb-7">
             <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
               昔
             </span>
-            <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">
-              {readerMode === 'journal' ? '记忆正文' : '当时的我'}
-            </h3>
-            <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.pastSelf}</p>
+            <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">当时的我</h3>
+            {isEditing ? (
+              <textarea
+                value={draftMemory.pastSelf}
+                onChange={(event) => updateDraft('pastSelf', event.target.value)}
+                className="map-memory-edit-textarea map-ui-body-text mt-3 min-h-28 w-full resize-y px-3 py-2 text-[13px] leading-7 outline-none"
+                aria-label="编辑当时的我"
+              />
+            ) : <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.pastSelf}</p>}
           </section>
 
-          {readerMode === 'reflection' && <section className="relative">
+          {(readerMode === 'reflection' || isEditing) && <section className="relative">
             <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
               今
             </span>
             <div className="flex items-center justify-between gap-3">
               <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">现在的我</h3>
-              {onSaveMemory && <button
+              {!isEditing && onSaveMemory && <button
                 type="button"
-                onClick={isEditing ? commitText : () => setIsEditing(true)}
+                onClick={beginEditing}
                 className="map-ui-accent map-ui-accent-hover flex items-center gap-1.5 text-[10px] transition-colors cursor-pointer"
               >
-                {isEditing ? <Check className="h-3.5 w-3.5" /> : <Edit3 className="h-3.5 w-3.5" />}
-                {isEditing ? '完成' : '编辑'}
+                <Edit3 className="h-3.5 w-3.5" />
+                编辑
               </button>}
             </div>
             {isEditing ? (
               <textarea
-                value={presentDraft}
-                onChange={(event) => setPresentDraft(event.target.value)}
-                className="map-memory-inline-textarea map-ui-body-text map-ui-accent-border mt-3 min-h-32 w-full resize-y border-0 border-b px-0 py-2 text-[13px] leading-7 outline-none"
+                value={draftMemory.presentSelf}
+                onChange={(event) => updateDraft('presentSelf', event.target.value)}
+                className="map-memory-edit-textarea map-ui-body-text mt-3 min-h-24 w-full resize-y px-3 py-2 text-[13px] leading-7 outline-none"
                 aria-label="编辑现在的我"
               />
             ) : (
-              <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{presentDraft}</p>
+              <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.presentSelf}</p>
             )}
           </section>}
         </div>
 
         {onSaveMemory && <div className="mt-8 flex items-center gap-3 text-[11px]">
-          <button
+          {!isEditing && <button
             type="button"
-            onClick={saveMemory}
+            onClick={() => void saveMemory()}
             disabled={saveStatus === 'saving'}
             className="map-ui-accent map-ui-accent-hover flex items-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Bookmark className="h-4.5 w-4.5" strokeWidth={1.5} />
             {saveStatus === 'saving' ? '保存中…' : '保存记忆'}
-          </button>
-          <span className="map-ui-muted">|</span>
+          </button>}
+          {!isEditing && <span className="map-ui-muted">|</span>}
           <span className={`map-ui-save-status flex items-center gap-1.5 ${saveStatus === 'error' ? 'is-error' : ''}`}>
             <Cloud className="h-4 w-4" strokeWidth={1.5} />
-            {saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存'}
+            {isEditing
+              ? (saveStatus === 'saving' ? '正在保存草稿…' : saveStatus === 'error' ? '草稿保存失败' : '草稿已保存 · Ctrl + Enter 完成')
+              : (saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存')}
           </span>
         </div>}
 
