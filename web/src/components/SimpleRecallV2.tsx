@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, Map, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import type { CategoryType, Memory } from '../types';
 import './SimpleRecallV2.css';
 
@@ -9,49 +9,212 @@ interface SimpleRecallV2Props {
   onSelectMemory: (memory: Memory) => void;
 }
 
-const THEMES: Array<{ value: CategoryType; label: string; description: string }> = [
-  { value: 'travel', label: '旅行', description: '走到过的地方' },
-  { value: 'growth', label: '成长', description: '正在成为的自己' },
-  { value: 'motorcycle', label: '日常', description: '生活里的微光' },
-  { value: 'photography', label: '日常 · 瞬间', description: '被留下的片刻' },
+type RecallTheme = 'travel' | 'growth' | 'daily';
+
+interface RecallThemeDefinition {
+  value: RecallTheme;
+  label: string;
+  accent: string;
+  categories: CategoryType[];
+}
+
+const THEMES: RecallThemeDefinition[] = [
+  { value: 'travel', label: '旅行', accent: 'travel', categories: ['travel'] },
+  { value: 'growth', label: '成长', accent: 'growth', categories: ['growth'] },
+  { value: 'daily', label: '日常', accent: 'daily', categories: ['motorcycle', 'photography'] },
 ];
 
-const coverOf = (memories: Memory[]) => memories.find((memory) => memory.image)?.image || memories.flatMap((memory) => memory.gallery).find(Boolean) || '';
+function timestampOf(memory: Memory) {
+  const parsed = Date.parse(memory.date.replace(/\./g, '-'));
+  return Number.isNaN(parsed) ? memory.year : parsed;
+}
+
+function placeOf(memory: Memory) {
+  return memory.city || memory.country || memory.location?.name || memory.detailLocation || '未标注地点';
+}
+
+function summaryOf(memory: Memory) {
+  return memory.pastSelf.trim() || memory.presentSelf.trim() || memory.tag.trim() || '这段记忆还没有留下文字。';
+}
+
+function memoriesForTheme(memories: Memory[], theme: RecallThemeDefinition) {
+  return memories
+    .filter((memory) => theme.categories.includes(memory.category))
+    .sort((left, right) => timestampOf(right) - timestampOf(left));
+}
+
+function groupByYear(memories: Memory[]) {
+  return memories.reduce<Map<number, Memory[]>>((groups, memory) => {
+    const entries = groups.get(memory.year) || [];
+    entries.push(memory);
+    groups.set(memory.year, entries);
+    return groups;
+  }, new Map());
+}
 
 export default function SimpleRecallV2({ memories, onClose, onSelectMemory }: SimpleRecallV2Props) {
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedTheme, setSelectedTheme] = useState<CategoryType | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<RecallTheme | null>(null);
 
-  const years = useMemo(() => Array.from(new Set(memories.map((memory) => memory.year))).sort((a, b) => b - a), [memories]);
-  const visibleYears = selectedYear === null ? years : years.filter((year) => year === selectedYear);
-  const selectedThemeInfo = THEMES.find((theme) => theme.value === selectedTheme);
-  const list = selectedTheme && selectedYear !== null
-    ? memories.filter((memory) => memory.year === selectedYear && memory.category === selectedTheme)
-    : [];
+  const years = useMemo(
+    () => Array.from(new Set(memories.map((memory) => memory.year))).sort((left, right) => right - left),
+    [memories],
+  );
+  const selectedThemeInfo = THEMES.find((theme) => theme.value === selectedTheme) || null;
+  const themeMemories = useMemo(
+    () => (selectedThemeInfo ? memoriesForTheme(memories, selectedThemeInfo) : []),
+    [memories, selectedThemeInfo],
+  );
+  const memoriesByYear = useMemo(() => groupByYear(themeMemories), [themeMemories]);
 
   return (
-    <section className="simple-recall-v2 fixed inset-0 z-[1100] overflow-y-auto" aria-label="简易回顾">
-      <header className="simple-recall-header sticky top-0 z-10 flex items-center justify-between border-b px-6 py-5 sm:px-10">
-        <div><p className="simple-recall-kicker">MEMORY RECALL</p><h1 className="font-editorial-serif text-3xl tracking-[0.06em]">简易回顾</h1><p className="simple-recall-muted mt-1 text-xs">按时间回看，再从主题进入记忆</p></div>
-        <div className="flex items-center gap-2"><button type="button" onClick={onClose} className="simple-recall-action flex items-center gap-2 rounded-full border px-3 py-2 text-xs cursor-pointer"><Map size={15} />回到地图</button><button type="button" onClick={onClose} aria-label="关闭简易回顾" className="simple-recall-icon rounded-full border p-2 cursor-pointer"><X size={16} /></button></div>
-      </header>
-
-      <div className="mx-auto max-w-6xl px-6 py-8 sm:px-10 sm:py-12">
-        {selectedTheme && selectedThemeInfo && selectedYear !== null ? (
+    <section className="simple-recall-v2" aria-label="简易回顾">
+      <div className="simple-recall-shell">
+        <header className="simple-recall-header">
           <div>
-            <button type="button" onClick={() => setSelectedTheme(null)} className="simple-recall-back mb-8 flex items-center gap-2 text-sm cursor-pointer"><ArrowLeft size={16} />返回主题</button>
-            <div className="mb-8 flex items-end justify-between gap-4"><div><p className="simple-recall-kicker">{selectedYear} · 主题列表</p><h2 className="font-editorial-serif text-4xl tracking-[0.05em]">{selectedThemeInfo.label}</h2><p className="simple-recall-muted mt-2 text-sm">{selectedThemeInfo.description} · {list.length} 段记忆</p></div><CalendarDays className="simple-recall-accent h-8 w-8" strokeWidth={1.2} /></div>
-            {list.length === 0 ? <div className="simple-recall-empty rounded-2xl border p-10 text-center"><p className="text-sm">这一段时间还没有记忆</p><p className="simple-recall-muted mt-2 text-xs">回到地图继续记录</p></div> : <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{list.map((memory) => <button key={memory.id} type="button" onClick={() => onSelectMemory(memory)} className="simple-recall-memory group overflow-hidden rounded-2xl border text-left cursor-pointer"><div className="h-44 overflow-hidden bg-stone-100">{memory.image && <img src={memory.image} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />}</div><div className="p-4"><h3 className="line-clamp-1 font-editorial-serif text-lg">{memory.title}</h3><p className="simple-recall-muted mt-2 font-mono text-[11px]">{memory.date}{memory.tag ? ` · ${memory.tag}` : ''}</p></div></button>)}</div>}
+            <h1>回顾</h1>
+            <p className="simple-recall-description">
+              {selectedThemeInfo
+                ? `${selectedThemeInfo.label} · ${themeMemories.length} 段记忆 · 按时间连续浏览`
+                : '按时间回望，也按主题重新发现那些片段'}
+            </p>
           </div>
+          <button type="button" onClick={onClose} className="simple-recall-return">
+            <ArrowLeft size={16} aria-hidden="true" />
+            回到足迹
+          </button>
+        </header>
+
+        {selectedThemeInfo ? (
+          <ThemeMemoryList
+            theme={selectedThemeInfo}
+            memories={themeMemories}
+            memoriesByYear={memoriesByYear}
+            onChooseTheme={setSelectedTheme}
+            onSelectMemory={onSelectMemory}
+          />
         ) : (
-          <div className="space-y-12">
-            {visibleYears.length === 0 ? <div className="simple-recall-empty rounded-2xl border p-12 text-center"><p>还没有可回顾的记忆</p></div> : visibleYears.map((year) => {
-              const yearMemories = memories.filter((memory) => memory.year === year);
-              return <section key={year} className="simple-recall-year grid gap-5 md:grid-cols-[150px_1fr]"><div className="simple-recall-year-label md:sticky md:top-32 md:self-start"><p className="simple-recall-kicker">YEAR</p><h2 className="font-editorial-serif text-4xl">{year}</h2><p className="simple-recall-muted mt-1 text-xs">{yearMemories.length} 段记忆</p></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">{THEMES.map((theme) => { const themeMemories = yearMemories.filter((memory) => memory.category === theme.value); if (!themeMemories.length) return null; return <button key={theme.value} type="button" onClick={() => { setSelectedYear(year); setSelectedTheme(theme.value); }} className="simple-recall-theme group relative min-h-48 overflow-hidden rounded-2xl border text-left cursor-pointer"><div className="absolute inset-0 bg-stone-200">{coverOf(themeMemories) && <img src={coverOf(themeMemories)} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover opacity-80 transition-transform duration-500 group-hover:scale-[1.05]" />}</div><div className="simple-recall-theme-scrim absolute inset-0" /><div className="relative flex min-h-48 flex-col justify-end p-4 text-white"><span className="text-xs tracking-[0.12em]">{theme.label}</span><strong className="mt-1 font-editorial-serif text-xl">{theme.description}</strong><span className="mt-2 flex items-center gap-1 text-[11px] opacity-85">{themeMemories.length} 段记忆 <ArrowRight size={13} /></span></div></button>; })}</div></section>;
-            })}
-          </div>
+          <ThemeSummary memories={memories} years={years} onChooseTheme={setSelectedTheme} />
         )}
       </div>
     </section>
+  );
+}
+
+function ThemeSummary({
+  memories,
+  years,
+  onChooseTheme,
+}: {
+  memories: Memory[];
+  years: number[];
+  onChooseTheme: (theme: RecallTheme) => void;
+}) {
+  return (
+    <main className="simple-recall-summary">
+      <nav className="simple-recall-year-index" aria-label="回顾包含的年份">
+        <span className="simple-recall-year-index-item simple-recall-year-index-current">全部</span>
+        {years.map((year) => <span key={year} className="simple-recall-year-index-item">{year}</span>)}
+      </nav>
+
+      <section className="simple-recall-theme-section" aria-labelledby="simple-recall-theme-heading">
+        <p id="simple-recall-theme-heading" className="simple-recall-section-label">按主题</p>
+        <div className="simple-recall-theme-grid">
+          {THEMES.map((theme) => {
+            const entries = memoriesForTheme(memories, theme);
+            return (
+              <button
+                key={theme.value}
+                type="button"
+                className={`simple-recall-theme-card simple-recall-theme-card-${theme.accent}`}
+                onClick={() => onChooseTheme(theme.value)}
+              >
+                <span className="simple-recall-theme-accent" aria-hidden="true" />
+                <span className="simple-recall-theme-name">{theme.label}</span>
+                <span className="simple-recall-theme-count">{entries.length} 段记忆</span>
+                <span className="simple-recall-card-divider" aria-hidden="true" />
+                <span className="simple-recall-theme-examples">
+                  {entries.length === 0 ? <span>还没有记录</span> : entries.slice(0, 2).map((memory) => (
+                    <span key={memory.id}>{memory.year} · {memory.title}</span>
+                  ))}
+                </span>
+                <span className="simple-recall-theme-action">查看主题记忆 <span aria-hidden="true">→</span></span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ThemeMemoryList({
+  theme,
+  memories,
+  memoriesByYear,
+  onChooseTheme,
+  onSelectMemory,
+}: {
+  theme: RecallThemeDefinition;
+  memories: Memory[];
+  memoriesByYear: Map<number, Memory[]>;
+  onChooseTheme: (theme: RecallTheme | null) => void;
+  onSelectMemory: (memory: Memory) => void;
+}) {
+  const years = Array.from(memoriesByYear.keys()).sort((left, right) => right - left);
+
+  return (
+    <main className="simple-recall-list-view">
+      <div className="simple-recall-theme-filter" aria-label="主题筛选">
+        <span className="simple-recall-filter-label">主题</span>
+        <button type="button" onClick={() => onChooseTheme(null)} className="simple-recall-filter-button">全部</button>
+        {THEMES.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`simple-recall-filter-button ${option.value === theme.value ? 'is-active' : ''}`}
+            onClick={() => onChooseTheme(option.value)}
+            aria-pressed={option.value === theme.value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {memories.length === 0 ? (
+        <div className="simple-recall-empty">
+          <p>这个主题暂时还没有记忆。</p>
+          <button type="button" onClick={() => onChooseTheme(null)}>回到主题</button>
+        </div>
+      ) : (
+        <div className="simple-recall-timeline">
+          {years.map((year) => (
+            <section key={year} className="simple-recall-timeline-year" aria-labelledby={`recall-year-${year}`}>
+              <h2 id={`recall-year-${year}`}>{year}</h2>
+              <span className="simple-recall-timeline-rail" aria-hidden="true" />
+              <div className="simple-recall-timeline-memories">
+                {memoriesByYear.get(year)?.map((memory) => (
+                  <button
+                    key={memory.id}
+                    type="button"
+                    className="simple-recall-memory-row"
+                    onClick={() => onSelectMemory(memory)}
+                  >
+                    <span className="simple-recall-memory-photo">
+                      {memory.image ? <img src={memory.image} alt="" referrerPolicy="no-referrer" /> : <span>暂无照片</span>}
+                    </span>
+                    <span className="simple-recall-memory-copy">
+                      <strong>{memory.title}</strong>
+                      <span className="simple-recall-memory-meta">{memory.date} · {placeOf(memory)} · {theme.label}</span>
+                      <span className="simple-recall-memory-summary">{summaryOf(memory)}</span>
+                    </span>
+                    <span className="simple-recall-memory-open">打开记忆 <span aria-hidden="true">→</span></span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </main>
   );
 }
