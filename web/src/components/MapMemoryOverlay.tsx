@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, Check, ChevronLeft, ChevronRight, Cloud, Edit3, X } from 'lucide-react';
+import { Bookmark, Check, ChevronLeft, ChevronRight, Cloud, Edit3, Trash2, X } from 'lucide-react';
 import { Memory } from '../types';
 
 interface ScreenPoint {
@@ -14,6 +14,7 @@ interface MapMemoryOverlayProps {
   viewport: { width: number; height: number };
   onClose: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
+  onDeleteMemory?: (id: string) => Promise<void>;
   readerMode?: 'reflection' | 'journal';
 }
 
@@ -23,6 +24,7 @@ export default function MapMemoryOverlay({
   viewport,
   onClose,
   onSaveMemory,
+  onDeleteMemory,
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
   const photos = useMemo(
@@ -37,6 +39,8 @@ export default function MapMemoryOverlay({
   const [isEditing, setIsEditing] = useState(false);
   const [presentDraft, setPresentDraft] = useState(memory.presentSelf);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -44,6 +48,8 @@ export default function MapMemoryOverlay({
     setIsEditing(false);
     setPresentDraft(memory.presentSelf);
     setSaveStatus('idle');
+    setDeleteArmed(false);
+    setIsDeleting(false);
   }, [memory.id, memory.presentSelf]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
@@ -86,6 +92,18 @@ export default function MapMemoryOverlay({
     } catch (error) {
       console.error(error);
       setSaveStatus('error');
+    }
+  };
+
+  const deleteMemory = async () => {
+    if (!onDeleteMemory || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteMemory(memory.id);
+      onClose();
+    } catch (error) {
+      console.error(error);
+      setIsDeleting(false);
     }
   };
 
@@ -259,6 +277,42 @@ export default function MapMemoryOverlay({
             {saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存'}
           </span>
         </div>}
+
+        {onDeleteMemory && (
+          <div className="mt-5 border-t border-[color:var(--color-border-subtle)] pt-4 text-[11px]">
+            {!deleteArmed ? (
+              <button
+                type="button"
+                aria-label="删除记忆"
+                onClick={() => setDeleteArmed(true)}
+                className="map-ui-save-status inline-flex items-center gap-2 transition-colors hover:text-[var(--color-danger)] cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+                删除记忆
+              </button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="map-ui-save-status">确定删除这段记忆？</span>
+                <button
+                  type="button"
+                  onClick={deleteMemory}
+                  disabled={isDeleting}
+                  className="map-ui-danger rounded-full px-3 py-1.5 text-[11px] font-semibold transition-opacity disabled:opacity-50 cursor-pointer"
+                >
+                  {isDeleting ? '删除中…' : '确认删除'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteArmed(false)}
+                  disabled={isDeleting}
+                  className="map-ui-save-status transition-colors hover:text-[var(--color-text-primary)] disabled:opacity-50 cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </motion.article>
 
       <button

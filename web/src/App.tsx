@@ -806,6 +806,7 @@ export default function App({
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
+            onDeleteMemory={handleDeleteMemory}
             onAddMemory={() => setShowAddMemory(true)}
             onLock={onLock}
             onOpenRecall={() => setShowRecall(true)}

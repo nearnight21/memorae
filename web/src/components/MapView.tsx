@@ -30,6 +30,7 @@ interface MapViewProps {
   onSelectMemory: (m: Memory) => void;
   onCloseMemory: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
+  onDeleteMemory?: (id: string) => Promise<void>;
   onAddMemory?: () => void;
   onLock?: () => void;
   onOpenRecall?: () => void;
@@ -165,6 +166,7 @@ export default function MapView({
   onSelectMemory,
   onCloseMemory,
   onSaveMemory,
+  onDeleteMemory,
   onAddMemory,
   onLock,
   onOpenRecall,
@@ -759,6 +761,7 @@ export default function MapView({
             viewport={mapViewport}
             onClose={onCloseMemory}
             onSaveMemory={onSaveMemory}
+            onDeleteMemory={onDeleteMemory}
             readerMode={readerMode}
           />
         )}
