@@ -267,6 +267,8 @@ export default function MapMemoryOverlay({
         type="button"
         onClick={() => void completeEditing()}
         disabled={saveStatus === 'saving'}
+        aria-label="保存修改并完成编辑"
+        title="保存修改并完成编辑"
         className="map-memory-complete map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 min-w-[82px] items-center justify-center rounded-full border px-4 text-[12px] transition-colors disabled:opacity-60 cursor-pointer"
       >
         {saveStatus === 'saving' ? '保存中…' : '完成'}
@@ -387,6 +389,16 @@ export default function MapMemoryOverlay({
         </div>
 
         {onSaveMemory && <div className="mt-8 flex items-center gap-3 text-[11px]">
+          {isEditing && <button
+            type="button"
+            onClick={() => void saveMemory()}
+            disabled={saveStatus === 'saving'}
+            className="map-ui-accent map-ui-accent-hover flex items-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
+            aria-label="保存记忆修改"
+          >
+            <Bookmark className="h-4 w-4" strokeWidth={1.5} />
+            {saveStatus === 'saving' ? '保存中…' : saveStatus === 'saved' ? '已保存' : '保存修改'}
+          </button>}
           {!isEditing && <button
             type="button"
             onClick={() => void saveMemory()}

@@ -4,7 +4,7 @@
   bottom: 0;
   z-index: 1001;
   width: min(1120px, calc(100vw - 120px));
-  height: 48px;
+  height: 88px;
   transform: translateX(-50%);
   color: #092b50;
   font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
@@ -23,7 +23,7 @@
   cursor: pointer;
   isolation: isolate;
   -webkit-tap-highlight-color: transparent;
-  transform: translateY(40px);
+  transform: translateY(44px);
   transition: transform 180ms ease;
 }
 .crystal-timeline-formal.is-expanded .crystal-timeline-formal-body { transform: translateY(0); }
