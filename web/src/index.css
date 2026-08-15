@@ -25,7 +25,6 @@
   --color-border-subtle: rgba(137, 125, 109, 0.48);
   --color-shadow: rgba(54, 49, 43, 0.15);
   --color-nav: #37332f;
-  --map-warm-overlay: rgba(165, 149, 126, 0.06);
 }
 
 .font-editorial-serif {
@@ -408,14 +407,6 @@
 .map-editorial-canvas.leaflet-container {
   background: var(--color-bg-canvas);
   font-family: 'Inter', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-}
-.map-editorial-canvas.leaflet-container::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 250;
-  pointer-events: none;
-  background: var(--map-warm-overlay);
 }
 .map-editorial-canvas .leaflet-tile {
   opacity: 0;
