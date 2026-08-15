@@ -48,6 +48,19 @@ test('date, region and theme filters combine with AND semantics', () => {
   assert.equal(isMemoryFiltersActive({ dateRange: yearDateRange(2025), regions: [], themes: [] }), true);
 });
 
+test('timeline range keeps earlier memories visible when the handle is moved later', () => {
+  const memories = [
+    memory({ id: 'earlier', date: '2021.06.18', year: 2021 }),
+    memory({ id: 'later', date: '2023.02.03', year: 2023 }),
+  ];
+  const through2022 = filterMemories(memories, {
+    ...EMPTY_MEMORY_FILTERS,
+    dateRange: { start: '2021-01-01', end: '2022-12-31' },
+  });
+
+  assert.deepEqual(through2022.map((item) => item.id), ['earlier']);
+});
+
 test('region filters match country, city and location labels', () => {
   const memories = [
     memory({ id: 'country', country: '中国' }),

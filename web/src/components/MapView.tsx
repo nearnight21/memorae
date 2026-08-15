@@ -434,15 +434,6 @@ export default function MapView({
     const previousLayer = layerRef.current;
     const nextLayer = L.layerGroup();
 
-    if (filtersActive) {
-      if (previousLayer && map.hasLayer(previousLayer)) map.removeLayer(previousLayer);
-      previousLayer?.clearLayers();
-      layerRef.current = null;
-      return () => {
-        nextLayer.clearLayers();
-      };
-    }
-
     let cancelled = false;
 
     const build = async () => {
@@ -715,7 +706,7 @@ export default function MapView({
       {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
 
       {!selectedMemory && <div className="map-status-chip absolute bottom-[66px] left-24 z-[1002]">
-        {filtersActive ? `筛选中 · 地图标记已隐藏 · ${filtered.length} 段记忆` : '缩放以展开地点与照片'}
+        {filtersActive ? `筛选中 · 显示 ${filtered.length} 段记忆` : '缩放以展开地点与照片'}
       </div>}
 
       {!selectedMemory && onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-tab absolute right-0 top-1/2 z-[1002] -translate-y-1/2 rounded-l-xl border border-r-0 px-3 py-4 text-[12px] tracking-[0.1em] shadow-sm backdrop-blur-md cursor-pointer">简易回顾</button>}
