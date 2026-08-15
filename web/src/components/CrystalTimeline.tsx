@@ -36,6 +36,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const movedPointer = useRef(false);
   const [expanded, setExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [dragProgress, setDragProgress] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
 
   const bounds = useMemo(() => {
@@ -46,7 +47,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     return { min, max };
   }, [memories]);
 
-  const currentDate = useMemo(() => {
+  const committedDate = useMemo(() => {
     const end = filters.dateRange?.end;
     if (!end) return bounds.max;
     const timestamp = Date.parse(`${end.slice(0, 10)}T00:00:00Z`);
@@ -54,7 +55,12 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   }, [bounds.max, filters.dateRange?.end]);
 
   const totalDays = Math.max(1, (bounds.max.getTime() - bounds.min.getTime()) / DAY_MS);
-  const progress = clamp((currentDate.getTime() - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+  const committedProgress = clamp((committedDate.getTime() - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+  const progress = dragProgress ?? committedProgress;
+  const currentDate = useMemo(
+    () => new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * progress) / DAY_MS) * DAY_MS),
+    [bounds.max, bounds.min, progress],
+  );
   const years = useMemo(() => {
     const start = bounds.min.getUTCFullYear();
     const end = bounds.max.getUTCFullYear();
@@ -73,10 +79,6 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     });
   };
 
-  const updateFromPointer = (clientX: number) => {
-    if (bodyRef.current) commitProgress(progressForPointer(bodyRef.current, clientX));
-  };
-
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     event.preventDefault();
@@ -85,7 +87,6 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     movedPointer.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
-    updateFromPointer(event.clientX);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -139,15 +140,18 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
             movedPointer.current = true;
             setExpanded(true);
           }
-          updateFromPointer(event.clientX);
+          if (movedPointer.current) setDragProgress(progressForPointer(event.currentTarget, event.clientX));
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+          if (movedPointer.current) commitProgress(progressForPointer(event.currentTarget, event.clientX));
           setDragging(false);
+          setDragProgress(null);
           pointerStartX.current = null;
         }}
         onPointerCancel={() => {
           setDragging(false);
+          setDragProgress(null);
           pointerStartX.current = null;
         }}
         onKeyDown={handleKeyDown}
