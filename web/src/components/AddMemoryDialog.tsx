@@ -13,6 +13,7 @@ import type { CategoryType, Memory, PinnedBy } from '../types';
 import { selectLocalPhoto } from '../product/selectPhoto';
 import { readPhotoMetadata } from '../product/photoMetadata';
 import { reverseGeocodeCoordinates } from '../lib/geo';
+import { convertGpsToAmap } from '../lib/locationApi';
 import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
 import './AddMemoryDialog.css';
@@ -25,6 +26,15 @@ interface AddMemoryDialogProps {
 
 type CreateStep = 'source' | 'photo-review' | 'editor';
 type SaveState = 'idle' | 'saving' | 'error';
+
+interface SelectedLocation {
+  name: string;
+  lat: number;
+  lng: number;
+  country?: string;
+  city?: string;
+  district?: string;
+}
 
 const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
   { value: 'travel', label: '旅行' },
@@ -57,15 +67,11 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
   const [tag, setTag] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [locationName, setLocationName] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [detailLocation, setDetailLocation] = useState('');
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
-  const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
   const [showLocationMap, setShowLocationMap] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [validationMessage, setValidationMessage] = useState('');
@@ -90,13 +96,14 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
     return () => window.removeEventListener('keydown', submitWithShortcut);
   }, [step]);
 
-  const applyLocationCoordinates = (result: { country?: string; city?: string; lat: number; lng: number }) => {
-    setCountry(result.country ?? '');
-    setCity(result.city ?? '');
-    setLat(result.lat);
-    setLng(result.lng);
-    setIsLocationConfirmed(true);
+  const confirmLocation = (result: SelectedLocation) => {
+    setSelectedLocation(result);
+    setLocationQuery('');
+    locationValueRef.current = result.name;
   };
+
+  const locationName = selectedLocation?.name ?? locationQuery;
+  const isLocationConfirmed = selectedLocation !== null;
 
   const applyPhotoMetadata = async (file: File) => {
     const requestId = photoMetadataRequestRef.current + 1;
@@ -115,14 +122,22 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
     if (hasGps && (!locationValueRef.current.trim() || locationAutoRef.current)) {
       const latitude = metadata.latitude as number;
       const longitude = metadata.longitude as number;
-      const reverse = await reverseGeocodeCoordinates(latitude, longitude);
+      const converted = await convertGpsToAmap({ lat: latitude, lng: longitude });
       if (requestId !== photoMetadataRequestRef.current || (!locationAutoRef.current && locationValueRef.current.trim())) return;
-      const label = reverse?.label || reverse?.city || reverse?.country || `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-      locationValueRef.current = label;
-      setLocationName(label);
+      if (!converted) return;
+      const reverse = await reverseGeocodeCoordinates(converted.lat, converted.lng);
+      if (requestId !== photoMetadataRequestRef.current || (!locationAutoRef.current && locationValueRef.current.trim())) return;
+      const label = reverse?.label || reverse?.city || reverse?.country || '已读取照片 GPS';
       setDetailLocation((current) => current.trim() || reverse?.district || '');
       locationAutoRef.current = true;
-      applyLocationCoordinates(reverse ?? { lat: latitude, lng: longitude });
+      confirmLocation({
+        name: label,
+        lat: converted.lat,
+        lng: converted.lng,
+        country: reverse?.country,
+        city: reverse?.city,
+        district: reverse?.district,
+      });
     }
   };
 
@@ -188,10 +203,10 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
         presentSelf: presentSelf.trim(),
         pinnedBy: 'pin' as PinnedBy,
         location: locationName.trim() ? { name: locationName.trim(), mx: 50, my: 50 } : undefined,
-        country: country.trim() || undefined,
-        city: city.trim() || undefined,
-        lat: lat ?? undefined,
-        lng: lng ?? undefined,
+        country: selectedLocation?.country?.trim() || undefined,
+        city: selectedLocation?.city?.trim() || undefined,
+        lat: selectedLocation?.lat,
+        lng: selectedLocation?.lng,
         detailLocation: detailLocation.trim() || undefined,
       });
       onClose();
@@ -205,14 +220,12 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
   if (showLocationMap) {
     return (
       <LocationMapSelection
-        initialCoordinates={lat !== null && lng !== null ? { lat, lng } : null}
+        initialCoordinates={selectedLocation ? { lat: selectedLocation.lat, lng: selectedLocation.lng } : null}
         fallbackName={locationName}
         onCancel={() => setShowLocationMap(false)}
         onConfirm={(selection) => {
           locationAutoRef.current = false;
-          locationValueRef.current = selection.name;
-          setLocationName(selection.name);
-          applyLocationCoordinates(selection);
+          confirmLocation(selection);
           if (selection.district) setDetailLocation(selection.district);
           setShowLocationMap(false);
         }}
@@ -305,7 +318,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
   return (
     <section className="memory-create-editor" aria-label="编辑新记忆">
       <header className="memory-editor-header">
-        <p>足迹 / {country || '未标注地区'}{city ? ` / ${city}` : ''}{locationName ? ` / ${locationName}` : ''}</p>
+        <p>足迹 / {selectedLocation?.country || '未标注地区'}{selectedLocation?.city ? ` / ${selectedLocation.city}` : ''}{locationName ? ` / ${locationName}` : ''}</p>
         <div className="memory-editor-header-actions">
           <button type="button" onClick={() => setStep('source')} className="memory-editor-back">
             <ArrowLeft size={16} aria-hidden="true" />
@@ -388,23 +401,40 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
               required
             />
             <LocationPicker
-              value={locationName}
-              onChange={(value) => {
+              selectedLabel={selectedLocation?.name ?? ''}
+              query={locationQuery}
+              onQueryChange={(value) => {
                 locationAutoRef.current = false;
                 locationValueRef.current = value;
-                setLocationName(value);
-                setCountry('');
-                setCity('');
-                setLat(null);
-                setLng(null);
-                setIsLocationConfirmed(false);
+                setLocationQuery(value);
+                setSelectedLocation(null);
               }}
               onSelect={(candidate) => {
                 locationAutoRef.current = false;
-                locationValueRef.current = candidate.shortName;
-                setLocationName(candidate.shortName);
-                applyLocationCoordinates(candidate);
+                confirmLocation({
+                  name: candidate.shortName,
+                  lat: candidate.lat,
+                  lng: candidate.lng,
+                  country: candidate.country,
+                  city: candidate.city,
+                  district: candidate.district,
+                });
                 if (candidate.district) setDetailLocation(candidate.district);
+                // 输入提示的候选坐标不可被反查覆盖；反查只补齐城市、区县等展示层级。
+                void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
+                  if (!reverse) return;
+                  setSelectedLocation((current) => (
+                    current?.lat === candidate.lat && current.lng === candidate.lng
+                      ? {
+                        ...current,
+                        country: reverse.country ?? current.country,
+                        city: reverse.city ?? current.city,
+                        district: reverse.district ?? current.district,
+                      }
+                      : current
+                  ));
+                  if (reverse.district) setDetailLocation((current) => current || reverse.district || '');
+                });
               }}
               placeholder="地点"
               inputClassName="memory-editor-location-input"

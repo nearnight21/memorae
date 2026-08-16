@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, LoaderCircle, RefreshCw, Trash2, X } from 'lucide-react';
 import { CategoryType, Memory } from '../types';
+import { reverseGeocodeCoordinates } from '../lib/geo';
 import LocationPicker from './LocationPicker';
 
 interface ScreenPoint {
@@ -62,6 +63,7 @@ export default function MapMemoryOverlay({
   const [isOriginalOpen, setIsOriginalOpen] = useState(false);
   const [originalState, setOriginalState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [originalUrl, setOriginalUrl] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -74,6 +76,7 @@ export default function MapMemoryOverlay({
     setIsOriginalOpen(false);
     setOriginalState('loading');
     setOriginalUrl('');
+    setLocationQuery('');
   }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
@@ -111,12 +114,17 @@ export default function MapMemoryOverlay({
     setDraftMemory((current) => ({ ...current, [key]: value }));
   };
 
-  const updateDraftLocationName = (name: string) => {
+  const updateDraftLocationQuery = (name: string) => {
+    setLocationQuery(name);
     setDraftMemory((current) => ({
       ...current,
       location: name.trim() || current.location
         ? { ...(current.location ?? { mx: 50, my: 50, name: '' }), name }
         : undefined,
+      country: undefined,
+      city: undefined,
+      lat: undefined,
+      lng: undefined,
     }));
   };
 
@@ -357,20 +365,38 @@ export default function MapMemoryOverlay({
             {isEditing ? (
               <div className="map-memory-edit-chip map-memory-edit-location">
                 <LocationPicker
-                  value={draftMemory.location?.name ?? ''}
-                  onChange={updateDraftLocationName}
-                  onSelect={(candidate) => setDraftMemory((current) => ({
-                    ...current,
-                    location: {
-                      name: candidate.shortName,
-                      mx: current.location?.mx ?? 50,
-                      my: current.location?.my ?? 50,
-                    },
-                    country: candidate.country ?? current.country,
-                    city: candidate.city ?? current.city,
-                    lat: candidate.lat,
-                    lng: candidate.lng,
-                  }))}
+                  selectedLabel={draftMemory.location?.name ?? ''}
+                  query={locationQuery}
+                  onQueryChange={updateDraftLocationQuery}
+                  onSelect={(candidate) => {
+                    setLocationQuery('');
+                    setDraftMemory((current) => ({
+                      ...current,
+                      location: {
+                        name: candidate.shortName,
+                        mx: current.location?.mx ?? 50,
+                        my: current.location?.my ?? 50,
+                      },
+                      country: candidate.country ?? current.country,
+                      city: candidate.city ?? current.city,
+                      lat: candidate.lat,
+                      lng: candidate.lng,
+                    }));
+                    // 输入提示的坐标就是最终坐标；反查仅补齐行政层级，绝不重新搜索或移动该点。
+                    void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
+                      if (!reverse) return;
+                      setDraftMemory((current) => (
+                        current.lat === candidate.lat && current.lng === candidate.lng
+                          ? {
+                            ...current,
+                            country: reverse.country ?? current.country,
+                            city: reverse.city ?? current.city,
+                            detailLocation: current.detailLocation || reverse.district,
+                          }
+                          : current
+                      ));
+                    });
+                  }}
                   placeholder="地点"
                   inputClassName="map-memory-edit-chip-input"
                 />

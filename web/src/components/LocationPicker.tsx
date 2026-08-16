@@ -3,10 +3,11 @@ import { MapPin, MapPinned, Loader2 } from 'lucide-react';
 import { searchPlaces, PlaceCandidate } from '../lib/geo';
 
 interface LocationPickerProps {
-  /** 当前地点名 */
-  value: string;
-  /** 手动输入时回调 */
-  onChange: (name: string) => void;
+  /** 已确认地点的展示名。它不会触发新的搜索。 */
+  selectedLabel: string;
+  /** 用户正在输入的搜索文本。 */
+  query: string;
+  onQueryChange: (query: string) => void;
   /** 从候选中选中时回调（携带坐标与国家/城市） */
   onSelect: (c: PlaceCandidate) => void;
   placeholder?: string;
@@ -16,12 +17,13 @@ interface LocationPickerProps {
 }
 
 /**
- * 地点搜索选择器：输入关键词 → Nominatim 候选下拉 → 选中带回真实坐标。
- * 选中后地图可直接使用存储坐标，不再依赖名称猜测。
+ * 地点搜索选择器：查询文本与已确认地点完全分离。
+ * 选中候选后只写入候选自身的坐标，不会再用地点名称进行第二次搜索。
  */
 export default function LocationPicker({
-  value,
-  onChange,
+  selectedLabel,
+  query,
+  onQueryChange,
   onSelect,
   placeholder,
   inputClassName,
@@ -32,29 +34,23 @@ export default function LocationPicker({
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<number | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
-  // 选中候选后父组件会回填 value，跳过这次回填触发的搜索
-  const skipSearchRef = useRef(false);
 
   useEffect(() => {
     window.clearTimeout(debounceRef.current);
-    if (skipSearchRef.current) {
-      skipSearchRef.current = false;
-      return;
-    }
-    if (!value.trim()) {
+    if (!query.trim()) {
       setCandidates([]);
       setOpen(false);
       return;
     }
     debounceRef.current = window.setTimeout(async () => {
       setSearching(true);
-      const list = await searchPlaces(value);
+      const list = await searchPlaces(query);
       setSearching(false);
       setCandidates(list);
       setOpen(list.length > 0);
     }, 400);
     return () => window.clearTimeout(debounceRef.current);
-  }, [value]);
+  }, [query]);
 
   // 点击组件外部时收起下拉
   useEffect(() => {
@@ -71,8 +67,8 @@ export default function LocationPicker({
     <div ref={wrapRef} className="relative">
       <input
         type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={query || selectedLabel}
+        onChange={(e) => onQueryChange(e.target.value)}
         onFocus={() => candidates.length > 0 && setOpen(true)}
         placeholder={placeholder}
         className={inputClassName}
@@ -99,7 +95,6 @@ export default function LocationPicker({
               <button
                 type="button"
                 onClick={() => {
-                  skipSearchRef.current = true;
                   onSelect(c);
                   setOpen(false);
                 }}

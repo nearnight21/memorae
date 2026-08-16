@@ -170,8 +170,12 @@ export default function MemoryDetailPanel({
                       <MapPin className="h-3.5 w-3.5 text-red-500 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <LocationPicker
-                          value={locName}
-                          onChange={setLocName}
+                          selectedLabel={locGeo ? locName : ''}
+                          query={locGeo ? '' : locName}
+                          onQueryChange={(value) => {
+                            setLocName(value);
+                            setLocGeo(null);
+                          }}
                           onSelect={(c) => {
                             setLocName(c.shortName);
                             setLocGeo({ country: c.country, city: c.city, lat: c.lat, lng: c.lng });

@@ -8,6 +8,7 @@ import {
   PostgresPasswordAuthStore,
 } from './postgres';
 import { JsonCipherStore } from './store';
+import { AmapWebLocationService, type LocationService } from './location';
 import {
   TencentCosObjectStore,
   type TencentCosObjectStoreOptions,
@@ -28,6 +29,11 @@ function cosOptionsFromEnvironment(): TencentCosObjectStoreOptions | null {
   return values as TencentCosObjectStoreOptions;
 }
 
+function locationServiceFromEnvironment(): LocationService | undefined {
+  const key = process.env.MEMORY_RECALL_AMAP_WEB_SERVICE_KEY?.trim();
+  return key ? new AmapWebLocationService({ key }) : undefined;
+}
+
 async function main(): Promise<void> {
   const port = Number(process.env.MEMORY_RECALL_PORT ?? 8788);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -37,6 +43,7 @@ async function main(): Promise<void> {
     ?.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const locationService = locationServiceFromEnvironment();
   const databaseUrl = process.env.MEMORY_RECALL_DATABASE_URL;
   if (databaseUrl) {
     const tokenPepper = process.env.MEMORY_RECALL_SESSION_TOKEN_PEPPER;
@@ -58,6 +65,7 @@ async function main(): Promise<void> {
         tokenPepper,
       }),
       allowedOrigins,
+      locationService,
     });
     const cleanupExpiredPhotos = async () => {
       if (!cosStore) return;
@@ -94,6 +102,7 @@ async function main(): Promise<void> {
     store: new JsonCipherStore(filePath),
     localToken,
     allowedOrigins,
+    locationService,
   });
   const address = await app.listen({ host: '127.0.0.1', port });
   process.stdout.write(`Memory Recall 本地密文服务已启动：${address}\n`);

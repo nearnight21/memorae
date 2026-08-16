@@ -39,8 +39,8 @@ export interface Memory {
   };
   country?: string; // 地区线钻取：国家
   city?: string; // 地区线钻取：城市
-  lat?: number; // 真实纬度（LocationPicker 选定时写入，地图精确定位）
-  lng?: number; // 真实经度
+  lat?: number; // 高德 GCJ-02 纬度（候选、地图落点或 EXIF 转换后写入）
+  lng?: number; // 高德 GCJ-02 经度
   /** 详细位置备注（如"外公外婆家"），仅文字记录，不参与地图定位 */
   detailLocation?: string;
 }

@@ -30,6 +30,12 @@ import {
   type DirectPhotoTransfer,
 } from './photoTransfer';
 import { CipherConflictError, type CipherStore } from './store';
+import {
+  LocationProviderError,
+  LocationServiceUnavailableError,
+  type LocationCoordinates,
+  type LocationService,
+} from './location';
 
 export interface BuildAppOptions {
   store: CipherStore;
@@ -38,6 +44,8 @@ export interface BuildAppOptions {
   authenticator?: RequestAuthenticator;
   allowedOrigins?: string[];
   photoTransfer?: DirectPhotoTransfer;
+  /** 高德地点服务只由服务端持有 key，未配置时地点功能返回明确的 503。 */
+  locationService?: LocationService;
 }
 
 interface IdParams {
@@ -65,6 +73,18 @@ interface CompletePhotoUploadBody {
   uploadId: string;
 }
 
+interface LocationSuggestQuery {
+  q: string;
+  adcode?: string;
+}
+
+interface LocationReverseQuery {
+  lat: number;
+  lng: number;
+}
+
+interface ConvertGpsBody extends LocationCoordinates {}
+
 declare module 'fastify' {
   interface FastifyRequest {
     accountId?: string;
@@ -79,6 +99,26 @@ const loginSchema = {
     loginName: { type: 'string', minLength: 3, maxLength: 200 },
     password: { type: 'string', minLength: 8, maxLength: 1024 },
     deviceId: { type: 'string', minLength: 1, maxLength: 200 },
+  },
+} as const;
+
+const locationSuggestSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['q'],
+  properties: {
+    q: { type: 'string', minLength: 1, maxLength: 200 },
+    adcode: { type: 'string', minLength: 1, maxLength: 32 },
+  },
+} as const;
+
+const locationReverseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['lat', 'lng'],
+  properties: {
+    lat: { type: 'number', minimum: -90, maximum: 90 },
+    lng: { type: 'number', minimum: -180, maximum: 180 },
   },
 } as const;
 
@@ -105,6 +145,16 @@ function sendPhotoTransferError(error: unknown, reply: FastifyReply): FastifyRep
   }
   if (error instanceof PhotoTransferValidationError) {
     return reply.code(422).send({ error: error.message });
+  }
+  return null;
+}
+
+function sendLocationError(error: unknown, reply: FastifyReply): FastifyReply | null {
+  if (error instanceof LocationServiceUnavailableError) {
+    return reply.code(503).send({ error: error.message, code: 'location_service_unavailable' });
+  }
+  if (error instanceof LocationProviderError) {
+    return reply.code(502).send({ error: error.message, code: 'location_provider_unavailable' });
   }
   return null;
 }
@@ -181,6 +231,47 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(204).send();
     });
   }
+
+  const requireLocationService = (): LocationService => {
+    if (!options.locationService) throw new LocationServiceUnavailableError();
+    return options.locationService;
+  };
+
+  app.get<{ Querystring: LocationSuggestQuery }>('/v1/location/suggest', {
+    schema: { querystring: locationSuggestSchema },
+  }, async (request, reply) => {
+    try {
+      return await requireLocationService().suggest(request.query.q, request.query.adcode);
+    } catch (error) {
+      const response = sendLocationError(error, reply);
+      if (response) return response;
+      throw error;
+    }
+  });
+
+  app.get<{ Querystring: LocationReverseQuery }>('/v1/location/reverse', {
+    schema: { querystring: locationReverseSchema },
+  }, async (request, reply) => {
+    try {
+      return await requireLocationService().reverse({ lat: request.query.lat, lng: request.query.lng });
+    } catch (error) {
+      const response = sendLocationError(error, reply);
+      if (response) return response;
+      throw error;
+    }
+  });
+
+  app.post<{ Body: ConvertGpsBody }>('/v1/location/convert-gps', {
+    schema: { body: locationReverseSchema },
+  }, async (request, reply) => {
+    try {
+      return await requireLocationService().convertGps(request.body);
+    } catch (error) {
+      const response = sendLocationError(error, reply);
+      if (response) return response;
+      throw error;
+    }
+  });
 
   app.put<{ Body: VaultEnvelopeV1 }>('/v1/vault', {
     schema: { body: vaultEnvelopeSchema },

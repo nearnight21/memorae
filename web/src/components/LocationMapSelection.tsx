@@ -44,6 +44,7 @@ export default function LocationMapSelection({
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const [selection, setSelection] = useState<Coordinates | null>(initialCoordinates);
+  const [selectionCandidate, setSelectionCandidate] = useState<PlaceCandidate | null>(null);
   const [resolvedPlace, setResolvedPlace] = useState<GeoResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,6 +69,8 @@ export default function LocationMapSelection({
     ).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     map.on('click', (event: L.LeafletMouseEvent) => {
+      // 地图点击拥有最终坐标；反查只为它补充名称。
+      setSelectionCandidate(null);
       setSelection({ lat: event.latlng.lat, lng: event.latlng.lng });
     });
 
@@ -119,8 +122,9 @@ export default function LocationMapSelection({
 
   const selectSearchResult = (result: PlaceCandidate) => {
     const coordinates = { lat: result.lat, lng: result.lng };
+    setSelectionCandidate(result);
     setSelection(coordinates);
-    setSearchQuery(result.shortName);
+    setSearchQuery('');
     setSearchResults([]);
     mapRef.current?.flyTo([result.lat, result.lng], DETAIL_ZOOM, { duration: 0.55 });
   };
@@ -150,9 +154,11 @@ export default function LocationMapSelection({
     };
   }, [selection]);
 
-  const selectedName = locationName(resolvedPlace, fallbackName);
+  const selectedName = selectionCandidate?.shortName || locationName(resolvedPlace, fallbackName);
   const detail = resolvedPlace
-    ? [resolvedPlace.country, resolvedPlace.city].filter(Boolean).join(' · ')
+    ? resolvedPlace.formattedAddress || [resolvedPlace.country, resolvedPlace.city].filter(Boolean).join(' · ')
+    : selectionCandidate?.displayName
+      ? selectionCandidate.displayName
     : selection
       ? `${selection.lat.toFixed(5)}, ${selection.lng.toFixed(5)}`
       : '';
@@ -204,9 +210,9 @@ export default function LocationMapSelection({
             onClick={() => onConfirm({
               ...selection,
               name: selectedName,
-              country: resolvedPlace?.country,
-              city: resolvedPlace?.city,
-              district: resolvedPlace?.district,
+              country: resolvedPlace?.country ?? selectionCandidate?.country,
+              city: resolvedPlace?.city ?? selectionCandidate?.city,
+              district: resolvedPlace?.district ?? selectionCandidate?.district,
             })}
             disabled={isResolving}
             className="memory-location-selection-primary"

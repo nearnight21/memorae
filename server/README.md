@@ -24,6 +24,15 @@ npm.cmd run dev
 的端口，可用英文逗号分隔 `MEMORY_RECALL_ALLOWED_ORIGINS`。程序不会自动读取 `.env`；
 PowerShell 运行前需要像上面一样设置环境变量。
 
+地图地点功能使用服务端代理的高德 Web 服务，不把 Key 发送给浏览器。要启用地点搜索、地图落点
+反查和照片 GPS 转换，设置：
+
+```powershell
+$env:MEMORY_RECALL_AMAP_WEB_SERVICE_KEY = '部署机密钥管理中的高德 Web 服务 Key'
+```
+
+未设置该变量时，`/v1/location/*` 会明确返回“地点服务尚未配置”，网页不会回退到 OSM/Nominatim。
+
 ## PostgreSQL 试运行模式
 
 先创建空 PostgreSQL 数据库并应用迁移。迁移不会自动在服务器启动时执行，避免应用进程意外
@@ -85,6 +94,8 @@ GET 和 SHA-256 校验，照片字节没有经过 API；Android/Web 三档真实
 - `PUT /v1/vault`、`GET /v1/vault`：保存或读取加密后的钥匙信封。
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
 - `PUT /v1/photos/:id`、`GET /v1/photos/:id`：仅在未配置 COS 时注册，供本地回归保存或读取原图密文。
+- `GET /v1/location/suggest`、`GET /v1/location/reverse`、`POST /v1/location/convert-gps`：高德地点提示、
+  反向地理编码和照片 WGS-84 GPS 到 GCJ-02 转换；均要求账号令牌，服务端保管高德 Key。
 - `POST /v1/photos/:id/:kind/upload`：为 `thumbnail`、`preview` 或 `original` 申请短期 COS PUT 地址。
 - `POST /v1/photos/:id/:kind/complete`：直传完成后检查对象长度并提交密文索引。
 - `GET /v1/photos/:id/:kind/download`：校验账号归属后返回短期 COS GET 地址和加密元数据。
