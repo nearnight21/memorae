@@ -26,6 +26,8 @@ const TILE_MODE: 'amap' | 'dark' = 'amap';
 // 自适应层级阈值：zoom < CITY_ZOOM → 国家气泡；CITY_ZOOM ≤ zoom < POINT_ZOOM → 城市气泡；zoom ≥ POINT_ZOOM → 具体点位
 const CITY_ZOOM = 5;
 const POINT_ZOOM = 9;
+// 最远只保留东亚级概览，避免缩小到重复的完整世界底图。
+const MIN_OVERVIEW_ZOOM = 3;
 
 interface MapViewProps {
   memories: Memory[];
@@ -362,7 +364,7 @@ export default function MapView({
       zoomAnimation: true,
       markerZoomAnimation: true,
       worldCopyJump: true,
-      minZoom: 2,
+      minZoom: MIN_OVERVIEW_ZOOM,
       maxZoom: 14,
       attributionControl: true,
     });
