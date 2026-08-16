@@ -15,6 +15,7 @@ interface MapMemoryOverlayProps {
   anchor: ScreenPoint | null;
   viewport: { width: number; height: number };
   onClose: () => void;
+  onEditMemory?: (memory: Memory) => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
@@ -41,6 +42,7 @@ export default function MapMemoryOverlay({
   anchor,
   viewport,
   onClose,
+  onEditMemory,
   onSaveMemory,
   onDeleteMemory,
   onLoadOriginalPhoto,
@@ -105,6 +107,10 @@ export default function MapMemoryOverlay({
   };
 
   const beginEditing = () => {
+    if (onEditMemory) {
+      onEditMemory(memory);
+      return;
+    }
     setDraftMemory(memory);
     setSaveStatus('idle');
     setIsEditing(true);

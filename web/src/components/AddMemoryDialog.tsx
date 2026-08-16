@@ -20,7 +20,9 @@ import './AddMemoryDialog.css';
 
 interface AddMemoryDialogProps {
   onClose: () => void;
-  onAddMemory: (newMemory: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => Promise<void>;
+  onAddMemory?: (newMemory: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => Promise<void>;
+  onSaveMemory?: (memory: Memory) => Promise<void>;
+  memory?: Memory;
   isFirstMemory?: boolean;
 }
 
@@ -57,19 +59,48 @@ function dateFromFileTimestamp(timestamp: number): string | undefined {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
-export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = false }: AddMemoryDialogProps) {
-  const [step, setStep] = useState<CreateStep>('source');
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
-  const [category, setCategory] = useState<CategoryType>('travel');
-  const [pastSelf, setPastSelf] = useState('');
-  const [presentSelf, setPresentSelf] = useState('');
-  const [tag, setTag] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [locationQuery, setLocationQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
-  const [detailLocation, setDetailLocation] = useState('');
+function dateInputValue(date: string, fallbackYear?: number): string {
+  const match = date.trim().match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  return fallbackYear ? `${fallbackYear}-01-01` : '';
+}
+
+function selectedLocationFromMemory(memory?: Memory): SelectedLocation | null {
+  if (!memory?.location?.name || !Number.isFinite(memory.lat) || !Number.isFinite(memory.lng)) return null;
+  return {
+    name: memory.location.name,
+    lat: memory.lat as number,
+    lng: memory.lng as number,
+    country: memory.country,
+    city: memory.city,
+    district: memory.detailLocation,
+  };
+}
+
+export default function AddMemoryDialog({
+  onClose,
+  onAddMemory,
+  onSaveMemory,
+  memory,
+  isFirstMemory = false,
+}: AddMemoryDialogProps) {
+  const isEditing = Boolean(memory);
+  const initialLocation = selectedLocationFromMemory(memory);
+  const [step, setStep] = useState<CreateStep>(() => isEditing ? 'editor' : 'source');
+  const [title, setTitle] = useState(memory?.title ?? '');
+  const [date, setDate] = useState(() => dateInputValue(memory?.date ?? '', memory?.year));
+  const [category, setCategory] = useState<CategoryType>(memory?.category ?? 'travel');
+  const [pastSelf, setPastSelf] = useState(memory?.pastSelf ?? '');
+  const [presentSelf, setPresentSelf] = useState(memory?.presentSelf ?? '');
+  const [tag, setTag] = useState(memory?.tag ?? '');
+  const [imageUrl, setImageUrl] = useState(memory?.image ?? '');
+  const [galleryImages, setGalleryImages] = useState<string[]>(memory?.gallery ?? []);
+  const [locationQuery, setLocationQuery] = useState(initialLocation ? '' : (memory?.location?.name ?? ''));
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(initialLocation);
+  const [detailLocation, setDetailLocation] = useState(memory?.detailLocation ?? '');
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
   const [showLocationMap, setShowLocationMap] = useState(false);
@@ -81,8 +112,8 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
   const formRef = useRef<HTMLFormElement>(null);
   const dateAutoRef = useRef(false);
   const locationAutoRef = useRef(false);
-  const dateValueRef = useRef('');
-  const locationValueRef = useRef('');
+  const dateValueRef = useRef(date);
+  const locationValueRef = useRef(memory?.location?.name ?? '');
   const photoMetadataRequestRef = useRef(0);
 
   useEffect(() => {
@@ -191,24 +222,54 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
     setSaveState('saving');
     setValidationMessage('');
     try {
-      await onAddMemory({
-        title: title.trim() || '未命名记忆',
-        date: date.replace(/-/g, '.'),
-        year: parsedYear,
-        category,
-        tag: tag.trim() || defaultTag(category),
-        image: imageUrl,
-        gallery: galleryImages.filter((image) => image && image !== imageUrl),
-        pastSelf: pastSelf.trim(),
-        presentSelf: presentSelf.trim(),
-        pinnedBy: 'pin' as PinnedBy,
-        location: locationName.trim() ? { name: locationName.trim(), mx: 50, my: 50 } : undefined,
-        country: selectedLocation?.country?.trim() || undefined,
-        city: selectedLocation?.city?.trim() || undefined,
-        lat: selectedLocation?.lat,
-        lng: selectedLocation?.lng,
-        detailLocation: detailLocation.trim() || undefined,
-      });
+      if (memory) {
+        if (!onSaveMemory) throw new Error('当前记忆无法保存。');
+        const hasUnconfirmedLocationText = !selectedLocation && Boolean(locationQuery.trim());
+        await onSaveMemory({
+          ...memory,
+          title: title.trim() || '未命名记忆',
+          date: date.replace(/-/g, '.'),
+          year: parsedYear,
+          category,
+          tag: tag.trim() || defaultTag(category),
+          image: imageUrl,
+          gallery: galleryImages.filter((image) => image && image !== imageUrl),
+          pastSelf: pastSelf.trim(),
+          presentSelf: presentSelf.trim(),
+          location: locationName.trim()
+            ? {
+                name: locationName.trim(),
+                mx: memory.location?.mx ?? 50,
+                my: memory.location?.my ?? 50,
+              }
+            : undefined,
+          country: selectedLocation?.country?.trim() || (hasUnconfirmedLocationText ? undefined : memory.country),
+          city: selectedLocation?.city?.trim() || (hasUnconfirmedLocationText ? undefined : memory.city),
+          lat: selectedLocation?.lat ?? (hasUnconfirmedLocationText ? undefined : memory.lat),
+          lng: selectedLocation?.lng ?? (hasUnconfirmedLocationText ? undefined : memory.lng),
+          detailLocation: detailLocation.trim() || undefined,
+        });
+      } else {
+        if (!onAddMemory) throw new Error('当前记忆无法创建。');
+        await onAddMemory({
+          title: title.trim() || '未命名记忆',
+          date: date.replace(/-/g, '.'),
+          year: parsedYear,
+          category,
+          tag: tag.trim() || defaultTag(category),
+          image: imageUrl,
+          gallery: galleryImages.filter((image) => image && image !== imageUrl),
+          pastSelf: pastSelf.trim(),
+          presentSelf: presentSelf.trim(),
+          pinnedBy: 'pin' as PinnedBy,
+          location: locationName.trim() ? { name: locationName.trim(), mx: 50, my: 50 } : undefined,
+          country: selectedLocation?.country?.trim() || undefined,
+          city: selectedLocation?.city?.trim() || undefined,
+          lat: selectedLocation?.lat,
+          lng: selectedLocation?.lng,
+          detailLocation: detailLocation.trim() || undefined,
+        });
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -316,17 +377,17 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
   }
 
   return (
-    <section className="memory-create-editor" aria-label="编辑新记忆">
+    <section className="memory-create-editor" aria-label={isEditing ? '修改记忆' : '编辑新记忆'}>
       <header className="memory-editor-header">
-        <p>足迹 / {selectedLocation?.country || '未标注地区'}{selectedLocation?.city ? ` / ${selectedLocation.city}` : ''}{locationName ? ` / ${locationName}` : ''}</p>
+        <p>足迹 / {selectedLocation?.country || memory?.country || '未标注地区'}{selectedLocation?.city || memory?.city ? ` / ${selectedLocation?.city || memory?.city}` : ''}{locationName ? ` / ${locationName}` : ''}</p>
         <div className="memory-editor-header-actions">
-          <button type="button" onClick={() => setStep('source')} className="memory-editor-back">
+          <button type="button" onClick={isEditing ? onClose : () => setStep('source')} className="memory-editor-back">
             <ArrowLeft size={16} aria-hidden="true" />
-            返回
+            {isEditing ? '返回地图' : '返回'}
           </button>
           <button type="submit" form="new-memory-editor" className="memory-editor-complete" disabled={saveState === 'saving'}>
             {saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} aria-hidden="true" />}
-            完成
+            {isEditing ? '保存修改' : '完成'}
           </button>
         </div>
       </header>
@@ -335,7 +396,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
         <section className="memory-editor-photo-column" aria-label="记忆照片">
           <div className="memory-editor-photo-frame">
             {imageUrl ? (
-            <img src={imageUrl} alt="新记忆照片预览" referrerPolicy="no-referrer" className="memory-editor-photo-image" />
+            <img src={imageUrl} alt={isEditing ? '记忆照片预览' : '新记忆照片预览'} referrerPolicy="no-referrer" className="memory-editor-photo-image" />
             ) : (
               <button type="button" className="memory-editor-photo-empty" onClick={() => coverInputRef.current?.click()}>
                 <ImagePlus size={32} aria-hidden="true" />
@@ -472,7 +533,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
           </>}
 
           <p className={`memory-editor-save-note ${saveState === 'error' ? 'is-error' : ''}`}>
-            {saveState === 'saving' ? '正在加密并保存…' : saveState === 'error' ? validationMessage : '草稿仅保留在当前设备 · Ctrl + Enter 完成'}
+            {saveState === 'saving' ? '正在加密并保存…' : saveState === 'error' ? validationMessage : isEditing ? '修改会在当前设备加密保存 · Ctrl + Enter 完成' : '草稿仅保留在当前设备 · Ctrl + Enter 完成'}
           </p>
         </article>
 

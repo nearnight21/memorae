@@ -121,6 +121,7 @@ export default function App({
   const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [firstMemoryFeedback, setFirstMemoryFeedback] = useState<Memory | null>(null);
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
   const [showRecall, setShowRecall] = useState(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
   // Formal product entry is the footprint map. Legacy view state remains in the
@@ -817,6 +818,10 @@ export default function App({
             selectedMemory={selectedMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
+            onEditMemory={(memory) => {
+              setSelectedMemory(null);
+              setEditingMemory(memory);
+            }}
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
             onLoadOriginalPhoto={handleLoadOriginalPhoto}
@@ -855,11 +860,16 @@ export default function App({
         )}
 
         {/* Pin New Memory Form Interface */}
-        {showAddMemory && (
+        {(showAddMemory || editingMemory) && (
           <AddMemoryDialog
-            onClose={() => setShowAddMemory(false)}
+            onClose={() => {
+              setShowAddMemory(false);
+              setEditingMemory(null);
+            }}
             onAddMemory={handleAddMemory}
-            isFirstMemory={memories.length === 0}
+            onSaveMemory={handleSaveMemory}
+            memory={editingMemory ?? undefined}
+            isFirstMemory={!editingMemory && memories.length === 0}
           />
         )}
 
