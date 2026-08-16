@@ -1239,16 +1239,14 @@
 }
 
 .map-first-memory-feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 22px;
-  padding: 18px 20px;
+  display: block;
+  padding: 22px 24px 20px;
 }
 
 .map-first-memory-feedback h2 {
   font-size: 18px;
   line-height: 27px;
+  word-break: keep-all;
 }
 
 .map-first-memory-feedback p {
@@ -1259,7 +1257,28 @@
 
 .map-first-memory-feedback-actions {
   flex-wrap: nowrap;
-  margin-top: 0;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.map-first-memory-feedback-actions .map-first-memory-primary,
+.map-first-memory-feedback-actions .map-first-memory-secondary {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.map-first-memory-feedback-actions .map-first-memory-primary {
+  width: 112px;
+}
+
+.map-first-memory-feedback-actions .map-first-memory-secondary {
+  width: 88px;
+  border-color: transparent;
 }
 
 .map-first-memory-primary,
@@ -1306,6 +1325,6 @@
   }
 
   .map-first-memory-feedback-actions {
-    margin-top: 16px;
+    margin-top: 18px;
   }
 }

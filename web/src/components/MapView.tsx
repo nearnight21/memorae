@@ -808,8 +808,8 @@ export default function MapView({
             <p>时间轴已定位到 {firstMemoryFeedback.year} 年；现在它会和地图一起保存下来。</p>
           </div>
           <div className="map-first-memory-feedback-actions">
-            <button type="button" onClick={() => { onDismissFirstMemoryFeedback?.(); onSelectMemory(firstMemoryFeedback); }} className="map-first-memory-primary">查看这段记忆</button>
             <button type="button" onClick={() => { onDismissFirstMemoryFeedback?.(); onAddMemory?.(); }} className="map-first-memory-secondary">继续添加</button>
+            <button type="button" onClick={() => { onDismissFirstMemoryFeedback?.(); onSelectMemory(firstMemoryFeedback); }} className="map-first-memory-primary">查看记忆</button>
           </div>
         </motion.section>
       )}
