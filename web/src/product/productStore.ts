@@ -40,6 +40,7 @@ function toDisplayMemory(memory: MemoryV2, photoUrls: string[]): Memory {
     tag: memory.tag,
     image: photoUrls[0] ?? '',
     gallery: photoUrls.slice(1),
+    photoIds: memory.photos.map((photo) => photo.id),
     pastSelf: memory.pastSelf,
     presentSelf: memory.presentSelf,
     pinnedBy: memory.pinnedBy,
@@ -55,6 +56,26 @@ function toDisplayMemory(memory: MemoryV2, photoUrls: string[]): Memory {
     lng: memory.location?.lng,
     detailLocation: memory.location?.detail,
   };
+}
+
+/**
+ * Original files stay encrypted until a reader explicitly asks for one. The
+ * normal map view continues to use the preview variant returned by
+ * loadProductMemories.
+ */
+export async function loadProductOriginalPhoto(session: VaultSessionV1, photoId: string): Promise<string> {
+  const original = (await listEncryptedPhotos()).find((photo) => (
+    photo.id === photoId && photo.kind === 'original'
+  ));
+  if (!original) throw new Error('原图不可用。');
+  const decrypted = await decryptPhoto(session, original);
+  try {
+    const url = URL.createObjectURL(new Blob([decrypted.bytes], { type: decrypted.metadata.mimeType }));
+    registerDecryptedPhoto(url, photoId, decrypted.metadata.mimeType);
+    return url;
+  } finally {
+    decrypted.bytes.fill(0);
+  }
 }
 
 async function decryptDisplayPhoto(

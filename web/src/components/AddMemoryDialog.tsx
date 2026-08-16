@@ -23,7 +23,7 @@ interface AddMemoryDialogProps {
   isFirstMemory?: boolean;
 }
 
-type CreateStep = 'source' | 'editor';
+type CreateStep = 'source' | 'photo-review' | 'editor';
 type SaveState = 'idle' | 'saving' | 'error';
 
 const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
@@ -126,13 +126,15 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
     }
   };
 
-  const selectCover = async (file: File | undefined, openEditor = false) => {
+  const selectCover = async (file: File | undefined, nextStep: Extract<CreateStep, 'photo-review' | 'editor'> = 'editor') => {
     if (!file) return;
     setIsCoverUploading(true);
     try {
       setImageUrl(await selectLocalPhoto(file));
-      if (openEditor) setStep('editor');
-      void applyPhotoMetadata(file);
+      // The first-memory review must show the settled EXIF values, not values
+      // still being filled asynchronously underneath the next screen.
+      await applyPhotoMetadata(file);
+      setStep(nextStep);
     } catch (error) {
       console.error(error);
       window.alert(error instanceof Error ? error.message : '照片处理失败，请重试。');
@@ -241,8 +243,8 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
               {isCoverUploading ? <LoaderCircle size={16} className="animate-spin" /> : <Upload size={16} />}
               {isFirstMemory ? '选择照片' : '导入本地照片'}
             </button>
-            <button type="button" className="memory-create-secondary" onClick={() => setStep('editor')}>
-              {isFirstMemory ? '手动补充' : '手动添加'}
+            <button type="button" className="memory-create-secondary" onClick={isFirstMemory ? onClose : () => setStep('editor')}>
+              {isFirstMemory ? '稍后再说' : '手动添加'}
             </button>
           </div>
           <p className="memory-create-source-privacy">照片与位置仅在设备内解密处理；离开设备时保持加密。</p>
@@ -252,10 +254,49 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
             accept="image/*"
             className="memory-create-file-input"
             onChange={(event) => {
-              void selectCover(event.target.files?.[0], true);
+              void selectCover(event.target.files?.[0], isFirstMemory ? 'photo-review' : 'editor');
               event.target.value = '';
             }}
           />
+        </div>
+      </section>
+    );
+  }
+
+  if (step === 'photo-review') {
+    return (
+      <section className="memory-photo-review" aria-label="确认照片拍摄信息">
+        <div className="memory-photo-review-card">
+          <button type="button" onClick={() => setStep('source')} className="memory-create-dismiss" aria-label="重新选择照片">
+            <X size={18} aria-hidden="true" />
+          </button>
+          <h1>已读到这张照片的拍摄信息</h1>
+          <p>如果照片保留了拍摄信息，我们会先替你填写。确认后才会写入地图。</p>
+
+          <dl className="memory-photo-review-readings">
+            <div>
+              <dt><Check size={16} aria-hidden="true" />拍摄时间</dt>
+              <dd>{date || '未识别，可在下一步填写'}</dd>
+            </div>
+            <div>
+              <dt><Check size={16} aria-hidden="true" />拍摄地点</dt>
+              <dd>{locationName || '未识别，可在地图上选择'}</dd>
+            </div>
+          </dl>
+
+          <div className="memory-photo-review-preview">
+            {imageUrl && <img src={imageUrl} alt="已选择的照片" referrerPolicy="no-referrer" />}
+            <div>
+              <span>已选择 1 张照片</span>
+              <strong>你可以在下一步确认或修改时间和地点</strong>
+            </div>
+          </div>
+
+          <div className="memory-photo-review-actions">
+            <button type="button" className="memory-create-primary" onClick={() => setStep('editor')}>确认后继续</button>
+            <button type="button" className="memory-create-secondary" onClick={() => setShowLocationMap(true)}>地点不对？在地图上选择</button>
+          </div>
+          <small>自动识别仅用于预填，不会直接创建记忆。</small>
         </div>
       </section>
     );
@@ -277,7 +318,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
         </div>
       </header>
 
-      <form id="new-memory-editor" ref={formRef} className="memory-editor-layout" onSubmit={(event) => { void submitMemory(event); }}>
+      <form id="new-memory-editor" ref={formRef} className={`memory-editor-layout${isFirstMemory ? ' is-first-memory' : ''}`} onSubmit={(event) => { void submitMemory(event); }}>
         <section className="memory-editor-photo-column" aria-label="记忆照片">
           <div className="memory-editor-photo-frame">
             {imageUrl ? (
@@ -324,7 +365,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
         </section>
 
         <article className="memory-editor-copy-column">
-          <label className="memory-editor-title-label" htmlFor="new-memory-title">记忆标题</label>
+          <label className="memory-editor-title-label" htmlFor="new-memory-title">{isFirstMemory ? '给这段记忆起个名字（可选）' : '记忆标题'}</label>
           <input
             id="new-memory-title"
             className="memory-editor-title"
@@ -372,36 +413,40 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
           </div>
           {locationName.trim() && !isLocationConfirmed && <p className="memory-editor-location-status">尚未定位到地图</p>}
 
-          <div className="memory-editor-themes" aria-label="主题">
-            {CATEGORY_OPTIONS.map((option) => (
-              <button key={option.value} type="button" className={category === option.value ? 'is-selected' : ''} onClick={() => setCategory(option.value)} aria-pressed={category === option.value}>
-                {option.label}
-              </button>
-            ))}
-          </div>
+          {isFirstMemory && <p className="memory-editor-first-memory-note">先确认照片、时间和地点；其余内容都可以以后再写。</p>}
+
+          {!isFirstMemory && <div className="memory-editor-themes" aria-label="主题">
+              {CATEGORY_OPTIONS.map((option) => (
+                <button key={option.value} type="button" className={category === option.value ? 'is-selected' : ''} onClick={() => setCategory(option.value)} aria-pressed={category === option.value}>
+                  {option.label}
+                </button>
+              ))}
+            </div>}
 
           <div className="memory-editor-divider" />
 
-          <label className="memory-editor-reflection-label" htmlFor="new-memory-past">昔 当时的我</label>
+          <label className="memory-editor-reflection-label" htmlFor="new-memory-past">{isFirstMemory ? '写下你还记得的事（可选）' : '昔 当时的我'}</label>
           <textarea id="new-memory-past" className="memory-editor-reflection is-primary" value={pastSelf} onChange={(event) => setPastSelf(event.target.value)} placeholder="记下当时发生的事、心情和你看见的风景。" />
 
-          <label className="memory-editor-reflection-label" htmlFor="new-memory-present">今 现在的我</label>
-          <textarea id="new-memory-present" className="memory-editor-reflection" value={presentSelf} onChange={(event) => setPresentSelf(event.target.value)} placeholder="此刻回望，这段经历留下了什么？" />
+          {!isFirstMemory && <>
+            <label className="memory-editor-reflection-label" htmlFor="new-memory-present">今 现在的我</label>
+            <textarea id="new-memory-present" className="memory-editor-reflection" value={presentSelf} onChange={(event) => setPresentSelf(event.target.value)} placeholder="此刻回望，这段经历留下了什么？" />
 
-          <details className="memory-editor-details">
-            <summary>补充地点与标签</summary>
-            <div className="memory-editor-detail-fields">
-              <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="标签（可选）" aria-label="标签" />
-              <input value={detailLocation} onChange={(event) => setDetailLocation(event.target.value)} placeholder="地点备注（可选）" aria-label="地点备注" />
-            </div>
-          </details>
+            <details className="memory-editor-details">
+              <summary>补充地点与标签</summary>
+              <div className="memory-editor-detail-fields">
+                <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="标签（可选）" aria-label="标签" />
+                <input value={detailLocation} onChange={(event) => setDetailLocation(event.target.value)} placeholder="地点备注（可选）" aria-label="地点备注" />
+              </div>
+            </details>
+          </>}
 
           <p className={`memory-editor-save-note ${saveState === 'error' ? 'is-error' : ''}`}>
             {saveState === 'saving' ? '正在加密并保存…' : saveState === 'error' ? validationMessage : '草稿仅保留在当前设备 · Ctrl + Enter 完成'}
           </p>
         </article>
 
-        <input ref={coverInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectCover(event.target.files?.[0]); event.target.value = ''; }} />
+        <input ref={coverInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectCover(event.target.files?.[0], 'editor'); event.target.value = ''; }} />
         <input ref={galleryInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectGalleryPhoto(event.target.files?.[0]); event.target.value = ''; }} />
       </form>
     </section>

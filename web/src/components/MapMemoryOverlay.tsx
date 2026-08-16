@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, Trash2, X } from 'lucide-react';
+import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, LoaderCircle, RefreshCw, Trash2, X } from 'lucide-react';
 import { CategoryType, Memory } from '../types';
 import LocationPicker from './LocationPicker';
 
@@ -16,6 +16,7 @@ interface MapMemoryOverlayProps {
   onClose: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
+  onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
   readerMode?: 'reflection' | 'journal';
 }
 
@@ -41,6 +42,7 @@ export default function MapMemoryOverlay({
   onClose,
   onSaveMemory,
   onDeleteMemory,
+  onLoadOriginalPhoto,
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
   const photos = useMemo(
@@ -57,6 +59,9 @@ export default function MapMemoryOverlay({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isOriginalOpen, setIsOriginalOpen] = useState(false);
+  const [originalState, setOriginalState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [originalUrl, setOriginalUrl] = useState('');
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -66,6 +71,9 @@ export default function MapMemoryOverlay({
     setSaveStatus('idle');
     setDeleteArmed(false);
     setIsDeleting(false);
+    setIsOriginalOpen(false);
+    setOriginalState('loading');
+    setOriginalUrl('');
   }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
@@ -165,6 +173,38 @@ export default function MapMemoryOverlay({
     }
   };
 
+  const loadOriginal = () => {
+    const sourceIndex = photos.indexOf(currentPhoto);
+    const photoId = sourceIndex >= 0 ? memory.photoIds?.[sourceIndex] : undefined;
+    const probeOriginal = (source: string) => {
+      const probe = new Image();
+      probe.onload = () => setOriginalState('ready');
+      probe.onerror = () => setOriginalState('unavailable');
+      probe.src = source;
+    };
+    if (photoId && onLoadOriginalPhoto) {
+      setOriginalState('loading');
+      setOriginalUrl('');
+      void onLoadOriginalPhoto(photoId).then((source) => {
+        setOriginalUrl(source);
+        probeOriginal(source);
+      }).catch(() => setOriginalState('unavailable'));
+      return;
+    }
+    if (!currentPhoto) {
+      setOriginalState('unavailable');
+      return;
+    }
+    setOriginalState('loading');
+    setOriginalUrl(currentPhoto);
+    probeOriginal(currentPhoto);
+  };
+
+  const openOriginal = () => {
+    setIsOriginalOpen(true);
+    loadOriginal();
+  };
+
   return (
     <motion.div
       id="map-memory-overlay"
@@ -233,6 +273,14 @@ export default function MapMemoryOverlay({
             className="map-memory-photo-mask h-full w-full object-cover"
           />
         </AnimatePresence>
+
+        {currentPhoto && <button
+          type="button"
+          onClick={openOriginal}
+          className="pointer-events-auto absolute inset-0 z-10 cursor-zoom-in"
+          aria-label="查看原图"
+          title="查看原图"
+        />}
 
         {availablePhotos.length > 1 && (
           <div className="map-photo-toolbar pointer-events-auto absolute bottom-[7%] left-1/2 z-20 flex -translate-x-1/2 items-center gap-5">
@@ -419,37 +467,15 @@ export default function MapMemoryOverlay({
 
         {onDeleteMemory && (
           <div className="mt-5 border-t border-[color:var(--color-border-subtle)] pt-4 text-[11px]">
-            {!deleteArmed ? (
-              <button
-                type="button"
-                aria-label="删除记忆"
-                onClick={() => setDeleteArmed(true)}
-                className="map-ui-save-status inline-flex items-center gap-2 transition-colors hover:text-[var(--color-danger)] cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" strokeWidth={1.5} />
-                删除记忆
-              </button>
-            ) : (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="map-ui-save-status">确定删除这段记忆？</span>
-                <button
-                  type="button"
-                  onClick={deleteMemory}
-                  disabled={isDeleting}
-                  className="map-ui-danger rounded-full px-3 py-1.5 text-[11px] font-semibold transition-opacity disabled:opacity-50 cursor-pointer"
-                >
-                  {isDeleting ? '删除中…' : '确认删除'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteArmed(false)}
-                  disabled={isDeleting}
-                  className="map-ui-save-status transition-colors hover:text-[var(--color-text-primary)] disabled:opacity-50 cursor-pointer"
-                >
-                  取消
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              aria-label="删除记忆"
+              onClick={() => setDeleteArmed(true)}
+              className="map-ui-save-status inline-flex items-center gap-2 transition-colors hover:text-[var(--color-danger)] cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+              删除记忆
+            </button>
           </div>
         )}
       </motion.article>
@@ -464,6 +490,58 @@ export default function MapMemoryOverlay({
         <X className="h-4.5 w-4.5" strokeWidth={1.5} />
         收起记忆
       </button>
+
+      <AnimatePresence>
+        {deleteArmed && <motion.div
+          className="pointer-events-auto absolute inset-0 z-[80] grid place-items-center bg-[rgba(10,13,13,0.58)] p-5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isDeleting) setDeleteArmed(false);
+          }}
+        >
+          <motion.section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-memory-title"
+            className="w-full max-w-[540px] rounded-2xl bg-[var(--color-bg-surface)] px-9 py-8 shadow-[0_8px_24px_rgba(61,54,44,0.24)]"
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+          >
+            <h2 id="delete-memory-title" className="text-[28px] font-bold leading-9 text-[var(--color-text-primary)]">删除这段记忆？</h2>
+            <p className="mt-4 text-[16px] leading-6 text-[var(--color-text-secondary)]">将移除照片索引、位置和加密缩略图。原图不会进入回收站。</p>
+            <div className="mt-8 flex justify-end gap-3">
+              <button type="button" onClick={() => setDeleteArmed(false)} disabled={isDeleting} className="h-10 rounded-[10px] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] px-4 text-[15px] font-bold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-bg-subtle)] disabled:opacity-50 cursor-pointer">取消</button>
+              <button type="button" onClick={() => void deleteMemory()} disabled={isDeleting} className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[var(--color-danger)] px-4 text-[15px] font-bold text-[var(--color-bg-surface)] transition-colors hover:brightness-95 disabled:opacity-50 cursor-pointer">
+                {isDeleting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {isDeleting ? '删除中…' : '删除记忆'}
+              </button>
+            </div>
+          </motion.section>
+        </motion.div>}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isOriginalOpen && <motion.div
+          className="pointer-events-auto absolute inset-0 z-[90] bg-[#090a09] text-[var(--color-bg-surface)]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <p className="absolute left-12 top-8 z-10 text-[13px]">{memory.title} / {locationText || '未标注地点'}</p>
+          <p className="absolute left-1/2 top-8 z-10 -translate-x-1/2 text-[13px]">{originalState === 'loading' ? '正在加载原图' : originalState === 'unavailable' ? '原图不可用' : '原图'}</p>
+          <button type="button" onClick={() => setIsOriginalOpen(false)} aria-label="关闭原图" className="absolute right-7 top-6 z-10 grid h-11 w-11 place-items-center rounded-full bg-[#1f211f] text-[var(--color-bg-surface)] cursor-pointer"><X className="h-5 w-5" /></button>
+
+          {originalState === 'ready' && <img src={originalUrl} alt={memory.title} referrerPolicy="no-referrer" onError={() => setOriginalState('unavailable')} className="h-full w-full object-contain" />}
+          {originalState !== 'ready' && <section className="absolute left-1/2 top-1/2 w-[min(620px,calc(100%-40px))] -translate-x-1/2 -translate-y-1/2 bg-[rgba(10,13,13,0.84)] px-14 py-10">
+            <h2 className="text-[26px] font-bold">{originalState === 'loading' ? '正在加载原图' : '原图暂时不可用'}</h2>
+            <p className="mt-4 text-[15px] leading-7 text-[#d6d6cc]">{originalState === 'loading' ? '原图较大，正在从本地安全存储读取。' : '预览仍可查看。原图读取失败，请重试或继续使用当前清晰度。'}</p>
+            {originalState === 'loading' ? <div className="mt-7 h-2 overflow-hidden bg-[#30342f]"><div className="h-full w-2/3 animate-pulse bg-[var(--color-accent-fill)]" /></div> : <button type="button" onClick={loadOriginal} className="mt-6 inline-flex items-center gap-2 text-[15px] font-bold text-[var(--color-accent-fill)] cursor-pointer"><RefreshCw className="h-4 w-4" />重试加载原图</button>}
+          </section>}
+        </motion.div>}
+      </AnimatePresence>
     </motion.div>
   );
 }

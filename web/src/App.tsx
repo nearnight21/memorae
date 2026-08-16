@@ -25,7 +25,7 @@ import {
 // Data & Types
 import { Memory, type MemoryFilters } from './types';
 import { type VaultSessionV1 } from './crypto';
-import { deleteProductMemory, loadProductMemories, saveProductMemory } from './product/productStore';
+import { deleteProductMemory, loadProductMemories, loadProductOriginalPhoto, saveProductMemory } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
 import { geocodeAddress, reverseGeocodeCoordinates } from './lib/geo';
@@ -338,6 +338,8 @@ export default function App({
     await enqueueSilentSync();
     handleUpdateMemory(updatedMem);
   };
+
+  const handleLoadOriginalPhoto = (photoId: string) => loadProductOriginalPhoto(session, photoId);
 
   const handleDeleteMemory = async (id: string) => {
     await deleteProductMemory(id);
@@ -817,6 +819,7 @@ export default function App({
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
+            onLoadOriginalPhoto={handleLoadOriginalPhoto}
             onAddMemory={() => setShowAddMemory(true)}
             isFirstMemory={memories.length === 0}
             firstMemoryFeedback={firstMemoryFeedback}

@@ -39,6 +39,7 @@ interface MapViewProps {
   onCloseMemory: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
+  onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
   onAddMemory?: () => void;
   isFirstMemory?: boolean;
   firstMemoryFeedback?: Memory | null;
@@ -190,6 +191,7 @@ export default function MapView({
   onCloseMemory,
   onSaveMemory,
   onDeleteMemory,
+  onLoadOriginalPhoto,
   onAddMemory,
   isFirstMemory = false,
   firstMemoryFeedback,
@@ -325,6 +327,22 @@ export default function MapView({
     () => Array.from(new Set(enriched.map(countryOf).filter(Boolean))).sort(),
     [enriched]
   );
+
+  // These are map destinations, deliberately separate from the region filter.
+  // Once the movement settles, the viewport resolver owns currentRegion.
+  const availableCityLocations = useMemo(() => {
+    const entries = new Map<string, { country: string; city: string }>();
+    for (const memory of enriched) {
+      const country = countryOf(memory);
+      const city = cityOf(memory);
+      if (country && city) entries.set(`${country}/${city}`, { country, city });
+    }
+    return Array.from(entries.values()).sort((left, right) => (
+      left.country === right.country
+        ? left.city.localeCompare(right.city, 'zh-CN')
+        : left.country.localeCompare(right.country, 'zh-CN')
+    ));
+  }, [enriched]);
 
   // App owns the canonical result. Prototype callers without the controlled
   // result still get the same filtering semantics locally.
@@ -740,6 +758,18 @@ export default function MapView({
     mapRef.current?.flyTo([35, 100], CITY_ZOOM - 1, { duration: 0.8 });
   };
 
+  const navigateToRegion = async (country: string, city?: string) => {
+    const map = mapRef.current;
+    if (!map) return;
+    setFilterMenuOpen(false);
+    const regionMemories = enriched.filter((memory) => (
+      countryOf(memory) === country && (!city || cityOf(memory) === city)
+    ));
+    const coordinates = averageMemoryCoordinates(regionMemories) || await resolvePlace(country, city);
+    if (!coordinates) return;
+    map.flyTo(coordinates, city ? POINT_ZOOM : CITY_ZOOM, { duration: 0.8 });
+  };
+
   return (
     <div className="map-experience-root h-screen w-screen relative overflow-hidden">
       {/* 瓦片首屏占位：先给用户稳定的地图轮廓，真实瓦片就绪后淡出。 */}
@@ -822,6 +852,12 @@ export default function MapView({
           <AnimatePresence>
             {filterMenuOpen && <motion.div initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -4, opacity: 0 }} className="map-ui-popover absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border p-3 backdrop-blur-md">
               <div className="mb-2 flex items-center justify-between"><span className="font-editorial-serif text-sm">筛选足迹</span><button type="button" onClick={() => updateFilters({ dateRange: null, regions: [], themes: [] })} className="map-ui-muted map-ui-accent-hover text-[10px] cursor-pointer">清除全部</button></div>
+              <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">定位地图</p>
+              <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+                <button type="button" onClick={backToWorld} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">全部足迹</button>
+                {availableCountries.map((country) => <button key={`navigate-${country}`} type="button" onClick={() => { void navigateToRegion(country); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{country}</button>)}
+                {availableCityLocations.map(({ country, city }) => <button key={`navigate-${country}-${city}`} type="button" onClick={() => { void navigateToRegion(country, city); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{city}</button>)}
+              </div>
               <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">地区</p>
               <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
                 {availableCountries.map((country) => { const active = activeFilters.regions.includes(country); return <button key={country} type="button" onClick={() => updateFilters({ regions: active ? activeFilters.regions.filter((value) => value !== country) : [...activeFilters.regions, country] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{country}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
@@ -941,6 +977,7 @@ export default function MapView({
             onClose={onCloseMemory}
             onSaveMemory={onSaveMemory}
             onDeleteMemory={onDeleteMemory}
+            onLoadOriginalPhoto={onLoadOriginalPhoto}
             readerMode={readerMode}
           />
         )}

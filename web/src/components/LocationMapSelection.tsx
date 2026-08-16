@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Check, LoaderCircle, X } from 'lucide-react';
-import { reverseGeocodeCoordinates, type GeoResult } from '../lib/geo';
+import { Check, LoaderCircle, MapPin, Search, X } from 'lucide-react';
+import { reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
 
 interface Coordinates {
   lat: number;
@@ -46,6 +46,10 @@ export default function LocationMapSelection({
   const [selection, setSelection] = useState<Coordinates | null>(initialCoordinates);
   const [resolvedPlace, setResolvedPlace] = useState<GeoResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaceCandidate[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -94,6 +98,34 @@ export default function LocationMapSelection({
   }, [selection]);
 
   useEffect(() => {
+    if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    searchTimerRef.current = window.setTimeout(() => {
+      setIsSearching(true);
+      void searchPlaces(query).then((results) => {
+        setSearchResults(results);
+        setIsSearching(false);
+      });
+    }, 320);
+    return () => {
+      if (searchTimerRef.current !== null) window.clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
+
+  const selectSearchResult = (result: PlaceCandidate) => {
+    const coordinates = { lat: result.lat, lng: result.lng };
+    setSelection(coordinates);
+    setSearchQuery(result.shortName);
+    setSearchResults([]);
+    mapRef.current?.flyTo([result.lat, result.lng], DETAIL_ZOOM, { duration: 0.55 });
+  };
+
+  useEffect(() => {
     if (!selection) {
       setResolvedPlace(null);
       setIsResolving(false);
@@ -129,7 +161,31 @@ export default function LocationMapSelection({
     <section className="memory-location-selection" aria-label="在地图上选择地点">
       <div ref={containerRef} className="memory-location-selection-map" />
       <header className="memory-location-selection-header">
-        <p>点击地图，标记这段记忆发生的位置</p>
+        <div className="memory-location-selection-guidance">
+          <p>点击地图，标记这段记忆发生的位置</p>
+          <label className="memory-location-selection-search">
+            <Search size={15} aria-hidden="true" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索城市、地点或大致区域"
+              aria-label="搜索城市、地点或大致区域"
+            />
+            {isSearching && <LoaderCircle size={14} className="animate-spin" aria-label="正在搜索" />}
+          </label>
+          {searchResults.length > 0 && (
+            <ul className="memory-location-selection-search-results" aria-label="地点搜索结果">
+              {searchResults.map((result) => (
+                <li key={`${result.lat}-${result.lng}`}>
+                  <button type="button" onClick={() => selectSearchResult(result)}>
+                    <MapPin size={14} aria-hidden="true" />
+                    <span><strong>{result.shortName}</strong><small>{result.displayName}</small></span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button type="button" onClick={onCancel} className="memory-location-selection-cancel">
           <X size={16} aria-hidden="true" />
           取消
