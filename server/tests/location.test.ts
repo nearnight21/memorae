@@ -27,6 +27,9 @@ test('高德服务保持输入提示坐标，并将反查和 GPS 转换归一为
         return Response.json({
           status: '1',
           tips: [{
+            name: '东钱湖',
+            location: [],
+          }, {
             id: 'B0FF-test',
             name: '东钱湖',
             location: '121.625,29.760',

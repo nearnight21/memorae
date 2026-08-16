@@ -108,10 +108,11 @@ export class AmapWebLocationService implements LocationService {
         adcode?: string;
         district?: string;
       }>;
-    }>('https://restapi.amap.com/v5/assistant/inputtips', params);
+    }>('https://restapi.amap.com/v3/assistant/inputtips', params);
 
     return (response.tips ?? []).flatMap((tip) => {
-      if (!tip.location || !tip.name) return [];
+      // AMap uses [] rather than omitting location for broad, non-POI suggestions.
+      if (typeof tip.location !== 'string' || !tip.location.trim() || !tip.name) return [];
       const coordinates = requireCoordinates(tip.location);
       const district = stringValue(tip.district);
       const address = stringValue(tip.address);
