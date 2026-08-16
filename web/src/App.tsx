@@ -77,13 +77,13 @@ export default function App({
       let changed = false;
       for (let index = 0; index < next.length; index += 1) {
         const memory = next[index];
-        if (memory.country?.trim() || !memory.location?.name?.trim()) continue;
+        if (memory.city?.trim() || !memory.location?.name?.trim()) continue;
         const geo = await geocodeAddress(memory.location.name);
-        if (cancelled || !geo?.country) continue;
+        if (cancelled || !geo?.city) continue;
         next[index] = {
           ...memory,
-          country: geo.country,
-          city: memory.city?.trim() ? memory.city : geo.city,
+          country: memory.country?.trim() || geo.country,
+          city: geo.city,
           lat: memory.lat ?? geo.lat,
           lng: memory.lng ?? geo.lng,
         };

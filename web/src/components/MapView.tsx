@@ -46,8 +46,9 @@ interface PanelState {
 }
 
 const countryOf = (m: Memory): string => m.country?.trim() || '';
-// 城市为空时回退用「地点」名（如 "大理古城"），保证只填地点的记忆也能上图
-const cityOf = (m: Memory): string => m.city?.trim() || m.location?.name?.trim() || '';
+// 城市气泡只能使用行政城市字段；地点名可能是街道或景点，不能冒充城市标签。
+const cityOf = (m: Memory): string => m.city?.trim() || '';
+const cityGroupOf = (m: Memory): string => cityOf(m) || '未标注城市';
 
 const THEME_OPTIONS = [
   { value: 'travel' as const, label: '旅行' },
@@ -253,10 +254,16 @@ export default function MapView({
       let changed = false;
       for (let i = 0; i < out.length; i++) {
         const m = out[i];
-        if (!m.country?.trim() && m.location?.name?.trim()) {
+        if (!m.city?.trim() && m.location?.name?.trim()) {
           const geo = await geocodeAddress(m.location.name);
-          if (geo?.country && !cancelled) {
-            out[i] = { ...m, country: geo.country, city: m.city?.trim() ? m.city : geo.city };
+          if (geo?.city && !cancelled) {
+            out[i] = {
+              ...m,
+              country: m.country?.trim() || geo.country,
+              city: geo.city,
+              lat: m.lat ?? geo.lat,
+              lng: m.lng ?? geo.lng,
+            };
             changed = true;
           }
         }
@@ -538,13 +545,19 @@ export default function MapView({
         // 给气泡图标预留边缘空间，避免图片中心在视口边缘时被误判为不可见。
         const bounds = map.getBounds().pad(0.2);
         const chinaMemories = filtered.filter((memory) => isChinaCountry(countryOf(memory)));
-        const cities = groupBy(chinaMemories, cityOf);
+        const cities = groupBy(chinaMemories, cityGroupOf);
         const routePoints: Array<{ coords: L.LatLngExpression; order: number }> = [];
         const resolvedCities = await mapWithConcurrency(
           Object.entries(cities),
           async ([city, list]) => {
             const country = countryOf(list[0]);
-            return { city, list, country, coords: await resolvePlace(country, city) };
+            const cityForCoordinates = city === '未标注城市' ? undefined : city;
+            return {
+              city,
+              list,
+              country,
+              coords: averageMemoryCoordinates(list) || await resolvePlace(country, cityForCoordinates),
+            };
           },
         );
         for (const { city, list, country, coords } of resolvedCities) {

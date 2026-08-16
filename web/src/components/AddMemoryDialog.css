@@ -571,6 +571,7 @@
   position: fixed;
   inset: 0;
   z-index: 1300;
+  isolation: isolate;
   overflow: hidden;
   background: var(--color-bg-subtle, #e5dfd4);
   color: var(--color-text-primary, #282623);
@@ -579,6 +580,7 @@
 .memory-location-selection-map {
   position: absolute;
   inset: 0;
+  z-index: 0;
 }
 
 .memory-location-selection-header {
@@ -586,7 +588,7 @@
   top: 24px;
   right: 32px;
   left: 32px;
-  z-index: 3;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -636,7 +638,7 @@
   right: 32px;
   bottom: 28px;
   left: 32px;
-  z-index: 3;
+  z-index: 10;
   display: flex;
   width: min(680px, calc(100% - 64px));
   box-sizing: border-box;

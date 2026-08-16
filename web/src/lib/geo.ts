@@ -117,13 +117,28 @@ export interface GeoResult {
   label?: string;
 }
 
+type GeoAddress = {
+  country?: string;
+  city?: string;
+  town?: string;
+  municipality?: string;
+  village?: string;
+  county?: string;
+  state?: string;
+};
+
+// 城市气泡需要行政层级名称。街道/景点只留在 label，不作为 city 的回退。
+function administrativeCity(address: GeoAddress): string | undefined {
+  return address.city || address.town || address.municipality || address.state || address.county || address.village;
+}
+
 /**
  * 地理编码任意地点名（如 "大理古城"），返回坐标及其所属国家/城市。
  * 用于：只填了「地点」没填「国家/城市」的记忆，自动归组到地图气泡。
  * accept-language=zh 保证返回中文地名，与用户手写的国家/城市分组键一致。
  */
 export async function geocodeAddress(query: string): Promise<GeoResult | null> {
-  const ck = `geocode_${query}`;
+  const ck = `geocode_v2_${query}`;
   try {
     const cached = localStorage.getItem(ck);
     if (cached) return JSON.parse(cached) as GeoResult;
@@ -154,7 +169,7 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
         lat: parseFloat(r.lat),
         lng: parseFloat(r.lon),
         country: addr.country,
-        city: addr.city || addr.town || addr.village || addr.county || addr.state,
+        city: administrativeCity(addr),
       };
       try {
         localStorage.setItem(ck, JSON.stringify(result));
@@ -175,7 +190,7 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
  */
 export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const ck = `reverse_geocode_${lat.toFixed(5)}_${lng.toFixed(5)}`;
+  const ck = `reverse_geocode_v2_${lat.toFixed(5)}_${lng.toFixed(5)}`;
   try {
     const cached = localStorage.getItem(ck);
     if (cached) return JSON.parse(cached) as GeoResult;
@@ -205,7 +220,7 @@ export async function reverseGeocodeCoordinates(lat: number, lng: number): Promi
       lat,
       lng,
       country: address.country,
-      city: address.city || address.town || address.village || address.county || address.state,
+      city: administrativeCity(address),
       label: data.name || data.display_name?.split(',')[0],
     };
     try {
@@ -237,7 +252,7 @@ export interface PlaceCandidate {
 export async function searchPlaces(query: string): Promise<PlaceCandidate[]> {
   if (!query.trim()) return [];
   // 结果缓存：相同关键词不重复请求（Nominatim 境外，减少往返）
-  const ck = `search_${query.trim()}`;
+  const ck = `search_v2_${query.trim()}`;
   try {
     const cached = localStorage.getItem(ck);
     if (cached) return JSON.parse(cached) as PlaceCandidate[];
@@ -268,12 +283,7 @@ export async function searchPlaces(query: string): Promise<PlaceCandidate[]> {
       lat: parseFloat(r.lat),
       lng: parseFloat(r.lon),
       country: r.address?.country,
-      city:
-        r.address?.city ||
-        r.address?.town ||
-        r.address?.village ||
-        r.address?.county ||
-        r.address?.state,
+      city: administrativeCity(r.address ?? {}),
     }));
     try {
       localStorage.setItem(ck, JSON.stringify(results));
