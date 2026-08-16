@@ -48,9 +48,10 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:8788:8788"
+      - "${MEMORY_RECALL_API_BIND_HOST:-127.0.0.1}:${MEMORY_RECALL_API_PORT:-8788}:8788"
     networks:
       - private
+      - host-access
 
   caddy:
     image: caddy:2.10.0-alpine
@@ -82,4 +83,5 @@ volumes:
 networks:
   private:
     internal: true
+  host-access:
   public:

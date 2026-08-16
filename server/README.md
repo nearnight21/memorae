@@ -24,6 +24,11 @@ npm.cmd run dev
 的端口，可用英文逗号分隔 `MEMORY_RECALL_ALLOWED_ORIGINS`。程序不会自动读取 `.env`；
 PowerShell 运行前需要像上面一样设置环境变量。
 
+Docker Compose 默认把 API 暴露在本机 `127.0.0.1:8788`；如果该端口被 Windows 保留或已被占用，
+可在 `deploy/.env` 设置 `MEMORY_RECALL_API_PORT`，它只改变主机端口，容器内仍使用 8788。
+如 Docker Desktop 的本机回环转发异常，可临时设置 `MEMORY_RECALL_API_BIND_HOST=0.0.0.0` 排查，
+确认后应优先恢复为 `127.0.0.1`。
+
 地图地点功能使用服务端代理的高德 Web 服务，不把 Key 发送给浏览器。要启用地点搜索、地图落点
 反查和照片 GPS 转换，设置：
 
