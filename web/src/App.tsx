@@ -112,6 +112,7 @@ export default function App({
   const [isLanternOn, setIsLanternOn] = useState<boolean>(true);
   const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [firstMemoryFeedback, setFirstMemoryFeedback] = useState<Memory | null>(null);
   const [showRecall, setShowRecall] = useState(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
   // Formal product entry is the footprint map. Legacy view state remains in the
@@ -301,6 +302,7 @@ export default function App({
     await enqueueSilentSync();
     const updated = [completedMemory, ...memories];
     setMemories(updated);
+    if (memories.length === 0) setFirstMemoryFeedback(completedMemory);
 
     // Dynamic focus onto the newly added memory's year
     const nextYearsList = Array.from(new Set([...updated.map(m => m.year), 2024, 2025, 2026])).sort((a, b) => a - b);
@@ -808,6 +810,9 @@ export default function App({
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
             onAddMemory={() => setShowAddMemory(true)}
+            isFirstMemory={memories.length === 0}
+            firstMemoryFeedback={firstMemoryFeedback}
+            onDismissFirstMemoryFeedback={() => setFirstMemoryFeedback(null)}
             onLock={onLock}
             onOpenRecall={() => setShowRecall(true)}
           />
@@ -843,6 +848,7 @@ export default function App({
           <AddMemoryDialog
             onClose={() => setShowAddMemory(false)}
             onAddMemory={handleAddMemory}
+            isFirstMemory={memories.length === 0}
           />
         )}
 

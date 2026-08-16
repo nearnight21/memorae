@@ -5,7 +5,6 @@ import {
   Check,
   ImagePlus,
   LoaderCircle,
-  MapPin,
   Plus,
   Upload,
   X,
@@ -13,14 +12,15 @@ import {
 import type { CategoryType, Memory, PinnedBy } from '../types';
 import { selectLocalPhoto } from '../product/selectPhoto';
 import { readPhotoMetadata } from '../product/photoMetadata';
-import { geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
-import LocationMapPicker from './LocationMapPicker';
+import { reverseGeocodeCoordinates } from '../lib/geo';
+import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
 import './AddMemoryDialog.css';
 
 interface AddMemoryDialogProps {
   onClose: () => void;
   onAddMemory: (newMemory: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => Promise<void>;
+  isFirstMemory?: boolean;
 }
 
 type CreateStep = 'source' | 'editor';
@@ -47,7 +47,7 @@ function dateFromFileTimestamp(timestamp: number): string | undefined {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
-export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialogProps) {
+export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = false }: AddMemoryDialogProps) {
   const [step, setStep] = useState<CreateStep>('source');
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
@@ -65,8 +65,10 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
   const [detailLocation, setDetailLocation] = useState('');
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
-  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
+  const [isLocationConfirmed, setIsLocationConfirmed] = useState(false);
+  const [showLocationMap, setShowLocationMap] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [validationMessage, setValidationMessage] = useState('');
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -93,6 +95,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
     setCity(result.city ?? '');
     setLat(result.lat);
     setLng(result.lng);
+    setIsLocationConfirmed(true);
   };
 
   const applyPhotoMetadata = async (file: File) => {
@@ -151,32 +154,27 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
     }
   };
 
-  const resolveLocation = async () => {
-    if (!locationName.trim()) return;
-    setIsResolvingLocation(true);
-    try {
-      const result = await geocodeAddress(locationName.trim());
-      if (!result) {
-        window.alert('暂时无法定位这个地点，请从候选中选择，或稍后重试。');
-        return;
-      }
-      applyLocationCoordinates(result);
-    } finally {
-      setIsResolvingLocation(false);
-    }
-  };
-
   const submitMemory = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saveState === 'saving') return;
 
     const parsedYear = Number.parseInt(date.split('-')[0], 10);
-    if (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100) return;
+    if (!Number.isInteger(parsedYear) || parsedYear < 1900 || parsedYear > 2100) {
+      setSaveState('error');
+      setValidationMessage('请填写有效的日期。');
+      return;
+    }
+    if (isFirstMemory && (!imageUrl || !isLocationConfirmed)) {
+      setSaveState('error');
+      setValidationMessage('第一段记忆需要确认照片、时间和地点。');
+      return;
+    }
 
     setSaveState('saving');
+    setValidationMessage('');
     try {
       await onAddMemory({
-        title: title.trim(),
+        title: title.trim() || '未命名记忆',
         date: date.replace(/-/g, '.'),
         year: parsedYear,
         category,
@@ -197,8 +195,26 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
     } catch (error) {
       console.error(error);
       setSaveState('error');
+      setValidationMessage('保存失败，请检查后重试。');
     }
   };
+
+  if (showLocationMap) {
+    return (
+      <LocationMapSelection
+        initialCoordinates={lat !== null && lng !== null ? { lat, lng } : null}
+        fallbackName={locationName}
+        onCancel={() => setShowLocationMap(false)}
+        onConfirm={(selection) => {
+          locationAutoRef.current = false;
+          locationValueRef.current = selection.name;
+          setLocationName(selection.name);
+          applyLocationCoordinates(selection);
+          setShowLocationMap(false);
+        }}
+      />
+    );
+  }
 
   if (step === 'source') {
     return (
@@ -208,8 +224,11 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
             <X size={18} aria-hidden="true" />
           </button>
           <span className="memory-create-source-icon" aria-hidden="true"><Plus size={22} /></span>
-          <h1>添加一段记忆</h1>
-          <p>从本地照片开始，或手动添加没有照片的记忆。<br />日期、地点和主题都可以稍后修改。</p>
+          <h1>{isFirstMemory ? '先选择一张对你有意义的照片' : '添加一段记忆'}</h1>
+          <p>{isFirstMemory
+            ? '如果照片保留了拍摄信息，我们会自动填写时间和地点。'
+            : <>从本地照片开始，或手动添加没有照片的记忆。<br />日期、地点和主题都可以稍后修改。</>}
+          </p>
           <div className="memory-create-source-actions">
             <button
               type="button"
@@ -218,10 +237,10 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
               disabled={isCoverUploading}
             >
               {isCoverUploading ? <LoaderCircle size={16} className="animate-spin" /> : <Upload size={16} />}
-              导入本地照片
+              {isFirstMemory ? '选择照片' : '导入本地照片'}
             </button>
             <button type="button" className="memory-create-secondary" onClick={() => setStep('editor')}>
-              手动添加
+              {isFirstMemory ? '手动补充' : '手动添加'}
             </button>
           </div>
           <p className="memory-create-source-privacy">照片与位置仅在设备内解密处理；离开设备时保持加密。</p>
@@ -310,7 +329,6 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="给这段记忆起个名字"
-            required
             autoFocus
           />
 
@@ -336,6 +354,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
                 setCity('');
                 setLat(null);
                 setLng(null);
+                setIsLocationConfirmed(false);
               }}
               onSelect={(candidate) => {
                 locationAutoRef.current = false;
@@ -345,8 +364,10 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
               }}
               placeholder="地点"
               inputClassName="memory-editor-location-input"
+              onPickOnMap={() => setShowLocationMap(true)}
             />
           </div>
+          {locationName.trim() && !isLocationConfirmed && <p className="memory-editor-location-status">尚未定位到地图</p>}
 
           <div className="memory-editor-themes" aria-label="主题">
             {CATEGORY_OPTIONS.map((option) => (
@@ -359,31 +380,21 @@ export default function AddMemoryDialog({ onClose, onAddMemory }: AddMemoryDialo
           <div className="memory-editor-divider" />
 
           <label className="memory-editor-reflection-label" htmlFor="new-memory-past">昔 当时的我</label>
-          <textarea id="new-memory-past" className="memory-editor-reflection is-primary" value={pastSelf} onChange={(event) => setPastSelf(event.target.value)} placeholder="记下当时发生的事、心情和你看见的风景。" required />
+          <textarea id="new-memory-past" className="memory-editor-reflection is-primary" value={pastSelf} onChange={(event) => setPastSelf(event.target.value)} placeholder="记下当时发生的事、心情和你看见的风景。" />
 
           <label className="memory-editor-reflection-label" htmlFor="new-memory-present">今 现在的我</label>
-          <textarea id="new-memory-present" className="memory-editor-reflection" value={presentSelf} onChange={(event) => setPresentSelf(event.target.value)} placeholder="此刻回望，这段经历留下了什么？" required />
+          <textarea id="new-memory-present" className="memory-editor-reflection" value={presentSelf} onChange={(event) => setPresentSelf(event.target.value)} placeholder="此刻回望，这段经历留下了什么？" />
 
           <details className="memory-editor-details">
             <summary>补充地点与标签</summary>
             <div className="memory-editor-detail-fields">
-              <button type="button" onClick={() => { void resolveLocation(); }} disabled={!locationName.trim() || isResolvingLocation}>
-                {isResolvingLocation ? <LoaderCircle size={14} className="animate-spin" /> : <MapPin size={14} aria-hidden="true" />}
-                定位并微调
-              </button>
               <input value={tag} onChange={(event) => setTag(event.target.value)} placeholder="标签（可选）" aria-label="标签" />
               <input value={detailLocation} onChange={(event) => setDetailLocation(event.target.value)} placeholder="地点备注（可选）" aria-label="地点备注" />
-              {lat !== null && lng !== null && (
-                <>
-                  <LocationMapPicker lat={lat} lng={lng} onChange={(nextLat, nextLng) => { setLat(nextLat); setLng(nextLng); }} />
-                  <p>{country || city ? `自动识别：${[country, city].filter(Boolean).join(' / ')}` : '已手动调整地图位置'} · {lat.toFixed(5)}, {lng.toFixed(5)}</p>
-                </>
-              )}
             </div>
           </details>
 
           <p className={`memory-editor-save-note ${saveState === 'error' ? 'is-error' : ''}`}>
-            {saveState === 'saving' ? '正在加密并保存…' : saveState === 'error' ? '保存失败，请检查后重试。' : '草稿仅保留在当前设备 · Ctrl + Enter 完成'}
+            {saveState === 'saving' ? '正在加密并保存…' : saveState === 'error' ? validationMessage : '草稿仅保留在当前设备 · Ctrl + Enter 完成'}
           </p>
         </article>
 

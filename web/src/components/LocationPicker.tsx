@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Loader2 } from 'lucide-react';
+import { MapPin, MapPinned, Loader2 } from 'lucide-react';
 import { searchPlaces, PlaceCandidate } from '../lib/geo';
 
 interface LocationPickerProps {
@@ -11,6 +11,8 @@ interface LocationPickerProps {
   onSelect: (c: PlaceCandidate) => void;
   placeholder?: string;
   inputClassName?: string;
+  /** 在当前编辑状态中进入全屏地图选点。 */
+  onPickOnMap?: () => void;
 }
 
 /**
@@ -23,6 +25,7 @@ export default function LocationPicker({
   onSelect,
   placeholder,
   inputClassName,
+  onPickOnMap,
 }: LocationPickerProps) {
   const [candidates, setCandidates] = useState<PlaceCandidate[]>([]);
   const [open, setOpen] = useState(false);
@@ -73,9 +76,21 @@ export default function LocationPicker({
         onFocus={() => candidates.length > 0 && setOpen(true)}
         placeholder={placeholder}
         className={inputClassName}
+        style={onPickOnMap ? { paddingRight: 40 } : undefined}
       />
       {searching && (
-        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-stone-400 pointer-events-none" />
+        <Loader2 className={`absolute ${onPickOnMap ? 'right-10' : 'right-2.5'} top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-stone-400 pointer-events-none`} />
+      )}
+      {onPickOnMap && (
+        <button
+          type="button"
+          onClick={onPickOnMap}
+          title="在地图上选择"
+          aria-label="在地图上选择"
+          className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-stone-500 transition-colors hover:bg-amber-100/70 hover:text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-700"
+        >
+          <MapPinned className="h-3.5 w-3.5" strokeWidth={1.7} />
+        </button>
       )}
       {open && (
         <ul className="absolute z-50 left-0 right-0 mt-1 bg-[#fdfcf7] border border-amber-900/25 rounded-lg shadow-xl max-h-52 overflow-y-auto">

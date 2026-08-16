@@ -32,6 +32,9 @@ interface MapViewProps {
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
   onAddMemory?: () => void;
+  isFirstMemory?: boolean;
+  firstMemoryFeedback?: Memory | null;
+  onDismissFirstMemoryFeedback?: () => void;
   onLock?: () => void;
   onOpenRecall?: () => void;
   readerMode?: 'reflection' | 'journal';
@@ -181,6 +184,9 @@ export default function MapView({
   onSaveMemory,
   onDeleteMemory,
   onAddMemory,
+  isFirstMemory = false,
+  firstMemoryFeedback,
+  onDismissFirstMemoryFeedback,
   onLock,
   onOpenRecall,
   readerMode,
@@ -200,6 +206,7 @@ export default function MapView({
   // zoom 变化后 +1，触发气泡按当前缩放级别重建（自适应层级）
   const [zoomTick, setZoomTick] = useState(0);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [showFirstMemoryPrompt, setShowFirstMemoryPrompt] = useState(isFirstMemory);
   const [localFilters, setLocalFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
 
   const activeFilters = controlledFilters ?? localFilters;
@@ -208,6 +215,28 @@ export default function MapView({
     if (onFiltersChange) onFiltersChange(next);
     else setLocalFilters(next);
   };
+
+  useEffect(() => {
+    setShowFirstMemoryPrompt(isFirstMemory);
+  }, [isFirstMemory]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !firstMemoryFeedback) return;
+
+    let cancelled = false;
+    const focusNewMemory = async () => {
+      const coordinates = Number.isFinite(firstMemoryFeedback.lat) && Number.isFinite(firstMemoryFeedback.lng)
+        ? [firstMemoryFeedback.lat as number, firstMemoryFeedback.lng as number] as L.LatLngExpression
+        : await resolvePlace(countryOf(firstMemoryFeedback), cityOf(firstMemoryFeedback));
+      if (!cancelled && coordinates) map.flyTo(coordinates, POINT_ZOOM, { duration: 0.85 });
+    };
+    void focusNewMemory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firstMemoryFeedback]);
 
   // 全部可用年份作为滑块的固定刻度；不能从 filtered 计算，否则选中一年后滑块会塌缩成单值
   const allYears: number[] = useMemo(
@@ -650,6 +679,39 @@ export default function MapView({
       {/* 地图本体 */}
       {/* Leaflet 会在此节点运行时追加 class；React className 必须保持静态。 */}
       <div ref={containerRef} className="map-editorial-canvas absolute inset-0 z-0" />
+
+      {isFirstMemory && showFirstMemoryPrompt && !selectedMemory && (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="map-first-memory-prompt absolute left-1/2 top-1/2 z-[1002] w-[min(420px,calc(100%-40px))] -translate-x-1/2 -translate-y-1/2 text-center"
+        >
+          <p className="map-first-memory-kicker">你的足迹</p>
+          <h2>你的记忆地图还没有被点亮</h2>
+          <p>从一张照片开始，把一段经历放回它发生的时间和地点。</p>
+          <div>
+            <button type="button" onClick={onAddMemory} className="map-first-memory-primary">创建第一段记忆</button>
+            <button type="button" onClick={() => setShowFirstMemoryPrompt(false)} className="map-first-memory-secondary">稍后再说</button>
+          </div>
+        </motion.section>
+      )}
+
+      {firstMemoryFeedback && !selectedMemory && (
+        <motion.section
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="map-first-memory-feedback absolute bottom-24 left-1/2 z-[1002] w-[min(500px,calc(100%-40px))] -translate-x-1/2"
+        >
+          <div>
+            <h2>第一段记忆已经回到它发生的地方。</h2>
+            <p>时间轴已定位到 {firstMemoryFeedback.year} 年；现在它会和地图一起保存下来。</p>
+          </div>
+          <div className="map-first-memory-feedback-actions">
+            <button type="button" onClick={() => { onDismissFirstMemoryFeedback?.(); onSelectMemory(firstMemoryFeedback); }} className="map-first-memory-primary">查看这段记忆</button>
+            <button type="button" onClick={() => { onDismissFirstMemoryFeedback?.(); onAddMemory?.(); }} className="map-first-memory-secondary">继续添加</button>
+          </div>
+        </motion.section>
+      )}
 
       {panel !== null && !selectedMemory && <div className="map-region-focus absolute inset-0 z-[1001]" aria-hidden="true" />}
 
