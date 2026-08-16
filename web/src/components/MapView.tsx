@@ -348,7 +348,6 @@ export default function MapView({
   }, [filtered, focusedRegion]);
   const contextTitle = focusedRegion ? shortPlaceLabel(focusedRegion.name) : '全部地区';
   const contextRange = yearRangeOf(contextMemories);
-  const currentResultLabel = contextTitle === '全部地区' ? '全部记忆' : contextTitle;
 
   // --- 地图生命周期 ---
   useEffect(() => {
@@ -851,13 +850,10 @@ export default function MapView({
           type="button"
           onClick={() => setIsResultListOpen(true)}
           className="map-current-results-trigger absolute right-0 top-1/2 z-[1002] -translate-y-1/2"
-          aria-label={`查看${currentResultLabel}的 ${contextMemories.length} 段记忆`}
-          title={`查看${currentResultLabel}的 ${contextMemories.length} 段记忆`}
+          aria-label="查看当前记忆列表"
+          title="查看当前记忆列表"
         >
-          <ChevronLeft className="map-current-results-chevron h-4 w-4 shrink-0" strokeWidth={1.7} aria-hidden="true" />
-          <List className="h-4 w-4 shrink-0" strokeWidth={1.6} aria-hidden="true" />
-          <span className="map-current-results-count">{contextMemories.length}</span>
-          <span className="map-current-results-copy">查看{currentResultLabel}的 {contextMemories.length} 段记忆</span>
+          <List className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />
         </button>
       )}
 

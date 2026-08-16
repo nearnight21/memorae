@@ -872,15 +872,12 @@
 }
 
 .map-current-results-trigger {
-  right: -20px;
-  display: inline-flex;
-  width: 102px;
-  min-height: 52px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  overflow: hidden;
+  right: -8px;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--color-border-subtle, #cfc7b8);
   border-right: 0;
   border-radius: 999px 0 0 999px;
@@ -889,44 +886,15 @@
   color: var(--color-text-primary, #282623);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
-  line-height: 20px;
-  text-align: left;
-  transition: width 190ms ease, right 190ms ease, background 190ms ease, box-shadow 190ms ease;
+  transition: right 190ms ease, background 190ms ease, box-shadow 190ms ease;
 }
 
 .map-current-results-trigger:hover,
 .map-current-results-trigger:focus-visible {
   right: 0;
-  width: min(268px, calc(100vw - 24px));
   background: var(--color-bg-surface, #fffdf8);
   box-shadow: 0 8px 18px -5px rgba(10, 46, 71, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.64);
   outline: none;
-}
-
-.map-current-results-chevron {
-  color: var(--color-accent-fill, #a76b3e);
-}
-
-.map-current-results-count {
-  flex: 0 0 auto;
-  min-width: 18px;
-  color: var(--color-text-primary, #282623);
-}
-
-.map-current-results-copy {
-  max-width: 0;
-  overflow: hidden;
-  color: var(--color-text-primary, #282623);
-  opacity: 0;
-  white-space: nowrap;
-  transition: max-width 190ms ease, opacity 150ms ease;
-}
-
-.map-current-results-trigger:hover .map-current-results-copy,
-.map-current-results-trigger:focus-visible .map-current-results-copy {
-  max-width: 180px;
-  opacity: 1;
 }
 
 .map-add-memory-floating {
