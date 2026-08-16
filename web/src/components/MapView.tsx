@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, ChevronLeft, History, List, LockKeyhole, MapPin, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, History, List, MapPin, Plus } from 'lucide-react';
 import { Memory, type MemoryFilters } from '../types';
 import { resolvePlace, geocodeAddress } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
@@ -194,7 +194,6 @@ export default function MapView({
   isFirstMemory = false,
   firstMemoryFeedback,
   onDismissFirstMemoryFeedback,
-  onLock,
   onOpenRecall,
   readerMode,
 }: MapViewProps) {
@@ -810,7 +809,6 @@ export default function MapView({
 
       {/* 回顾是全局浏览方式；地区筛选和当前结果列表各自保持独立职责。 */}
       {!selectedMemory && <div className="absolute right-24 top-9 z-[1002] flex items-start gap-2">
-        {onLock && <button type="button" onClick={onLock} aria-label="锁定私密空间" title="锁定私密空间" className="map-ui-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors cursor-pointer"><LockKeyhole className="h-4 w-4" strokeWidth={1.6} /></button>}
         {onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-crystal" aria-label="进入回顾">
           <History className="h-4 w-4" strokeWidth={1.6} />
           <span>回顾</span>
@@ -840,10 +838,6 @@ export default function MapView({
       </div>}
 
       {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
-
-      {!selectedMemory && <div className="map-status-chip absolute bottom-[66px] left-24 z-[1002]">
-        {filtersActive ? `筛选中 · 显示 ${filtered.length} 段记忆` : '缩放以展开地点与照片'}
-      </div>}
 
       {!selectedMemory && (
         <button

@@ -414,20 +414,55 @@
 }
 .map-editorial-canvas .leaflet-control-zoom {
   overflow: hidden;
-  border: 1px solid var(--color-border-subtle) !important;
+  border: 1px solid rgba(199, 232, 255, 0.8) !important;
   border-radius: 999px !important;
-  box-shadow: 0 7px 18px var(--color-shadow) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(238, 249, 255, 0.19) 0%,
+    rgba(255, 255, 255, 0.08) 22%,
+    rgba(220, 240, 251, 0.038) 58%,
+    rgba(73, 116, 146, 0.092) 100%
+  ) !important;
+  box-shadow:
+    inset 0 2px 2px rgba(250, 254, 255, 0.54),
+    inset 0 -2px 2px rgba(31, 82, 116, 0.17),
+    0 2px 5px rgba(41, 82, 110, 0.08) !important;
 }
 .map-editorial-canvas .leaflet-control-zoom a {
-  width: 42px !important;
-  height: 42px !important;
-  line-height: 40px !important;
-  background: rgba(var(--color-bg-surface-rgb), 0.94) !important;
-  color: var(--color-text-primary) !important;
-  border-bottom: 1px solid var(--color-border-subtle) !important;
+  position: relative;
+  display: grid !important;
+  width: 44px !important;
+  height: 44px !important;
+  place-items: center;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(7, 38, 78, 0.88) !important;
+  font-size: 25px !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.34);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+.map-editorial-canvas .leaflet-control-zoom a::before {
+  position: absolute;
+  top: 1px;
+  right: 8px;
+  left: 8px;
+  height: 14px;
+  border-radius: 999px 999px 42% 42%;
+  background: linear-gradient(180deg, rgba(250, 254, 255, 0.92), rgba(234, 247, 255, 0.26) 38%, transparent 92%);
+  content: '';
+  filter: blur(0.45px);
+  pointer-events: none;
+}
+.map-editorial-canvas .leaflet-control-zoom a:first-child {
+  border-bottom: 1px solid rgba(199, 232, 255, 0.48) !important;
 }
 .map-editorial-canvas .leaflet-control-zoom a:hover {
-  background: var(--color-bg-surface) !important;
+  background: rgba(225, 246, 255, 0.16) !important;
+  box-shadow: inset 0 0 0 1px rgba(143, 204, 255, 0.22) !important;
 }
 .map-editorial-canvas .leaflet-bottom.leaflet-right {
   bottom: 14px;
@@ -799,17 +834,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--color-accent-fill, #a76b3e);
-}
-
-.map-status-chip {
-  padding: 8px 11px;
-  border: 1px solid var(--color-border-subtle, #cfc7b8);
-  border-radius: 999px;
-  background: rgba(var(--color-bg-surface-rgb), 0.9);
-  box-shadow: 0 4px 10px -2px rgba(10, 46, 71, 0.12);
-  color: var(--color-text-secondary, #68635b);
-  font-size: 13px;
-  line-height: 20px;
 }
 
 .map-recall-crystal {
