@@ -31,20 +31,6 @@
   font-family: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
 }
 
-.map-page-heading::before {
-  content: '';
-  position: absolute;
-  inset: -18px -56px -18px -20px;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at 20% 35%,
-    rgba(var(--color-bg-surface-rgb), 0.96) 0%,
-    rgba(var(--color-bg-surface-rgb), 0.74) 52%,
-    transparent 78%
-  );
-}
-
 /* 地图内记忆展开：保持一张完整旧照片，只让四边与四角自然破损 */
 .map-memory-photo-mask {
   opacity: 0.95;

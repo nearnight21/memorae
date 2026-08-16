@@ -788,9 +788,7 @@ export default function MapView({
 
       {/* 页面标题与地区层级 */}
       <header
-        className={`map-ui-header pointer-events-none absolute z-[1002] ${
-          selectedMemory ? 'left-[96px] top-8' : 'map-page-heading left-[96px] top-8'
-        }`}
+        className="map-ui-header pointer-events-none absolute left-[96px] top-8 z-[1002]"
       >
         {selectedMemory ? (
           <nav className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[13px] tracking-[0.12em]" aria-label="地点层级">
