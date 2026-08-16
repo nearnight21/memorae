@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, LockKeyhole, MapPin, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, History, List, LockKeyhole, MapPin, Plus } from 'lucide-react';
 import { Memory, type MemoryFilters } from '../types';
 import { resolvePlace, geocodeAddress } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
@@ -40,9 +40,9 @@ interface MapViewProps {
   readerMode?: 'reflection' | 'journal';
 }
 
-interface PanelState {
-  title: string;
-  list: Memory[];
+interface RegionFocus {
+  name: string;
+  scope: 'country' | 'city';
 }
 
 const countryOf = (m: Memory): string => m.country?.trim() || '';
@@ -168,11 +168,11 @@ function yearRangeOf(memories: Memory[]): string {
 }
 
 function placeOf(memory: Memory): string {
-  // 主地点只显示城市；行政区作为次级地点，街道/景点留在详情页。
-  return [memory.country, memory.city, memory.detailLocation]
+  // 结果列表优先使用城市与行政区；国家、街道与景点不抢占主地点。
+  return [memory.city, memory.detailLocation]
     .map((part) => part?.trim())
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
-    .join(' · ') || '未标注地点';
+    .join(' · ') || memory.country?.trim() || memory.location?.name?.trim() || '未标注地点';
 }
 
 export default function MapView({
@@ -202,8 +202,8 @@ export default function MapView({
   const [selectedAnchor, setSelectedAnchor] = useState<{ x: number; y: number } | null>(null);
   const [mapViewport, setMapViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  const [panel, setPanel] = useState<PanelState | null>(null);
-  const [focusedRegion, setFocusedRegion] = useState<string | null>(null);
+  const [focusedRegion, setFocusedRegion] = useState<RegionFocus | null>(null);
+  const [isResultListOpen, setIsResultListOpen] = useState(false);
   const [enriched, setEnriched] = useState<Memory[]>(memories);
   // zoom 变化后 +1，触发气泡按当前缩放级别重建（自适应层级）
   const [zoomTick, setZoomTick] = useState(0);
@@ -291,14 +291,22 @@ export default function MapView({
   const filtered = controlledFilteredMemories ?? localFiltered;
   const filteredUnlabeled = useMemo(() => filtered.filter((m) => !countryOf(m)), [filtered]);
   const filtersActive = isMemoryFiltersActive(activeFilters);
-  const contextMemories = panel?.list ?? filtered;
+  const contextMemories = useMemo(() => {
+    if (!focusedRegion) return filtered;
+    return filtered.filter((memory) => (
+      focusedRegion.scope === 'country'
+        ? countryOf(memory) === focusedRegion.name
+        : cityOf(memory) === focusedRegion.name
+    ));
+  }, [filtered, focusedRegion]);
   const defaultContext = activeFilters.regions.length === 1
     ? activeFilters.regions[0]
     : availableCountries.length === 1
       ? availableCountries[0]
       : '全部地区';
-  const contextTitle = panel?.title ?? defaultContext;
+  const contextTitle = focusedRegion ? shortPlaceLabel(focusedRegion.name) : defaultContext;
   const contextRange = yearRangeOf(contextMemories);
+  const currentResultLabel = contextTitle === '全部地区' ? '全部记忆' : contextTitle;
 
   // --- 地图生命周期 ---
   useEffect(() => {
@@ -387,7 +395,6 @@ export default function MapView({
     // 缩放/平移变化：触发气泡按新视口与缩放级别重建（自适应）
     const onZoomEnd = () => {
       if (map.getZoom() < CITY_ZOOM) {
-        setPanel(null);
         setFocusedRegion(null);
       }
       setZoomTick((t) => t + 1);
@@ -475,14 +482,10 @@ export default function MapView({
 
     const build = async () => {
       const zoom = map.getZoom();
-      const handleCountryClick = (country: string, list: Memory[], coords: L.LatLngExpression) => {
-        setFocusedRegion(country);
-        if (!isChinaCountry(country)) {
-          setPanel(list.length === 1 ? null : { title: shortPlaceLabel(country), list });
-          if (list.length === 1) onSelectMemory(list[0]);
-          return;
-        }
-        setPanel({ title: shortPlaceLabel(country), list });
+      const handleCountryClick = (country: string, coords: L.LatLngExpression) => {
+        // 地图点击只建立当前地区上下文。列表由右侧入口单独打开，避免
+        // 地图钻取与抽屉展示互相抢夺控制权。
+        setFocusedRegion({ name: country, scope: 'country' });
         map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
       };
 
@@ -494,8 +497,8 @@ export default function MapView({
         );
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion === country) })
-            .on('click', () => handleCountryClick(country, list, coords))
+          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
+            .on('click', () => handleCountryClick(country, coords))
             .addTo(nextLayer);
         }
       };
@@ -520,8 +523,8 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion === country) })
-            .on('click', () => handleCountryClick(country, list, coords))
+          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
+            .on('click', () => handleCountryClick(country, coords))
             .addTo(nextLayer);
         }
         if (routePoints.length > 1) {
@@ -568,10 +571,9 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion === city) })
+          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) })
             .on('click', () => {
-              setPanel({ title: city, list });
-              setFocusedRegion(city);
+              setFocusedRegion({ name: city, scope: 'city' });
               map.flyTo(coords, POINT_ZOOM, { duration: 0.8 });
             })
             .addTo(nextLayer);
@@ -631,8 +633,7 @@ export default function MapView({
           if (list.length === 1) {
             L.marker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) })
               .on('click', () => {
-                setPanel(null);
-                setFocusedRegion(null);
+                setIsResultListOpen(false);
                 onSelectMemory(list[0]);
               })
               .addTo(nextLayer);
@@ -649,8 +650,7 @@ export default function MapView({
             const dLng = (Math.sin(a) * spreadDeg) / lngScale;
             L.marker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) })
               .on('click', () => {
-                setPanel(null);
-                setFocusedRegion(null);
+                setIsResultListOpen(false);
                 onSelectMemory(m);
               })
               .addTo(nextLayer);
@@ -678,7 +678,6 @@ export default function MapView({
   }, [zoomTick, filtered, filtersActive, focusedRegion]);
 
   const backToWorld = () => {
-    setPanel(null);
     setFocusedRegion(null);
     mapRef.current?.flyTo([35, 100], CITY_ZOOM - 1, { duration: 0.8 });
   };
@@ -727,7 +726,7 @@ export default function MapView({
         </motion.section>
       )}
 
-      {panel !== null && !selectedMemory && <div className="map-region-focus absolute inset-0 z-[1001]" aria-hidden="true" />}
+      {isResultListOpen && !selectedMemory && <div className="map-region-focus absolute inset-0 z-[1001]" aria-hidden="true" />}
 
       {/* 页面标题与地区层级 */}
       <header
@@ -752,9 +751,13 @@ export default function MapView({
         )}
       </header>
 
-      {/* 右上只保留地区主入口；时间由底部水晶时间轴控制。 */}
+      {/* 回顾是全局浏览方式；地区筛选和当前结果列表各自保持独立职责。 */}
       {!selectedMemory && <div className="absolute right-24 top-9 z-[1002] flex items-start gap-2">
         {onLock && <button type="button" onClick={onLock} aria-label="锁定私密空间" title="锁定私密空间" className="map-ui-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors cursor-pointer"><LockKeyhole className="h-4 w-4" strokeWidth={1.6} /></button>}
+        {onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-crystal" aria-label="进入回顾">
+          <History className="h-4 w-4" strokeWidth={1.6} />
+          <span>回顾</span>
+        </button>}
         <div className="relative">
           <button id="btn-toggle-map-filter" type="button" onClick={() => setFilterMenuOpen((open) => !open)} aria-label="打开地区与主题筛选" aria-expanded={filterMenuOpen} className="map-region-filter-trigger">
             <MapPin className="h-4 w-4" strokeWidth={1.6} />
@@ -785,73 +788,99 @@ export default function MapView({
         {filtersActive ? `筛选中 · 显示 ${filtered.length} 段记忆` : '缩放以展开地点与照片'}
       </div>}
 
-      {!selectedMemory && onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-tab absolute right-0 top-1/2 z-[1002] -translate-y-1/2 rounded-l-xl border border-r-0 px-3 py-4 text-[12px] tracking-[0.1em] shadow-sm backdrop-blur-md cursor-pointer">简易回顾</button>}
+      {!selectedMemory && (
+        <button
+          type="button"
+          onClick={() => setIsResultListOpen(true)}
+          className="map-current-results-trigger absolute right-0 top-1/2 z-[1002] -translate-y-1/2"
+          aria-label={`查看${currentResultLabel}的 ${contextMemories.length} 段记忆`}
+          title={`查看${currentResultLabel}的 ${contextMemories.length} 段记忆`}
+        >
+          <ChevronLeft className="map-current-results-chevron h-4 w-4 shrink-0" strokeWidth={1.7} aria-hidden="true" />
+          <List className="h-4 w-4 shrink-0" strokeWidth={1.6} aria-hidden="true" />
+          <span className="map-current-results-count">{contextMemories.length}</span>
+          <span className="map-current-results-copy">查看{currentResultLabel}的 {contextMemories.length} 段记忆</span>
+        </button>
+      )}
 
       {!selectedMemory && onAddMemory && <button id="btn-add-memory-from-map" type="button" onClick={onAddMemory} aria-label="添加记忆" title="添加记忆" className="map-add-memory-floating"><Plus className="h-6 w-6" strokeWidth={1.7} /></button>}
 
-      {/* 城市 / 未标注记忆面板 */}
+      {/* 当前地图上下文的结果列表。抽屉开合不改变地图中心或缩放。 */}
       <AnimatePresence>
-        {panel !== null && !selectedMemory && (
-          <motion.aside
-            initial={{ x: 320, opacity: 0 }}
+        {isResultListOpen && !selectedMemory && (
+          <motion.div
+            initial={{ x: 360, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 320, opacity: 0 }}
+            exit={{ x: 360, opacity: 0 }}
             transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-            className="map-memory-list-panel map-region-panel absolute top-0 right-0 z-[1003] h-full overflow-y-auto border-l backdrop-blur-md"
+            className="map-current-result-drawer-shell absolute top-0 right-0 z-[1003] h-full"
           >
-            <div className="map-memory-list-header map-region-panel-header sticky top-0 z-10 flex items-start justify-between border-b backdrop-blur-md">
-              <div>
-                <h2>{panel.title}</h2>
-                <p>{panel.list.length} 段记忆 · {yearRangeOf(panel.list)}</p>
+            <button
+              type="button"
+              onClick={() => setIsResultListOpen(false)}
+              className="map-current-results-collapse"
+              aria-label="收起当前记忆列表"
+              title="收起当前记忆列表"
+            >
+              <ChevronLeft className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
+            </button>
+            <aside className="map-memory-list-panel map-current-result-drawer h-full overflow-y-auto border-l backdrop-blur-md">
+              <div className="map-memory-list-header map-current-result-header sticky top-0 z-10 flex items-start justify-between border-b backdrop-blur-md">
+                <div>
+                  <h2>{contextTitle}</h2>
+                  <p>{contextMemories.length} 段记忆 · {contextRange}</p>
+                </div>
+                <button type="button" onClick={backToWorld} className="map-current-result-back">
+                  <ArrowLeft className="h-4 w-4" strokeWidth={1.6} />
+                  全部足迹
+                </button>
               </div>
-              <button type="button" onClick={backToWorld} className="map-region-back">
-                <ArrowLeft className="h-4 w-4" strokeWidth={1.6} />
-                全部足迹
-              </button>
-            </div>
-            <div className="map-region-card-list">
-              {panel.list.map((m) => {
-                const photo = m.image || fallbackImageOf(m) || '';
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      setPanel(null);
-                      setFocusedRegion(null);
-                      onSelectMemory(m);
-                    }}
-                    className="map-memory-list-card map-region-memory-card group"
-                  >
-                    <div className="map-region-memory-photo">
-                      {photo ? (
-                    <img
-                      src={photo}
-                      alt={m.title}
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        const fallback = fallbackImageOf(m);
-                        if (fallback && !e.currentTarget.dataset.fallbackApplied) {
-                          e.currentTarget.dataset.fallbackApplied = '1';
-                          e.currentTarget.src = fallback;
-                        } else {
-                          e.currentTarget.style.visibility = 'hidden';
-                        }
+              <div className="map-current-result-card-list">
+                {contextMemories.map((m) => {
+                  const photo = m.image || fallbackImageOf(m) || '';
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setIsResultListOpen(false);
+                        onSelectMemory(m);
                       }}
-                      className="map-memory-thumb transition-transform group-hover:scale-[1.03]"
-                    />
-                      ) : <span>暂无照片</span>}
-                    </div>
-                    <div className="map-region-memory-copy">
-                      <span>{m.year}</span>
-                      <strong>{m.title}</strong>
-                      <em>{placeOf(m)}</em>
-                      <small>打开记忆 <b aria-hidden="true">→</b></small>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.aside>
+                      className="map-memory-list-card map-current-result-card group"
+                    >
+                      <div className="map-current-result-photo">
+                        {photo ? (
+                          <img
+                            src={photo}
+                            alt={m.title}
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const fallback = fallbackImageOf(m);
+                              if (fallback && !e.currentTarget.dataset.fallbackApplied) {
+                                e.currentTarget.dataset.fallbackApplied = '1';
+                                e.currentTarget.src = fallback;
+                              } else {
+                                e.currentTarget.style.visibility = 'hidden';
+                              }
+                            }}
+                            className="map-memory-thumb transition-transform group-hover:scale-[1.03]"
+                          />
+                        ) : <span>暂无照片</span>}
+                      </div>
+                      <div className="map-current-result-copy">
+                        <span>{m.year}</span>
+                        <strong>{m.title}</strong>
+                        <em>{placeOf(m)}</em>
+                        <small>打开记忆 <b aria-hidden="true">→</b></small>
+                      </div>
+                    </button>
+                  );
+                })}
+                {contextMemories.length === 0 && (
+                  <p className="map-current-result-empty">当前条件下没有记忆。</p>
+                )}
+              </div>
+            </aside>
+          </motion.div>
         )}
       </AnimatePresence>
 
