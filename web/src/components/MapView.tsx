@@ -11,6 +11,12 @@ import {
   filterMemories,
   isMemoryFiltersActive,
 } from '../lib/memoryFilters';
+import {
+  currentRegionForViewport,
+  provinceForCity,
+  type ViewportRegion,
+  type ViewportRegionCandidate,
+} from '../lib/mapViewportRegion';
 import MapMemoryOverlay from './MapMemoryOverlay';
 import CrystalTimeline from './CrystalTimeline';
 
@@ -40,10 +46,7 @@ interface MapViewProps {
   readerMode?: 'reflection' | 'journal';
 }
 
-interface RegionFocus {
-  name: string;
-  scope: 'country' | 'city';
-}
+type RegionFocus = ViewportRegion;
 
 const countryOf = (m: Memory): string => m.country?.trim() || '';
 // 城市气泡只能使用行政城市字段；地点名可能是街道或景点，不能冒充城市标签。
@@ -203,6 +206,7 @@ export default function MapView({
   const [mapViewport, setMapViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   const [focusedRegion, setFocusedRegion] = useState<RegionFocus | null>(null);
+  const [viewportRegionCandidates, setViewportRegionCandidates] = useState<ViewportRegionCandidate[]>([]);
   const [isResultListOpen, setIsResultListOpen] = useState(false);
   const [enriched, setEnriched] = useState<Memory[]>(memories);
   // zoom 变化后 +1，触发气泡按当前缩放级别重建（自适应层级）
@@ -277,6 +281,45 @@ export default function MapView({
     };
   }, [memories]);
 
+  // A settled viewport is resolved from all available memories, not from the
+  // active time/theme result. A date filter must not make a China-wide map
+  // pretend that it is already focused on the one remaining city.
+  useEffect(() => {
+    let cancelled = false;
+    const resolveViewportCandidates = async () => {
+      const resolved = await mapWithConcurrency<Memory, ViewportRegionCandidate | null>(
+        enriched.filter((memory) => Boolean(countryOf(memory))),
+        async (memory): Promise<ViewportRegionCandidate | null> => {
+          if (Number.isFinite(memory.lat) && Number.isFinite(memory.lng)) {
+            return {
+              country: countryOf(memory),
+              city: cityOf(memory) || undefined,
+              lat: memory.lat as number,
+              lng: memory.lng as number,
+            };
+          }
+          const coordinates = await resolvePlace(countryOf(memory), cityOf(memory) || undefined);
+          if (!coordinates) return null;
+          return {
+            country: countryOf(memory),
+            city: cityOf(memory) || undefined,
+            lat: coordinates[0],
+            lng: coordinates[1],
+          };
+        },
+      );
+      if (!cancelled) {
+        setViewportRegionCandidates(
+          resolved.filter((candidate): candidate is ViewportRegionCandidate => candidate !== null),
+        );
+      }
+    };
+    void resolveViewportCandidates();
+    return () => {
+      cancelled = true;
+    };
+  }, [enriched]);
+
   const availableCountries = useMemo(
     () => Array.from(new Set(enriched.map(countryOf).filter(Boolean))).sort(),
     [enriched]
@@ -295,16 +338,13 @@ export default function MapView({
     if (!focusedRegion) return filtered;
     return filtered.filter((memory) => (
       focusedRegion.scope === 'country'
-        ? countryOf(memory) === focusedRegion.name
-        : cityOf(memory) === focusedRegion.name
+        ? countryOf(memory) === focusedRegion.country
+        : focusedRegion.scope === 'province'
+          ? countryOf(memory) === focusedRegion.country && provinceForCity(countryOf(memory), cityOf(memory)) === focusedRegion.name
+          : countryOf(memory) === focusedRegion.country && cityOf(memory) === focusedRegion.name
     ));
   }, [filtered, focusedRegion]);
-  const defaultContext = activeFilters.regions.length === 1
-    ? activeFilters.regions[0]
-    : availableCountries.length === 1
-      ? availableCountries[0]
-      : '全部地区';
-  const contextTitle = focusedRegion ? shortPlaceLabel(focusedRegion.name) : defaultContext;
+  const contextTitle = focusedRegion ? shortPlaceLabel(focusedRegion.name) : '全部地区';
   const contextRange = yearRangeOf(contextMemories);
   const currentResultLabel = contextTitle === '全部地区' ? '全部记忆' : contextTitle;
 
@@ -393,12 +433,7 @@ export default function MapView({
     }
 
     // 缩放/平移变化：触发气泡按新视口与缩放级别重建（自适应）
-    const onZoomEnd = () => {
-      if (map.getZoom() < CITY_ZOOM) {
-        setFocusedRegion(null);
-      }
-      setZoomTick((t) => t + 1);
-    };
+    const onZoomEnd = () => setZoomTick((t) => t + 1);
     map.on('zoomend', onZoomEnd);
     mapEventHandlers.push({ event: 'zoomend', handler: onZoomEnd });
 
@@ -418,6 +453,7 @@ export default function MapView({
     resizeObserver?.observe(containerRef.current);
     window.addEventListener('resize', onResize);
     map.invalidateSize({ pan: false });
+    setZoomTick((t) => t + 1);
     return () => {
       mapEventHandlers.forEach(({ event, handler }) => map.off(event, handler));
       window.removeEventListener('resize', onResize);
@@ -428,6 +464,30 @@ export default function MapView({
       layerRef.current = null;
     };
   }, []);
+
+  // Leaflet only reports a stable viewport after moveend/zoomend. Delaying the
+  // calculation avoids flicker while the user is still dragging or pinching.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const timer = window.setTimeout(() => {
+      const bounds = map.getBounds();
+      const nextRegion = currentRegionForViewport(map.getZoom(), {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+      }, viewportRegionCandidates);
+      setFocusedRegion((previous) => (
+        previous?.name === nextRegion?.name &&
+        previous?.scope === nextRegion?.scope &&
+        previous?.country === nextRegion?.country
+          ? previous
+          : nextRegion
+      ));
+    }, 160);
+    return () => window.clearTimeout(timer);
+  }, [zoomTick, viewportRegionCandidates]);
 
   // 地图内展开记忆时，持续将真实点位换算为屏幕坐标，供照片展开动画和虚线连接使用。
   useEffect(() => {
@@ -483,9 +543,8 @@ export default function MapView({
     const build = async () => {
       const zoom = map.getZoom();
       const handleCountryClick = (country: string, coords: L.LatLngExpression) => {
-        // 地图点击只建立当前地区上下文。列表由右侧入口单独打开，避免
-        // 地图钻取与抽屉展示互相抢夺控制权。
-        setFocusedRegion({ name: country, scope: 'country' });
+        // The viewport idle handler owns currentRegion. Marker clicks only
+        // move the map, so manual drill-down and hand panning share one path.
         map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
       };
 
@@ -573,7 +632,6 @@ export default function MapView({
           });
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) })
             .on('click', () => {
-              setFocusedRegion({ name: city, scope: 'city' });
               map.flyTo(coords, POINT_ZOOM, { duration: 0.8 });
             })
             .addTo(nextLayer);
@@ -761,7 +819,7 @@ export default function MapView({
         <div className="relative">
           <button id="btn-toggle-map-filter" type="button" onClick={() => setFilterMenuOpen((open) => !open)} aria-label="打开地区与主题筛选" aria-expanded={filterMenuOpen} className="map-region-filter-trigger">
             <MapPin className="h-4 w-4" strokeWidth={1.6} />
-            <span>{activeFilters.regions.length === 1 ? activeFilters.regions[0] : '全部地区'}</span>
+            <span>{contextTitle}</span>
             {filtersActive && <i aria-label="筛选已启用" />}
           </button>
           <AnimatePresence>
