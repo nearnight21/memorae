@@ -71,7 +71,7 @@ export default function MapMemoryOverlay({
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
   const currentPhoto = availablePhotos[photoIdx] || availablePhotos[0] || '';
   const activeMemory = isEditing ? draftMemory : memory;
-  const locationParts = [activeMemory.country, activeMemory.city, activeMemory.location?.name]
+  const locationParts = [activeMemory.country, activeMemory.city, activeMemory.detailLocation]
     .map((part) => part?.trim())
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index);
   const locationText = locationParts.join(' · ');

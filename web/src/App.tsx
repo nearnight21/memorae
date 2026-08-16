@@ -28,7 +28,7 @@ import { type VaultSessionV1 } from './crypto';
 import { deleteProductMemory, loadProductMemories, saveProductMemory } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
-import { geocodeAddress } from './lib/geo';
+import { geocodeAddress, reverseGeocodeCoordinates } from './lib/geo';
 import { EMPTY_MEMORY_FILTERS, filterMemories } from './lib/memoryFilters';
 
 // Subcomponents
@@ -68,7 +68,9 @@ export default function App({
 
   // Keep geocoded country/city data in the shared source used by every future view.
   // Filtering must happen after this enrichment so a location-only memory is not
-  // missing from the region results.
+  // missing from the region results. For China, a district such as 鄞州区 or 新城区
+  // is not a city; use the parent city as the primary map location and keep the
+  // district as secondary detail.
   useEffect(() => {
     setEnrichedMemories(memories);
     let cancelled = false;
@@ -77,13 +79,19 @@ export default function App({
       let changed = false;
       for (let index = 0; index < next.length; index += 1) {
         const memory = next[index];
-        if (memory.city?.trim() || !memory.location?.name?.trim()) continue;
-        const geo = await geocodeAddress(memory.location.name);
+        const city = memory.city?.trim() || '';
+        const isChina = memory.country?.includes('中国') || memory.country?.includes('中國');
+        const needsHierarchy = !city || (isChina && /(?:区|县|旗|镇)$/.test(city));
+        if (!needsHierarchy || !memory.location?.name?.trim()) continue;
+        const geo = Number.isFinite(memory.lat) && Number.isFinite(memory.lng)
+          ? await reverseGeocodeCoordinates(memory.lat as number, memory.lng as number)
+          : await geocodeAddress(memory.location.name);
         if (cancelled || !geo?.city) continue;
         next[index] = {
           ...memory,
           country: memory.country?.trim() || geo.country,
           city: geo.city,
+          detailLocation: memory.detailLocation?.trim() || geo.district,
           lat: memory.lat ?? geo.lat,
           lng: memory.lng ?? geo.lng,
         };

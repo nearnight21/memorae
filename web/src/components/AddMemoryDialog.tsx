@@ -120,6 +120,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
       const label = reverse?.label || reverse?.city || reverse?.country || `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
       locationValueRef.current = label;
       setLocationName(label);
+      setDetailLocation((current) => current.trim() || reverse?.district || '');
       locationAutoRef.current = true;
       applyLocationCoordinates(reverse ?? { lat: latitude, lng: longitude });
     }
@@ -210,6 +211,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
           locationValueRef.current = selection.name;
           setLocationName(selection.name);
           applyLocationCoordinates(selection);
+          if (selection.district) setDetailLocation(selection.district);
           setShowLocationMap(false);
         }}
       />
@@ -361,6 +363,7 @@ export default function AddMemoryDialog({ onClose, onAddMemory, isFirstMemory = 
                 locationValueRef.current = candidate.shortName;
                 setLocationName(candidate.shortName);
                 applyLocationCoordinates(candidate);
+                if (candidate.district) setDetailLocation(candidate.district);
               }}
               placeholder="地点"
               inputClassName="memory-editor-location-input"

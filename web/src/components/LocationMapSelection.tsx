@@ -13,7 +13,7 @@ interface LocationMapSelectionProps {
   initialCoordinates: Coordinates | null;
   fallbackName: string;
   onCancel: () => void;
-  onConfirm: (location: Coordinates & { name: string; country?: string; city?: string }) => void;
+  onConfirm: (location: Coordinates & { name: string; country?: string; city?: string; district?: string }) => void;
 }
 
 const DEFAULT_CENTER: L.LatLngExpression = [35, 108];
@@ -150,6 +150,7 @@ export default function LocationMapSelection({
               name: selectedName,
               country: resolvedPlace?.country,
               city: resolvedPlace?.city,
+              district: resolvedPlace?.district,
             })}
             disabled={isResolving}
             className="memory-location-selection-primary"

@@ -168,7 +168,8 @@ function yearRangeOf(memories: Memory[]): string {
 }
 
 function placeOf(memory: Memory): string {
-  return [memory.country, memory.city, memory.location?.name]
+  // 主地点只显示城市；行政区作为次级地点，街道/景点留在详情页。
+  return [memory.country, memory.city, memory.detailLocation]
     .map((part) => part?.trim())
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
     .join(' · ') || '未标注地点';
@@ -737,7 +738,7 @@ export default function MapView({
         {selectedMemory ? (
           <nav className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[13px] tracking-[0.12em]" aria-label="地点层级">
             <button type="button" onClick={onCloseMemory} className="map-ui-accent-hover transition-colors cursor-pointer">足迹</button>
-            {[selectedMemory.country, selectedMemory.city, selectedMemory.location?.name]
+            {[selectedMemory.country, selectedMemory.city, selectedMemory.detailLocation]
               .map((part) => part?.trim())
               .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
               .map((part) => <span key={part}>/ {part}</span>)}
