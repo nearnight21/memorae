@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { CalendarDays } from 'lucide-react';
 import type { Memory, MemoryFilters } from '../types';
 import { memoryDateValue } from '../lib/memoryFilters';
+import { getTimelineTicks } from '../lib/timelineTicks';
 import './CrystalTimeline.css';
 
 const DAY_MS = 86_400_000;
@@ -38,6 +39,18 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const [dragging, setDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  useEffect(() => {
+    const element = bodyRef.current;
+    if (!element) return undefined;
+    const updateWidth = () => setTrackWidth(element.clientWidth);
+    updateWidth();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const bounds = useMemo(() => {
     const dates = memories.map(memoryDateValue);
@@ -61,11 +74,18 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     () => new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * progress) / DAY_MS) * DAY_MS),
     [bounds.max, bounds.min, progress],
   );
-  const years = useMemo(() => {
+  const timelineTicks = useMemo(() => {
     const start = bounds.min.getUTCFullYear();
     const end = bounds.max.getUTCFullYear();
-    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
-  }, [bounds.max, bounds.min]);
+    return getTimelineTicks(start, end, { width: trackWidth || 1028 });
+  }, [bounds.max, bounds.min, trackWidth]);
+  const currentYear = currentDate.getUTCFullYear();
+  const previewYears = useMemo(() => {
+    if (!dragging) return [];
+    return [-1, 0, 1]
+      .map((offset) => currentYear + offset)
+      .filter((year, index, values) => year >= bounds.min.getUTCFullYear() && year <= bounds.max.getUTCFullYear() && values.indexOf(year) === index);
+  }, [bounds.max, bounds.min, currentYear, dragging]);
 
   const commitProgress = (nextProgress: number) => {
     const nextDate = new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * clamp(nextProgress)) / DAY_MS) * DAY_MS);
@@ -171,13 +191,24 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         <div className="crystal-formal-focus" aria-hidden="true"><span /></div>
         <div className="crystal-formal-content">
           <div className="crystal-formal-years" aria-hidden="true">
-            {years.map((year) => {
+            {timelineTicks.minorYears.map((year) => {
               const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
-              return <span key={year} style={{ left: positionFor(yearProgress) }}>{year}</span>;
+              return <span key={`minor-${year}`} className="crystal-formal-minor-tick" style={{ left: positionFor(yearProgress) }} />;
+            })}
+            {timelineTicks.majorYears.map((year) => {
+              const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+              return <span key={year} className={year === currentYear ? 'is-current-major' : undefined} style={{ left: positionFor(yearProgress) }}>{year}</span>;
             })}
           </div>
           <div className="crystal-formal-track"><span /></div>
           <span className="crystal-formal-handle" aria-hidden="true" />
+          <div className="crystal-formal-current-years" aria-hidden="true">
+            {previewYears.map((year) => {
+              const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+              return <span key={`preview-${year}`} className={year === currentYear ? 'is-current' : undefined} style={{ left: positionFor(yearProgress) }}>{year}</span>;
+            })}
+            {!dragging && <span className="crystal-formal-current-year" style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>}
+          </div>
           <output className={`crystal-formal-popover ${dragging || hovering || expanded ? 'is-visible' : ''}`} aria-live="polite">
             <span className="crystal-formal-popover-month"><CalendarDays size={16} />{formatMonth(currentDate)}</span>
             <span className="crystal-formal-popover-date">{formatDate(currentDate)}</span>

@@ -35,7 +35,13 @@
 .crystal-formal-focus { top:1px;left:var(--crystal-position);width:clamp(76px,9.5%,92px);height:86px;transform:translateX(-50%);border-radius:46%;background:radial-gradient(ellipse at 50% 46%,rgba(225,246,255,.27),rgba(153,213,249,.11) 42%,transparent 84%);backdrop-filter:blur(.8px) saturate(1.17) brightness(1.085);box-shadow:inset 0 2px 2px rgba(250,254,255,.46),0 0 5px rgba(91,176,229,.08);transition:left 70ms linear; }
 .crystal-formal-focus span { position:absolute;inset:7px 16px;border-radius:48%;background:radial-gradient(ellipse,rgba(238,250,255,.24),rgba(161,217,250,.065) 52%,transparent 76%); }
 .crystal-formal-content { inset:0; }
-.crystal-formal-years span { position:absolute;top:18px;transform:translateX(-50%);font-size:16px;font-weight:500;line-height:22px;color:rgba(7,38,78,.88);text-shadow:0 1px 1px rgba(255,255,255,.34); }
+.crystal-formal-years span { position:absolute;top:18px;transform:translateX(-50%);font-size:16px;font-weight:500;line-height:22px;color:rgba(7,38,78,.88);text-shadow:0 1px 1px rgba(255,255,255,.34);white-space:nowrap; }
+.crystal-formal-years .crystal-formal-minor-tick { top:47px;width:4px;height:4px;border-radius:50%;background:rgba(18,72,111,.2);box-shadow:0 0 3px rgba(211,240,255,.55); }
+.crystal-formal-years .is-current-major { color:rgba(7,38,78,.5); }
+.crystal-formal-current-years { position:absolute;inset:0;pointer-events:none; }
+.crystal-formal-current-years span { position:absolute;top:41px;transform:translateX(-50%);font-size:13px;font-weight:700;line-height:18px;color:rgba(5,54,96,.96);text-shadow:0 1px 2px rgba(255,255,255,.8);white-space:nowrap; }
+.crystal-formal-current-years .is-current { top:39px; padding:2px 7px; border-radius:999px; color:#0b4f83; background:rgba(232,248,255,.68); box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 1px 4px rgba(34,98,137,.14); }
+.crystal-formal-current-year { top:39px !important; }
 .crystal-formal-track { position:absolute;right:46px;bottom:19.5px;left:46px;height:3px;border-radius:999px;background:rgba(17,57,88,.2);overflow:hidden; }
 .crystal-formal-track span { display:block;width:var(--crystal-progress);height:100%;background:linear-gradient(90deg,rgba(35,105,160,.16),rgba(29,122,194,.62)); }
 .crystal-formal-handle { position:absolute;left:var(--crystal-position);bottom:14px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle at 38% 32%,#f8fcff 0 21%,#4389c6 24% 48%,#0d5d9e 72%);box-shadow:0 1px 3px rgba(15,75,119,.2); }
@@ -44,4 +50,4 @@
 .crystal-formal-popover-month,.crystal-formal-popover-date { display:flex;align-items:center;justify-content:center;gap:6px; }
 .crystal-formal-popover-month { font-size:15px;font-weight:600; }
 .crystal-formal-clear { position:absolute;right:18px;bottom:-27px;pointer-events:auto;border:0;background:transparent;color:#68635b;font-size:11px;cursor:pointer; }
-@media (max-width:720px) { .crystal-timeline-formal { left:50%;width:calc(100vw - 32px); } .crystal-formal-years span { font-size:12px; } }
+@media (max-width:720px) { .crystal-timeline-formal { left:50%;width:calc(100vw - 32px); } .crystal-formal-years span { font-size:12px; } .crystal-formal-current-years span { font-size:11px; } }
