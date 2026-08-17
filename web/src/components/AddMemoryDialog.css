@@ -860,6 +860,7 @@
 }
 
 .memory-location-selection-cancel,
+.memory-location-selection-retry,
 .memory-location-selection-secondary,
 .memory-location-selection-primary {
   display: inline-flex;
@@ -928,6 +929,18 @@
   color: var(--color-text-primary, #282623);
 }
 
+.memory-location-selection-retry {
+  border: 1px solid color-mix(in srgb, var(--color-crystal, #6c99ad) 58%, var(--color-border-subtle, #cfc7b8));
+  background: color-mix(in srgb, var(--color-crystal, #6c99ad) 10%, transparent);
+  color: var(--color-text-primary, #282623);
+}
+
+.memory-location-selection-retry:hover,
+.memory-location-selection-retry:focus-visible {
+  background: color-mix(in srgb, var(--color-crystal, #6c99ad) 18%, transparent);
+  outline: none;
+}
+
 .memory-location-selection-primary {
   border: 1px solid var(--color-accent-fill, #a76b3e);
   background: var(--color-accent-fill, #a76b3e);
@@ -940,19 +953,49 @@
 }
 
 .memory-location-selection-marker-shell {
+  position: relative;
   background: transparent;
   border: 0;
+  overflow: visible;
+}
+
+.memory-location-selection-marker-shell::after {
+  position: absolute;
+  top: 41px;
+  left: 14px;
+  width: 20px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(62, 48, 37, 0.25);
+  content: '';
+  filter: blur(1px);
+  z-index: 0;
 }
 
 .memory-location-selection-marker {
-  display: block;
-  width: 18px;
-  height: 18px;
-  margin: 7px;
+  position: absolute;
+  top: 3px;
+  left: 7px;
+  z-index: 1;
+  display: grid;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  place-items: center;
   border: 4px solid var(--color-bg-surface, #fffdf8);
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-accent-fill, #a76b3e);
+  box-shadow: 0 5px 15px rgba(62, 48, 37, 0.42);
+  transform: rotate(-45deg);
+}
+
+.memory-location-selection-marker::after {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--color-crystal, #6c99ad);
-  box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-crystal, #6c99ad) 28%, transparent), 0 4px 12px rgba(42, 62, 76, 0.32);
+  background: var(--color-bg-surface, #fffdf8);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-fill, #a76b3e) 24%, transparent);
+  content: '';
 }
 
 .memory-location-selection-marker-shell.is-arriving .memory-location-selection-marker {
@@ -960,9 +1003,9 @@
 }
 
 @keyframes memory-location-marker-arrive {
-  0% { transform: scale(0.35); opacity: 0; }
-  70% { transform: scale(1.12); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% { transform: translateY(-12px) rotate(-45deg) scale(0.45); opacity: 0; }
+  70% { transform: translateY(2px) rotate(-45deg) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) rotate(-45deg) scale(1); opacity: 1; }
 }
 
 .memory-editor-save-note {
@@ -1099,6 +1142,7 @@
   }
 
   .memory-location-selection-secondary,
+  .memory-location-selection-retry,
   .memory-location-selection-primary {
     flex: 1;
   }

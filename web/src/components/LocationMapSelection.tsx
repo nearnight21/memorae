@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Check, LoaderCircle, MapPin, Search, X } from 'lucide-react';
+import { Check, LoaderCircle, MapPin, RefreshCw, Search, X } from 'lucide-react';
 import { reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
+import { resolveLocationWithRetry } from '../lib/locationLookup';
 
 interface Coordinates {
   lat: number;
@@ -23,8 +24,8 @@ const DETAIL_ZOOM = 13;
 const temporaryMarker = L.divIcon({
   className: 'memory-location-selection-marker-shell',
   html: '<span class="memory-location-selection-marker" aria-hidden="true"></span>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
+  iconSize: [48, 52],
+  iconAnchor: [24, 46],
 });
 
 function locationName(result: GeoResult | null, fallbackName: string) {
@@ -47,6 +48,8 @@ export default function LocationMapSelection({
   const [selectionCandidate, setSelectionCandidate] = useState<PlaceCandidate | null>(null);
   const [resolvedPlace, setResolvedPlace] = useState<GeoResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
+  const [lookupFailed, setLookupFailed] = useState(false);
+  const [lookupVersion, setLookupVersion] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PlaceCandidate[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -90,7 +93,11 @@ export default function LocationMapSelection({
 
     const coordinates: L.LatLngExpression = [selection.lat, selection.lng];
     if (!markerRef.current) {
-      markerRef.current = L.marker(coordinates, { icon: temporaryMarker, keyboard: false }).addTo(map);
+      markerRef.current = L.marker(coordinates, {
+        icon: temporaryMarker,
+        keyboard: false,
+        zIndexOffset: 1_000,
+      }).addTo(map);
     } else {
       markerRef.current.setLatLng(coordinates);
     }
@@ -133,26 +140,27 @@ export default function LocationMapSelection({
     if (!selection) {
       setResolvedPlace(null);
       setIsResolving(false);
+      setLookupFailed(false);
       return;
     }
 
     let cancelled = false;
     setResolvedPlace(null);
+    setLookupFailed(false);
     setIsResolving(true);
-    const resolveWithFallback = Promise.race<GeoResult | null>([
-      reverseGeocodeCoordinates(selection.lat, selection.lng),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 6000)),
-    ]);
-    void resolveWithFallback.then((result) => {
+    void resolveLocationWithRetry(
+      () => reverseGeocodeCoordinates(selection.lat, selection.lng),
+    ).then((result) => {
       if (cancelled) return;
       setResolvedPlace(result);
+      setLookupFailed(result === null);
       setIsResolving(false);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [selection]);
+  }, [lookupVersion, selection]);
 
   const selectedName = selectionCandidate?.shortName || locationName(resolvedPlace, fallbackName);
   const detail = resolvedPlace
@@ -201,9 +209,31 @@ export default function LocationMapSelection({
       {selection && (
         <aside className="memory-location-selection-confirm" aria-live="polite">
           <div className="memory-location-selection-copy">
-            <strong>{isResolving ? '正在识别地点...' : selectedName}</strong>
-            <span>{isResolving ? '正在获取地点名称与地址' : detail || '大致位置已标记'}</span>
+            <strong>
+              {isResolving
+                ? '正在识别地点...'
+                : lookupFailed && !selectionCandidate
+                  ? '地点名称暂未识别'
+                  : selectedName}
+            </strong>
+            <span>
+              {isResolving
+                ? '正在获取地点名称与地址'
+                : lookupFailed && !selectionCandidate
+                  ? `${detail} · 可重试或直接确认`
+                  : detail || '大致位置已标记'}
+            </span>
           </div>
+          {lookupFailed && !selectionCandidate && (
+            <button
+              type="button"
+              onClick={() => setLookupVersion((version) => version + 1)}
+              className="memory-location-selection-retry"
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+              重新识别
+            </button>
+          )}
           <button type="button" onClick={onCancel} className="memory-location-selection-secondary">取消</button>
           <button
             type="button"
