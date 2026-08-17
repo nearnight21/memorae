@@ -6,7 +6,10 @@ export interface LocationCoordinates {
 export interface LocationSuggestion extends LocationCoordinates {
   shortName: string;
   displayName: string;
+  provider: 'amap';
+  providerId?: string;
   country?: string;
+  province?: string;
   city?: string;
   district?: string;
   adcode?: string;
@@ -15,8 +18,11 @@ export interface LocationSuggestion extends LocationCoordinates {
 
 export interface ReverseGeocodedLocation extends LocationCoordinates {
   label?: string;
+  placeName?: string;
   formattedAddress?: string;
+  provider: 'amap';
   country?: string;
+  province?: string;
   city?: string;
   district?: string;
   adcode?: string;
@@ -55,6 +61,7 @@ type AmapStatusResponse = {
 
 type AmapAddressComponent = {
   country?: string;
+  province?: string;
   city?: string | string[];
   district?: string;
   adcode?: string;
@@ -67,6 +74,26 @@ function stringValue(value: unknown): string | undefined {
 function cityValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value.map(stringValue).find(Boolean);
   return stringValue(value);
+}
+
+const CHINA_MUNICIPALITIES = new Set(['北京市', '上海市', '天津市', '重庆市']);
+
+function normalizedAdministrativeLocation(component: AmapAddressComponent): Pick<
+  ReverseGeocodedLocation,
+  'country' | 'province' | 'city' | 'district' | 'adcode'
+> {
+  const country = stringValue(component.country);
+  const province = stringValue(component.province);
+  const rawCity = cityValue(component.city);
+  const isChina = country === '中国' || Boolean(province && CHINA_MUNICIPALITIES.has(province));
+  const city = rawCity || (isChina && province && CHINA_MUNICIPALITIES.has(province) ? province : undefined);
+  return {
+    country,
+    province,
+    city,
+    district: stringValue(component.district),
+    adcode: stringValue(component.adcode),
+  };
 }
 
 function requireCoordinates(value: string | undefined): LocationCoordinates {
@@ -120,6 +147,8 @@ export class AmapWebLocationService implements LocationService {
         ...coordinates,
         shortName: tip.name.trim(),
         displayName: [district, address].filter(Boolean).join(' · ') || tip.name.trim(),
+        provider: 'amap' as const,
+        providerId: stringValue(tip.id),
         district,
         adcode: stringValue(tip.adcode),
         poiId: stringValue(tip.id),
@@ -149,11 +178,10 @@ export class AmapWebLocationService implements LocationService {
     return {
       ...coordinates,
       label,
+      placeName: label,
       formattedAddress,
-      country: stringValue(component.country),
-      city: cityValue(component.city),
-      district: stringValue(component.district),
-      adcode: stringValue(component.adcode),
+      provider: 'amap',
+      ...normalizedAdministrativeLocation(component),
     };
   }
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Check, LoaderCircle, MapPin, RefreshCw, Search, X } from 'lucide-react';
-import { reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
 import { resolveLocationWithRetry } from '../lib/locationLookup';
 
 interface Coordinates {
@@ -14,7 +14,17 @@ interface LocationMapSelectionProps {
   initialCoordinates: Coordinates | null;
   fallbackName: string;
   onCancel: () => void;
-  onConfirm: (location: Coordinates & { name: string; country?: string; city?: string; district?: string }) => void;
+  onConfirm: (location: Coordinates & {
+    name: string;
+    country?: string;
+    province?: string;
+    city?: string;
+    district?: string;
+    adcode?: string;
+    provider?: 'amap';
+    providerId?: string;
+    resolved: boolean;
+  }) => void;
 }
 
 const DEFAULT_CENTER: L.LatLngExpression = [35, 108];
@@ -29,7 +39,7 @@ const temporaryMarker = L.divIcon({
 });
 
 function locationName(result: GeoResult | null, fallbackName: string) {
-  return result?.label || result?.city || result?.country || fallbackName.trim() || '大致位置已标记';
+  return result?.placeName || result?.label || result?.city || result?.country || fallbackName.trim() || '大致位置已标记';
 }
 
 /**
@@ -170,6 +180,31 @@ export default function LocationMapSelection({
     : selection
       ? `${selection.lat.toFixed(5)}, ${selection.lng.toFixed(5)}`
       : '';
+  const canConfirm = Boolean(
+    resolvedPlace
+      && !lookupFailed
+      && hasResolvedAdministrativeLocation(resolvedPlace),
+  );
+
+  const confirmSelection = () => {
+    if (isResolving) return;
+    if (!canConfirm) {
+      setLookupVersion((version) => version + 1);
+      return;
+    }
+    onConfirm({
+      ...selection!,
+      name: selectedName,
+      country: resolvedPlace?.country,
+      province: resolvedPlace?.province,
+      city: resolvedPlace?.city,
+      district: resolvedPlace?.district,
+      adcode: resolvedPlace?.adcode,
+      provider: resolvedPlace?.provider,
+      providerId: selectionCandidate?.providerId,
+      resolved: true,
+    });
+  };
 
   return (
     <section className="memory-location-selection" aria-label="在地图上选择地点">
@@ -210,21 +245,17 @@ export default function LocationMapSelection({
         <aside className="memory-location-selection-confirm" aria-live="polite">
           <div className="memory-location-selection-copy">
             <strong>
-              {isResolving
-                ? '正在识别地点...'
-                : lookupFailed && !selectionCandidate
-                  ? '地点名称暂未识别'
-                  : selectedName}
+              {isResolving ? '正在识别地点...' : lookupFailed ? '地点行政信息暂未确认' : selectedName}
             </strong>
             <span>
               {isResolving
                 ? '正在获取地点名称与地址'
-                : lookupFailed && !selectionCandidate
-                  ? `${detail} · 可重试或直接确认`
+                : lookupFailed
+                  ? `${detail} · 可重试后再确认`
                   : detail || '大致位置已标记'}
             </span>
           </div>
-          {lookupFailed && !selectionCandidate && (
+          {lookupFailed && (
             <button
               type="button"
               onClick={() => setLookupVersion((version) => version + 1)}
@@ -237,13 +268,7 @@ export default function LocationMapSelection({
           <button type="button" onClick={onCancel} className="memory-location-selection-secondary">取消</button>
           <button
             type="button"
-            onClick={() => onConfirm({
-              ...selection,
-              name: selectedName,
-              country: resolvedPlace?.country ?? selectionCandidate?.country,
-              city: resolvedPlace?.city ?? selectionCandidate?.city,
-              district: resolvedPlace?.district ?? selectionCandidate?.district,
-            })}
+            onClick={confirmSelection}
             disabled={isResolving}
             className="memory-location-selection-primary"
           >

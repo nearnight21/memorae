@@ -8,6 +8,7 @@ export interface ViewportRegion {
 
 export interface ViewportRegionCandidate {
   country: string;
+  province?: string;
   city?: string;
   lat: number;
   lng: number;
@@ -23,8 +24,9 @@ export interface GeographicBounds {
 export const COUNTRY_VIEWPORT_ZOOM = 5;
 export const CITY_VIEWPORT_ZOOM = 8;
 
-// MemoryV2 does not yet persist province. This covers the city data already
-// used by the product; unknown cities safely fall back to their country.
+// Keep a small fallback table for viewport-level province grouping. Normalized
+// MemoryV2 records also carry province, but the viewport candidate contract
+// intentionally stays compact and derives it from the city label here.
 const CHINA_CITY_PROVINCES: Record<string, string> = {
   '宁波': '浙江',
   '杭州': '浙江',
@@ -47,7 +49,8 @@ const CHINA_CITY_PROVINCES: Record<string, string> = {
 
 export const provinceForCity = (country: string, city?: string): string | null => {
   if (!city || country !== '中国') return null;
-  return CHINA_CITY_PROVINCES[city] ?? null;
+  const normalizedCity = city.trim().replace(/市$/, '');
+  return CHINA_CITY_PROVINCES[normalizedCity] ?? null;
 };
 
 const contains = (bounds: GeographicBounds, candidate: ViewportRegionCandidate): boolean =>
@@ -99,7 +102,9 @@ export const currentRegionForViewport = (
     }
   }
 
-  const provinces = distinct(cities.map((city) => provinceForCity(country, city) ?? ''));
+  const provinces = distinct(visible
+    .filter((candidate) => candidate.city?.trim())
+    .map((candidate) => candidate.province?.trim() || provinceForCity(country, candidate.city) || ''));
   if (provinces.length === 1) return { name: provinces[0], scope: 'province', country };
   return { name: country, scope: 'country', country };
 };

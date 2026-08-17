@@ -10,7 +10,10 @@ export interface LocationCoordinates {
 export interface LocationSearchResult extends LocationCoordinates {
   shortName: string;
   displayName: string;
+  provider: 'amap';
+  providerId?: string;
   country?: string;
+  province?: string;
   city?: string;
   district?: string;
   adcode?: string;
@@ -19,9 +22,12 @@ export interface LocationSearchResult extends LocationCoordinates {
 
 export interface LocationReverseResult extends LocationCoordinates {
   label?: string;
+  placeName?: string;
   formattedAddress?: string;
+  provider: 'amap';
   country?: string;
-  city?: string;
+  province?: string | string[];
+  city?: string | string[];
   district?: string;
   adcode?: string;
 }

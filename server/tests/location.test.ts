@@ -44,7 +44,7 @@ test('高德服务保持输入提示坐标，并将反查和 GPS 转换归一为
           status: '1',
           regeocode: {
             formatted_address: '浙江省宁波市鄞州区东钱湖镇环湖东路',
-            addressComponent: { country: '中国', city: '宁波市', district: '鄞州区', adcode: '330212' },
+            addressComponent: { country: '中国', province: '浙江省', city: '宁波市', district: '鄞州区', adcode: '330212' },
             pois: [{ name: '东钱湖' }],
           },
         });
@@ -59,6 +59,8 @@ test('高德服务保持输入提示坐标，并将反查和 GPS 转换归一为
     displayName: '鄞州区 · 环湖东路',
     lat: 29.76,
     lng: 121.625,
+    provider: 'amap',
+    providerId: 'B0FF-test',
     district: '鄞州区',
     adcode: '330212',
     poiId: 'B0FF-test',
@@ -69,8 +71,11 @@ test('高德服务保持输入提示坐标，并将反查和 GPS 转换归一为
     lat: 29.76,
     lng: 121.625,
     label: '东钱湖',
+    placeName: '东钱湖',
     formattedAddress: '浙江省宁波市鄞州区东钱湖镇环湖东路',
+    provider: 'amap',
     country: '中国',
+    province: '浙江省',
     city: '宁波市',
     district: '鄞州区',
     adcode: '330212',
@@ -79,6 +84,31 @@ test('高德服务保持输入提示坐标，并将反查和 GPS 转换归一为
   assert.deepEqual(await service.convertGps({ lat: 29.75, lng: 121.62 }), { lat: 29.756, lng: 121.629 });
   assert.match(requested[0], /city=330200/);
   assert.match(requested[2], /coordsys=gps/);
+});
+
+test('高德直辖市反查在 city 为空时使用省级名称作为城市', async () => {
+  for (const province of ['北京市', '上海市', '天津市', '重庆市']) {
+    const service = new AmapWebLocationService({
+      key: 'private-service-key',
+      fetch: async () => Response.json({
+        status: '1',
+        regeocode: {
+          formatted_address: `${province}某区某路`,
+          addressComponent: {
+            country: '中国',
+            province,
+            city: [],
+            district: `${province.slice(0, 2)}区`,
+            adcode: '110101',
+          },
+        },
+      }),
+    });
+
+    const result = await service.reverse({ lat: 39.9, lng: 116.4 });
+    assert.equal(result?.province, province);
+    assert.equal(result?.city, province);
+  }
 });
 
 test('地点代理需要账号令牌，并在未配置服务时明确提示', async (context) => {
@@ -111,11 +141,11 @@ test('地点代理只返回服务端选择的地点结果', async (context) => {
   const locationService: LocationService = {
     async suggest(query, adcode) {
       calls.push(`suggest:${query}:${adcode ?? ''}`);
-      return [{ shortName: '东钱湖', displayName: '宁波 · 东钱湖', lat: 29.76, lng: 121.625 }];
+      return [{ provider: 'amap', providerId: 'B0FF-test', shortName: '东钱湖', displayName: '宁波 · 东钱湖', lat: 29.76, lng: 121.625 }];
     },
     async reverse({ lat, lng }) {
       calls.push(`reverse:${lat}:${lng}`);
-      return { lat, lng, label: '东钱湖', country: '中国', city: '宁波', district: '鄞州区' };
+      return { lat, lng, label: '东钱湖', placeName: '东钱湖', provider: 'amap', country: '中国', province: '浙江省', city: '宁波市', district: '鄞州区' };
     },
     async convertGps({ lat, lng }) {
       calls.push(`convert:${lat}:${lng}`);
@@ -138,7 +168,7 @@ test('地点代理只返回服务端选择的地点结果', async (context) => {
     headers: bearer(),
   });
   assert.equal(suggestions.statusCode, 200);
-  assert.deepEqual(suggestions.json(), [{ shortName: '东钱湖', displayName: '宁波 · 东钱湖', lat: 29.76, lng: 121.625 }]);
+  assert.deepEqual(suggestions.json(), [{ provider: 'amap', providerId: 'B0FF-test', shortName: '东钱湖', displayName: '宁波 · 东钱湖', lat: 29.76, lng: 121.625 }]);
 
   const reverse = await app.inject({
     method: 'GET',

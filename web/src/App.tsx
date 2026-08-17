@@ -28,7 +28,7 @@ import { type VaultSessionV1 } from './crypto';
 import { deleteProductMemory, loadProductMemories, loadProductOriginalPhoto, saveProductMemory } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
-import { geocodeAddress, reverseGeocodeCoordinates } from './lib/geo';
+import { geocodeAddress, hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from './lib/geo';
 import { EMPTY_MEMORY_FILTERS, filterMemories } from './lib/memoryFilters';
 
 // Subcomponents
@@ -66,44 +66,76 @@ export default function App({
   const [filters, setFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
   const [enrichedMemories, setEnrichedMemories] = useState<Memory[]>(initialMemories);
 
-  // Keep geocoded country/city data in the shared source used by every future view.
-  // Filtering must happen after this enrichment so a location-only memory is not
-  // missing from the region results. For China, a district such as 鄞州区 or 新城区
-  // is not a city; use the parent city as the primary map location and keep the
-  // district as secondary detail.
+  // Keep one normalized location shape in the shared source used by every view.
+  // Missing hierarchy on old encrypted records is repaired from their saved
+  // coordinates (or the place name), then written back so the fix survives reload.
   useEffect(() => {
     setEnrichedMemories(memories);
     let cancelled = false;
     const run = async () => {
       const next = [...memories];
-      let changed = false;
+      const persistedUpdates: Memory[] = [];
       for (let index = 0; index < next.length; index += 1) {
         const memory = next[index];
-        const city = memory.city?.trim() || '';
-        const isChina = memory.country?.includes('中国') || memory.country?.includes('中國');
-        const needsHierarchy = !city || (isChina && /(?:区|县|旗|镇)$/.test(city));
+        const isChina = Boolean(memory.country?.includes('中国') || memory.country?.includes('中國'));
+        const cityNeedsNormalization = !memory.city?.trim()
+          || (isChina && /(?:区|县|旗|镇)$/.test(memory.city.trim()));
+        const needsHierarchy = Boolean(memory.location?.name?.trim()) && (
+          cityNeedsNormalization
+          || !memory.province?.trim()
+          || (isChina && (!memory.district?.trim() || !memory.adcode?.trim()))
+        );
         if (!needsHierarchy || !memory.location?.name?.trim()) continue;
         const geo = Number.isFinite(memory.lat) && Number.isFinite(memory.lng)
           ? await reverseGeocodeCoordinates(memory.lat as number, memory.lng as number)
           : await geocodeAddress(memory.location.name);
-        if (cancelled || !geo?.city) continue;
-        next[index] = {
+        if (cancelled || !hasResolvedAdministrativeLocation(geo)) continue;
+        const updated: Memory = {
           ...memory,
           country: memory.country?.trim() || geo.country,
-          city: geo.city,
+          province: memory.province?.trim() || geo.province,
+          city: cityNeedsNormalization ? geo.city : memory.city?.trim(),
+          district: memory.district?.trim() || geo.district,
+          adcode: memory.adcode?.trim() || geo.adcode,
+          locationProvider: memory.locationProvider || geo.provider,
+          locationProviderId: memory.locationProviderId || geo.providerId,
           detailLocation: memory.detailLocation?.trim() || geo.district,
           lat: memory.lat ?? geo.lat,
           lng: memory.lng ?? geo.lng,
         };
-        changed = true;
+        const changed = [
+          'country', 'province', 'city', 'district', 'adcode',
+          'locationProvider', 'locationProviderId', 'detailLocation', 'lat', 'lng',
+        ].some((key) => updated[key as keyof Memory] !== memory[key as keyof Memory]);
+        if (!changed) continue;
+        next[index] = updated;
+        try {
+          await saveProductMemory(session, updated);
+          persistedUpdates.push(updated);
+        } catch (error) {
+          console.error('地点标准化回写失败', error);
+        }
       }
-      if (changed && !cancelled) setEnrichedMemories(next);
+      if (persistedUpdates.length > 0 && !cancelled) {
+        await enqueueSilentSync();
+        const updatesById = new Map(persistedUpdates.map((memory) => [memory.id, memory]));
+        setMemories((current) => current.map((memory) => {
+          const update = updatesById.get(memory.id);
+          return update ? { ...memory, ...update } : memory;
+        }));
+        setEnrichedMemories((current) => current.map((memory) => {
+          const update = updatesById.get(memory.id);
+          return update ? { ...memory, ...update } : memory;
+        }));
+      } else if (next.some((memory, index) => memory !== memories[index]) && !cancelled) {
+        setEnrichedMemories(next);
+      }
     };
     void run();
     return () => {
       cancelled = true;
     };
-  }, [memories]);
+  }, [enqueueSilentSync, memories, session]);
 
   const filteredMemories = useMemo(
     () => filterMemories(enrichedMemories, filters),
@@ -120,6 +152,7 @@ export default function App({
   const [isLanternOn, setIsLanternOn] = useState<boolean>(true);
   const [hoveredMemoryId, setHoveredMemoryId] = useState<string | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [focusMemory, setFocusMemory] = useState<Memory | null>(null);
   const [firstMemoryFeedback, setFirstMemoryFeedback] = useState<Memory | null>(null);
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
   const [showRecall, setShowRecall] = useState(false);
@@ -335,9 +368,16 @@ export default function App({
   };
 
   const handleSaveMemory = async (updatedMem: Memory) => {
+    const previousMem = memories.find((memory) => memory.id === updatedMem.id);
+    const locationChanged = previousMem ? (
+      previousMem.location?.name !== updatedMem.location?.name
+      || previousMem.lat !== updatedMem.lat
+      || previousMem.lng !== updatedMem.lng
+    ) : false;
     await saveProductMemory(session, updatedMem);
     await enqueueSilentSync();
     handleUpdateMemory(updatedMem);
+    if (locationChanged) setFocusMemory(updatedMem);
   };
 
   const handleLoadOriginalPhoto = (photoId: string) => loadProductOriginalPhoto(session, photoId);
@@ -816,6 +856,7 @@ export default function App({
             filters={filters}
             onFiltersChange={setFilters}
             selectedMemory={selectedMemory}
+            focusMemory={focusMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
             onEditMemory={(memory) => {

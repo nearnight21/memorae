@@ -38,7 +38,12 @@ export interface Memory {
     my: number; // map coordinates on the central rustic map (y percent)
   };
   country?: string; // 地区线钻取：国家
+  province?: string; // 标准化行政层级：省/直辖市
   city?: string; // 地区线钻取：城市
+  district?: string; // 标准化行政层级：区县
+  adcode?: string; // 高德行政区编码
+  locationProvider?: 'amap';
+  locationProviderId?: string;
   lat?: number; // 高德 GCJ-02 纬度（候选、地图落点或 EXIF 转换后写入）
   lng?: number; // 高德 GCJ-02 经度
   /** 详细位置备注（如"外公外婆家"），仅文字记录，不参与地图定位 */

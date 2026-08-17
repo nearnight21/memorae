@@ -894,6 +894,7 @@
   margin: 0 auto;
   padding: 12px;
   border-radius: 8px;
+  pointer-events: auto;
 }
 
 .memory-location-selection-copy {

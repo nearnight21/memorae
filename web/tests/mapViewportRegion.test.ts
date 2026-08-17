@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   currentRegionForViewport,
+  provinceForCity,
   type GeographicBounds,
   type ViewportRegionCandidate,
 } from '../src/lib/mapViewportRegion';
@@ -44,4 +45,9 @@ test('a city remains current when its neighbour is only at the viewport edge', (
   assert.deepEqual(currentRegionForViewport(9, broadNingbo, candidates), {
     name: '宁波', scope: 'city', country: '中国',
   });
+});
+
+test('normalized municipality city labels still resolve their province', () => {
+  assert.equal(provinceForCity('中国', '上海市'), '上海');
+  assert.equal(provinceForCity('中国', '北京市'), '北京');
 });

@@ -9,6 +9,11 @@ export interface MemoryLocationV2 extends MemoryLocationV1 {
   mx: number;
   my: number;
   detail?: string;
+  province?: string;
+  district?: string;
+  adcode?: string;
+  provider?: string;
+  providerId?: string;
 }
 export interface MemoryV2 {
   schemaVersion: typeof MEMORY_SCHEMA_VERSION_V2;
@@ -104,7 +109,7 @@ export function assertMemoryV2(value: unknown): asserts value is MemoryV2 {
     if (value.location.lng !== undefined && !isFiniteBetween(value.location.lng, -180, 180)) {
       throw new Error('MemoryV2 的经度无效。');
     }
-    for (const key of ['city', 'country', 'detail'] as const) {
+    for (const key of ['city', 'country', 'province', 'district', 'adcode', 'provider', 'providerId', 'detail'] as const) {
       if (value.location[key] !== undefined && !isNonEmptyString(value.location[key])) {
         throw new Error(`MemoryV2 的地点字段 ${key} 无效。`);
       }

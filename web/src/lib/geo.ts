@@ -48,13 +48,17 @@ export interface GeoResult {
   lat: number;
   lng: number;
   country?: string;
+  province?: string;
   city?: string;
   /** 城市下一级行政区，用于地点的次级展示。 */
   district?: string;
   /** 反向地理编码返回的可读地点名。 */
   label?: string;
+  placeName?: string;
   formattedAddress?: string;
   adcode?: string;
+  provider?: 'amap';
+  providerId?: string;
 }
 
 export interface PlaceCandidate {
@@ -63,10 +67,13 @@ export interface PlaceCandidate {
   lat: number;
   lng: number;
   country?: string;
+  province?: string;
   city?: string;
   district?: string;
   adcode?: string;
   poiId?: string;
+  provider?: 'amap';
+  providerId?: string;
 }
 
 type GeoAddress = {
@@ -87,6 +94,55 @@ function displayNameParts(displayName?: string): string[] {
   return displayName?.split(',').map((part) => part.trim()).filter(Boolean) ?? [];
 }
 
+const CHINA_MUNICIPALITIES = new Set(['北京市', '上海市', '天津市', '重庆市']);
+
+function textValue(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return value.map((item) => textValue(item)).find(Boolean);
+  }
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function addressAdministrativeFallback(address: string): Pick<GeoResult, 'province' | 'city' | 'district'> {
+  const text = address.replace(/^(?:中国|中國)/, '');
+  const provinceMatch = text.match(/^([\u4e00-\u9fa5]{2,}?(?:省|自治区|特别行政区|市))/);
+  const province = provinceMatch?.[1];
+  const remainder = province ? text.slice(province.length) : text;
+  const isMunicipality = CHINA_MUNICIPALITIES.has(province ?? '');
+  const city = isMunicipality
+    ? province
+    : remainder.match(/^([\u4e00-\u9fa5]{2,}(?:市|自治州|地区|盟))/)?.[1];
+  const districtText = isMunicipality ? remainder : city ? remainder.slice(city.length) : remainder;
+  const district = districtText.match(/^([\u4e00-\u9fa5]{2,}(?:区|县|旗))/)?.[1];
+  return { province, city, district };
+}
+
+/**
+ * Normalize both the current API shape and older cloud responses. Older
+ * deployments returned a formatted address but omitted province/city, and
+ * AMap can return city as an empty array for municipalities.
+ */
+export function normalizeGeoResult(result: GeoResult): GeoResult {
+  const country = textValue(result.country);
+  const addressFallback = country?.includes('中国') || country?.includes('中國')
+    ? addressAdministrativeFallback(textValue(result.formattedAddress) ?? '')
+    : {};
+  const province = textValue(result.province) || addressFallback.province;
+  const city = textValue(result.city)
+    || (province && CHINA_MUNICIPALITIES.has(province) ? province : addressFallback.city);
+  const district = textValue(result.district) || addressFallback.district;
+  return { ...result, country, province, city, district };
+}
+
+export function hasResolvedAdministrativeLocation(
+  result: Pick<GeoResult, 'country' | 'province' | 'city'> | null | undefined,
+): boolean {
+  if (!result) return false;
+  const country = textValue(result.country) || '';
+  const isChina = country.includes('中国') || country.includes('中國');
+  return Boolean(textValue(result.city)) || (!isChina && Boolean(textValue(result.province)));
+}
+
 /** 保持中国城市为地图主层级，区县只作地点次级信息。 */
 export function administrativeLocation(address: GeoAddress, displayName?: string): {
   city?: string;
@@ -104,16 +160,19 @@ export function administrativeLocation(address: GeoAddress, displayName?: string
 }
 
 function geoFromReverse(result: LocationReverseResult): GeoResult {
-  return {
+  return normalizeGeoResult({
     lat: result.lat,
     lng: result.lng,
     country: result.country,
-    city: result.city,
+    province: textValue(result.province),
+    city: textValue(result.city),
     district: result.district,
     label: result.label,
+    placeName: result.placeName ?? result.label,
     formattedAddress: result.formattedAddress,
     adcode: result.adcode,
-  };
+    provider: result.provider ?? 'amap',
+  });
 }
 
 function candidateFromAmap(result: LocationSearchResult): PlaceCandidate {
@@ -123,10 +182,13 @@ function candidateFromAmap(result: LocationSearchResult): PlaceCandidate {
     lat: result.lat,
     lng: result.lng,
     country: result.country,
+    province: result.province,
     city: result.city,
     district: result.district,
     adcode: result.adcode,
     poiId: result.poiId,
+    provider: result.provider,
+    providerId: result.providerId,
   };
 }
 
@@ -173,24 +235,30 @@ export async function resolvePlace(country: string, city?: string): Promise<LatL
 
 /** 根据一个文本地点补齐显示层级；坐标始终来自高德搜索候选。 */
 export async function geocodeAddress(query: string): Promise<GeoResult | null> {
-  const key = `amap_geocode_v1_${query.trim()}`;
+  const key = `amap_geocode_v2_${query.trim()}`;
   try {
     const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached) as GeoResult;
+    if (cached) return normalizeGeoResult(JSON.parse(cached) as GeoResult);
   } catch {
     // Ignore malformed local cache entries.
   }
   const candidate = (await searchPlaces(query))[0];
   if (!candidate) return null;
-  const result: GeoResult = {
+  const reverse = await reverseGeocodeCoordinates(candidate.lat, candidate.lng);
+  const result = normalizeGeoResult({
     lat: candidate.lat,
     lng: candidate.lng,
-    country: candidate.country,
-    city: candidate.city,
-    district: candidate.district,
-    label: candidate.shortName,
-    adcode: candidate.adcode,
-  };
+    country: reverse?.country,
+    province: reverse?.province,
+    city: reverse?.city,
+    district: reverse?.district,
+    label: candidate.shortName || reverse?.label,
+    placeName: candidate.shortName || reverse?.placeName || reverse?.label,
+    formattedAddress: reverse?.formattedAddress ?? candidate.displayName,
+    adcode: reverse?.adcode,
+    provider: reverse?.provider,
+    providerId: reverse?.providerId,
+  });
   try {
     localStorage.setItem(key, JSON.stringify(result));
   } catch {
@@ -202,10 +270,10 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
 /** 地图点击和 GPS 反查：传入的坐标不在这里做二次搜索或移动。 */
 export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const key = `amap_reverse_v1_${lat.toFixed(5)}_${lng.toFixed(5)}`;
+  const key = `amap_reverse_v2_${lat.toFixed(5)}_${lng.toFixed(5)}`;
   try {
     const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached) as GeoResult;
+    if (cached) return normalizeGeoResult(JSON.parse(cached) as GeoResult);
   } catch {
     // Ignore malformed local cache entries.
   }
@@ -221,11 +289,30 @@ export async function reverseGeocodeCoordinates(lat: number, lng: number): Promi
   return result;
 }
 
+/** 候选搜索只确认名称和坐标；最终行政层级必须来自同一坐标的反向地理编码。 */
+export async function resolvePlaceCandidate(candidate: PlaceCandidate): Promise<GeoResult | null> {
+  const reverse = await reverseGeocodeCoordinates(candidate.lat, candidate.lng);
+  if (!reverse) return null;
+  return normalizeGeoResult({
+    ...reverse,
+    label: candidate.shortName || reverse.label,
+    placeName: candidate.shortName || reverse.placeName || reverse.label,
+    formattedAddress: reverse.formattedAddress || candidate.displayName,
+    country: reverse.country,
+    province: reverse.province,
+    city: reverse.city,
+    district: reverse.district,
+    adcode: reverse.adcode,
+    provider: reverse.provider,
+    providerId: candidate.providerId,
+  });
+}
+
 /** 高德输入提示 / POI 搜索的候选列表。 */
 export async function searchPlaces(query: string, adcode?: string): Promise<PlaceCandidate[]> {
   const text = query.trim();
   if (!text) return [];
-  const key = `amap_search_v1_${adcode ?? ''}_${text}`;
+  const key = `amap_search_v2_${adcode ?? ''}_${text}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached) as PlaceCandidate[];

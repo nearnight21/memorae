@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, LoaderCircle, RefreshCw, Trash2, X } from 'lucide-react';
 import { CategoryType, Memory } from '../types';
-import { reverseGeocodeCoordinates } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from '../lib/geo';
 import LocationPicker from './LocationPicker';
 
 interface ScreenPoint {
@@ -37,6 +37,14 @@ const yearFromDate = (date: string, fallback: number) => {
   return Number.isInteger(year) && year >= 1900 && year <= 2100 ? year : fallback;
 };
 
+function locationNeedsResolution(memory: Memory): boolean {
+  const country = memory.country?.trim() || '';
+  const isChina = country.includes('中国') || country.includes('中國');
+  return !memory.city?.trim()
+    || !memory.province?.trim()
+    || (isChina && /(?:区|县|旗|镇)$/.test(memory.city.trim()));
+}
+
 export default function MapMemoryOverlay({
   memory,
   anchor,
@@ -66,6 +74,10 @@ export default function MapMemoryOverlay({
   const [originalState, setOriginalState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [originalUrl, setOriginalUrl] = useState('');
   const [locationQuery, setLocationQuery] = useState('');
+  const [locationResolution, setLocationResolution] = useState<'idle' | 'resolving' | 'resolved' | 'error'>(
+    locationNeedsResolution(memory) ? 'idle' : 'resolved',
+  );
+  const locationRequestRef = useRef(0);
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -79,6 +91,8 @@ export default function MapMemoryOverlay({
     setOriginalState('loading');
     setOriginalUrl('');
     setLocationQuery('');
+    setLocationResolution(locationNeedsResolution(memory) ? 'idle' : 'resolved');
+    locationRequestRef.current += 1;
   }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
@@ -121,14 +135,21 @@ export default function MapMemoryOverlay({
   };
 
   const updateDraftLocationQuery = (name: string) => {
+    locationRequestRef.current += 1;
     setLocationQuery(name);
+    setLocationResolution('idle');
     setDraftMemory((current) => ({
       ...current,
       location: name.trim() || current.location
         ? { ...(current.location ?? { mx: 50, my: 50, name: '' }), name }
         : undefined,
       country: undefined,
+      province: undefined,
       city: undefined,
+      district: undefined,
+      adcode: undefined,
+      locationProvider: undefined,
+      locationProviderId: undefined,
       lat: undefined,
       lng: undefined,
     }));
@@ -136,6 +157,10 @@ export default function MapMemoryOverlay({
 
   const saveMemory = async (): Promise<boolean> => {
     if (!onSaveMemory || saveStatus === 'saving') return false;
+    if (draftMemory.location?.name.trim() && locationResolution !== 'resolved') {
+      setSaveStatus('error');
+      return false;
+    }
     const updated = {
       ...draftMemory,
       year: yearFromDate(draftMemory.date, memory.year),
@@ -328,7 +353,7 @@ export default function MapMemoryOverlay({
       {isEditing && onSaveMemory && <button
         type="button"
         onClick={() => void completeEditing()}
-        disabled={saveStatus === 'saving'}
+        disabled={saveStatus === 'saving' || (draftMemory.location?.name.trim() !== '' && locationResolution !== 'resolved')}
         aria-label="保存修改并完成编辑"
         title="保存修改并完成编辑"
         className="map-memory-complete map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 min-w-[82px] items-center justify-center rounded-full border px-4 text-[12px] transition-colors disabled:opacity-60 cursor-pointer"
@@ -375,6 +400,8 @@ export default function MapMemoryOverlay({
                   query={locationQuery}
                   onQueryChange={updateDraftLocationQuery}
                   onSelect={(candidate) => {
+                    const requestId = locationRequestRef.current + 1;
+                    locationRequestRef.current = requestId;
                     setLocationQuery('');
                     setDraftMemory((current) => ({
                       ...current,
@@ -384,23 +411,37 @@ export default function MapMemoryOverlay({
                         my: current.location?.my ?? 50,
                       },
                       country: candidate.country ?? current.country,
-                      city: candidate.city ?? current.city,
+                      province: undefined,
+                      city: undefined,
+                      district: undefined,
+                      adcode: undefined,
+                      locationProvider: candidate.provider,
+                      locationProviderId: candidate.providerId,
                       lat: candidate.lat,
                       lng: candidate.lng,
                     }));
-                    // 输入提示的坐标就是最终坐标；反查仅补齐行政层级，绝不重新搜索或移动该点。
+                    setLocationResolution('resolving');
                     void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
-                      if (!reverse) return;
+                      if (requestId !== locationRequestRef.current) return;
+                      if (!hasResolvedAdministrativeLocation(reverse)) {
+                        setLocationResolution('error');
+                        return;
+                      }
                       setDraftMemory((current) => (
                         current.lat === candidate.lat && current.lng === candidate.lng
                           ? {
                             ...current,
-                            country: reverse.country ?? current.country,
-                            city: reverse.city ?? current.city,
+                            country: reverse.country,
+                            province: reverse.province,
+                            city: reverse.city,
+                            district: reverse.district,
+                            adcode: reverse.adcode,
+                            locationProvider: reverse.provider,
                             detailLocation: current.detailLocation || reverse.district,
                           }
                           : current
                       ));
+                      setLocationResolution('resolved');
                     });
                   }}
                   placeholder="地点"

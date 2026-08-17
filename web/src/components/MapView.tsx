@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, ChevronLeft, History, List, MapPin, Plus } from 'lucide-react';
 import { Memory, type MemoryFilters } from '../types';
-import { resolvePlace, geocodeAddress } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
 import {
   EMPTY_MEMORY_FILTERS,
@@ -35,6 +35,8 @@ interface MapViewProps {
   filters?: MemoryFilters;
   onFiltersChange?: (filters: MemoryFilters) => void;
   selectedMemory: Memory | null;
+  /** 保存地址后需要地图主动聚焦的记忆。 */
+  focusMemory?: Memory | null;
   onSelectMemory: (m: Memory) => void;
   onCloseMemory: () => void;
   onEditMemory?: (memory: Memory) => void;
@@ -188,6 +190,7 @@ export default function MapView({
   filters: controlledFilters,
   onFiltersChange,
   selectedMemory,
+  focusMemory,
   onSelectMemory,
   onCloseMemory,
   onEditMemory,
@@ -249,13 +252,35 @@ export default function MapView({
     };
   }, [firstMemoryFeedback]);
 
+  // 编辑记忆地址后，地图必须跟随新的地点，而不是只更新面板里的文字。
+  // 等待底图初始化完成后再执行，避免保存发生在 Leaflet 实例创建之前时丢失聚焦。
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !baseMapReady || !focusMemory) return;
+
+    let cancelled = false;
+    const focusSavedMemory = async () => {
+      const coordinates = Number.isFinite(focusMemory.lat) && Number.isFinite(focusMemory.lng)
+        ? [focusMemory.lat as number, focusMemory.lng as number] as L.LatLngExpression
+        : await resolvePlace(countryOf(focusMemory), cityOf(focusMemory));
+      if (!cancelled && coordinates) map.flyTo(coordinates, POINT_ZOOM, { duration: 0.85 });
+    };
+
+    void focusSavedMemory();
+    return () => {
+      cancelled = true;
+    };
+  }, [baseMapReady, focusMemory]);
+
   // 全部可用年份作为滑块的固定刻度；不能从 filtered 计算，否则选中一年后滑块会塌缩成单值
   const allYears: number[] = useMemo(
     () => Array.from(new Set<number>(enriched.map((m) => m.year))).sort((a, b) => a - b),
     [enriched]
   );
 
-  // 只填了「地点」没填「国家」的记忆：地理编码自动归组到国家/城市气泡（结果有 localStorage 缓存）
+  // Render-time fallback for records loaded before normalized location fields
+  // existed. App persists the same repair; this keeps the map correct while it
+  // is in flight and never treats a district as a city.
   useEffect(() => {
     setEnriched(memories);
     let cancelled = false;
@@ -264,19 +289,33 @@ export default function MapView({
       let changed = false;
       for (let i = 0; i < out.length; i++) {
         const m = out[i];
-        if (!m.city?.trim() && m.location?.name?.trim()) {
-          const geo = await geocodeAddress(m.location.name);
-          if (geo?.city && !cancelled) {
-            out[i] = {
-              ...m,
-              country: m.country?.trim() || geo.country,
-              city: geo.city,
-              lat: m.lat ?? geo.lat,
-              lng: m.lng ?? geo.lng,
-            };
-            changed = true;
-          }
-        }
+        const isChina = Boolean(m.country?.includes('中国') || m.country?.includes('中國'));
+        const cityNeedsNormalization = !m.city?.trim()
+          || (isChina && /(?:区|县|旗|镇)$/.test(m.city.trim()));
+        const needsHierarchy = Boolean(m.location?.name?.trim()) && (
+          cityNeedsNormalization
+          || !m.province?.trim()
+          || (isChina && (!m.district?.trim() || !m.adcode?.trim()))
+        );
+        if (!needsHierarchy || !m.location?.name?.trim()) continue;
+        const geo = Number.isFinite(m.lat) && Number.isFinite(m.lng)
+          ? await reverseGeocodeCoordinates(m.lat as number, m.lng as number)
+          : await geocodeAddress(m.location.name);
+        if (!hasResolvedAdministrativeLocation(geo) || cancelled) continue;
+        out[i] = {
+          ...m,
+          country: m.country?.trim() || geo.country,
+          province: m.province?.trim() || geo.province,
+          city: cityNeedsNormalization ? geo.city : m.city?.trim(),
+          district: m.district?.trim() || geo.district,
+          adcode: m.adcode?.trim() || geo.adcode,
+          locationProvider: m.locationProvider || geo.provider,
+          locationProviderId: m.locationProviderId || geo.providerId,
+          detailLocation: m.detailLocation?.trim() || geo.district,
+          lat: m.lat ?? geo.lat,
+          lng: m.lng ?? geo.lng,
+        };
+        changed = true;
       }
       if (changed && !cancelled) setEnriched(out);
     };
@@ -298,6 +337,7 @@ export default function MapView({
           if (Number.isFinite(memory.lat) && Number.isFinite(memory.lng)) {
             return {
               country: countryOf(memory),
+              province: memory.province?.trim() || undefined,
               city: cityOf(memory) || undefined,
               lat: memory.lat as number,
               lng: memory.lng as number,
@@ -307,6 +347,7 @@ export default function MapView({
           if (!coordinates) return null;
           return {
             country: countryOf(memory),
+            province: memory.province?.trim() || undefined,
             city: cityOf(memory) || undefined,
             lat: coordinates[0],
             lng: coordinates[1],

@@ -12,8 +12,9 @@ import {
 import type { CategoryType, Memory, PinnedBy } from '../types';
 import { selectLocalPhoto } from '../product/selectPhoto';
 import { readPhotoMetadata } from '../product/photoMetadata';
-import { reverseGeocodeCoordinates } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, resolvePlaceCandidate, reverseGeocodeCoordinates, type PlaceCandidate } from '../lib/geo';
 import { convertGpsToAmap } from '../lib/locationApi';
+import { resolveLocationWithRetry } from '../lib/locationLookup';
 import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
 import './AddMemoryDialog.css';
@@ -28,14 +29,19 @@ interface AddMemoryDialogProps {
 
 type CreateStep = 'source' | 'photo-review' | 'editor';
 type SaveState = 'idle' | 'saving' | 'error';
+type LocationResolution = 'idle' | 'resolving' | 'resolved' | 'error';
 
 interface SelectedLocation {
   name: string;
   lat: number;
   lng: number;
   country?: string;
+  province?: string;
   city?: string;
   district?: string;
+  adcode?: string;
+  provider?: 'amap';
+  providerId?: string;
 }
 
 const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
@@ -75,9 +81,22 @@ function selectedLocationFromMemory(memory?: Memory): SelectedLocation | null {
     lat: memory.lat as number,
     lng: memory.lng as number,
     country: memory.country,
+    province: memory.province,
     city: memory.city,
-    district: memory.detailLocation,
+    district: memory.district ?? memory.detailLocation,
+    adcode: memory.adcode,
+    provider: memory.locationProvider,
+    providerId: memory.locationProviderId,
   };
+}
+
+function locationNeedsResolution(location: SelectedLocation | null): boolean {
+  if (!location) return false;
+  const country = location.country?.trim() || '';
+  const isChina = country.includes('中国') || country.includes('中國');
+  return !location.city?.trim()
+    || !location.province?.trim()
+    || (isChina && /(?:区|县|旗|镇)$/.test(location.city.trim()));
 }
 
 export default function AddMemoryDialog({
@@ -100,6 +119,9 @@ export default function AddMemoryDialog({
   const [galleryImages, setGalleryImages] = useState<string[]>(memory?.gallery ?? []);
   const [locationQuery, setLocationQuery] = useState(initialLocation ? '' : (memory?.location?.name ?? ''));
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(initialLocation);
+  const [locationResolution, setLocationResolution] = useState<LocationResolution>(
+    initialLocation && !locationNeedsResolution(initialLocation) ? 'resolved' : 'idle',
+  );
   const [detailLocation, setDetailLocation] = useState(memory?.detailLocation ?? '');
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isGalleryUploading, setIsGalleryUploading] = useState(false);
@@ -115,6 +137,7 @@ export default function AddMemoryDialog({
   const dateValueRef = useRef(date);
   const locationValueRef = useRef(memory?.location?.name ?? '');
   const photoMetadataRequestRef = useRef(0);
+  const locationRequestRef = useRef(0);
 
   useEffect(() => {
     const submitWithShortcut = (event: KeyboardEvent) => {
@@ -127,10 +150,82 @@ export default function AddMemoryDialog({
     return () => window.removeEventListener('keydown', submitWithShortcut);
   }, [step]);
 
+  useEffect(() => {
+    if (!initialLocation || !locationNeedsResolution(initialLocation)) return;
+    const requestId = locationRequestRef.current + 1;
+    locationRequestRef.current = requestId;
+    let cancelled = false;
+    setLocationResolution('resolving');
+    void resolveLocationWithRetry(
+      () => reverseGeocodeCoordinates(initialLocation.lat, initialLocation.lng),
+    ).then((reverse) => {
+      if (cancelled || requestId !== locationRequestRef.current) return;
+      if (!hasResolvedAdministrativeLocation(reverse)) {
+        setLocationResolution('error');
+        return;
+      }
+      confirmLocation({
+        ...initialLocation,
+        country: reverse.country ?? initialLocation.country,
+        province: reverse.province ?? initialLocation.province,
+        city: reverse.city ?? initialLocation.city,
+        district: reverse.district ?? initialLocation.district,
+        adcode: reverse.adcode ?? initialLocation.adcode,
+        provider: reverse.provider ?? initialLocation.provider,
+      });
+      setDetailLocation((current) => current || reverse.district || '');
+      setLocationResolution('resolved');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialLocation?.lat, initialLocation?.lng, initialLocation?.city, initialLocation?.province]);
+
   const confirmLocation = (result: SelectedLocation) => {
     setSelectedLocation(result);
     setLocationQuery('');
     locationValueRef.current = result.name;
+  };
+
+  const selectLocationCandidate = async (candidate: PlaceCandidate) => {
+    const requestId = locationRequestRef.current + 1;
+    locationRequestRef.current = requestId;
+    locationAutoRef.current = false;
+    confirmLocation({
+      name: candidate.shortName,
+      lat: candidate.lat,
+      lng: candidate.lng,
+      country: candidate.country,
+      district: candidate.district,
+      adcode: candidate.adcode,
+      provider: candidate.provider,
+      providerId: candidate.providerId,
+    });
+    setLocationResolution('resolving');
+    const resolved = await resolveLocationWithRetry(
+      () => resolvePlaceCandidate(candidate),
+    );
+    if (requestId !== locationRequestRef.current) return;
+    if (!hasResolvedAdministrativeLocation(resolved)) {
+      setLocationResolution('error');
+      setValidationMessage('地点的行政信息尚未确认，请重试或在地图上选择。');
+      return;
+    }
+    confirmLocation({
+      name: candidate.shortName,
+      lat: candidate.lat,
+      lng: candidate.lng,
+      country: resolved.country,
+      province: resolved.province,
+      city: resolved.city,
+      district: resolved.district,
+      adcode: resolved.adcode,
+      provider: resolved.provider,
+      providerId: candidate.providerId,
+    });
+    setDetailLocation((current) => current || resolved.district || '');
+    setLocationResolution('resolved');
+    setValidationMessage('');
   };
 
   const locationName = selectedLocation?.name ?? locationQuery;
@@ -158,6 +253,10 @@ export default function AddMemoryDialog({
       if (!converted) return;
       const reverse = await reverseGeocodeCoordinates(converted.lat, converted.lng);
       if (requestId !== photoMetadataRequestRef.current || (!locationAutoRef.current && locationValueRef.current.trim())) return;
+      if (!hasResolvedAdministrativeLocation(reverse)) {
+        setLocationResolution('error');
+        return;
+      }
       const label = reverse?.label || reverse?.city || reverse?.country || '已读取照片 GPS';
       setDetailLocation((current) => current.trim() || reverse?.district || '');
       locationAutoRef.current = true;
@@ -166,9 +265,13 @@ export default function AddMemoryDialog({
         lat: converted.lat,
         lng: converted.lng,
         country: reverse?.country,
+        province: reverse?.province,
         city: reverse?.city,
         district: reverse?.district,
+        adcode: reverse?.adcode,
+        provider: reverse?.provider,
       });
+      setLocationResolution('resolved');
     }
   };
 
@@ -218,6 +321,11 @@ export default function AddMemoryDialog({
       setValidationMessage('第一段记忆需要确认照片、时间和地点。');
       return;
     }
+    if (locationName.trim() && (!isLocationConfirmed || locationResolution !== 'resolved')) {
+      setSaveState('error');
+      setValidationMessage('请等待地点行政信息确认完成后再保存。');
+      return;
+    }
 
     setSaveState('saving');
     setValidationMessage('');
@@ -244,7 +352,12 @@ export default function AddMemoryDialog({
               }
             : undefined,
           country: selectedLocation?.country?.trim() || (hasUnconfirmedLocationText ? undefined : memory.country),
+          province: selectedLocation?.province?.trim() || (hasUnconfirmedLocationText ? undefined : memory.province),
           city: selectedLocation?.city?.trim() || (hasUnconfirmedLocationText ? undefined : memory.city),
+          district: selectedLocation?.district?.trim() || (hasUnconfirmedLocationText ? undefined : memory.district),
+          adcode: selectedLocation?.adcode?.trim() || (hasUnconfirmedLocationText ? undefined : memory.adcode),
+          locationProvider: selectedLocation?.provider || (hasUnconfirmedLocationText ? undefined : memory.locationProvider),
+          locationProviderId: selectedLocation?.providerId || (hasUnconfirmedLocationText ? undefined : memory.locationProviderId),
           lat: selectedLocation?.lat ?? (hasUnconfirmedLocationText ? undefined : memory.lat),
           lng: selectedLocation?.lng ?? (hasUnconfirmedLocationText ? undefined : memory.lng),
           detailLocation: detailLocation.trim() || undefined,
@@ -264,7 +377,12 @@ export default function AddMemoryDialog({
           pinnedBy: 'pin' as PinnedBy,
           location: locationName.trim() ? { name: locationName.trim(), mx: 50, my: 50 } : undefined,
           country: selectedLocation?.country?.trim() || undefined,
+          province: selectedLocation?.province?.trim() || undefined,
           city: selectedLocation?.city?.trim() || undefined,
+          district: selectedLocation?.district?.trim() || undefined,
+          adcode: selectedLocation?.adcode?.trim() || undefined,
+          locationProvider: selectedLocation?.provider,
+          locationProviderId: selectedLocation?.providerId,
           lat: selectedLocation?.lat,
           lng: selectedLocation?.lng,
           detailLocation: detailLocation.trim() || undefined,
@@ -284,9 +402,18 @@ export default function AddMemoryDialog({
         initialCoordinates={selectedLocation ? { lat: selectedLocation.lat, lng: selectedLocation.lng } : null}
         fallbackName={locationName}
         onCancel={() => setShowLocationMap(false)}
-        onConfirm={(selection) => {
+          onConfirm={(selection) => {
+            locationRequestRef.current += 1;
+            if (!selection.resolved) {
+              setLocationResolution('error');
+              setValidationMessage('地点的行政信息尚未确认，请重试。');
+              setShowLocationMap(false);
+              return;
+            }
           locationAutoRef.current = false;
           confirmLocation(selection);
+          setLocationResolution('resolved');
+          setValidationMessage('');
           if (selection.district) setDetailLocation(selection.district);
           setShowLocationMap(false);
         }}
@@ -385,7 +512,12 @@ export default function AddMemoryDialog({
             <ArrowLeft size={16} aria-hidden="true" />
             {isEditing ? '返回地图' : '返回'}
           </button>
-          <button type="submit" form="new-memory-editor" className="memory-editor-complete" disabled={saveState === 'saving'}>
+          <button
+            type="submit"
+            form="new-memory-editor"
+            className="memory-editor-complete"
+            disabled={saveState === 'saving' || (locationName.trim().length > 0 && locationResolution !== 'resolved')}
+          >
             {saveState === 'saving' ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} aria-hidden="true" />}
             {isEditing ? '保存修改' : '完成'}
           </button>
@@ -465,44 +597,22 @@ export default function AddMemoryDialog({
               selectedLabel={selectedLocation?.name ?? ''}
               query={locationQuery}
               onQueryChange={(value) => {
+                locationRequestRef.current += 1;
                 locationAutoRef.current = false;
                 locationValueRef.current = value;
                 setLocationQuery(value);
                 setSelectedLocation(null);
+                setLocationResolution('idle');
               }}
-              onSelect={(candidate) => {
-                locationAutoRef.current = false;
-                confirmLocation({
-                  name: candidate.shortName,
-                  lat: candidate.lat,
-                  lng: candidate.lng,
-                  country: candidate.country,
-                  city: candidate.city,
-                  district: candidate.district,
-                });
-                if (candidate.district) setDetailLocation(candidate.district);
-                // 输入提示的候选坐标不可被反查覆盖；反查只补齐城市、区县等展示层级。
-                void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
-                  if (!reverse) return;
-                  setSelectedLocation((current) => (
-                    current?.lat === candidate.lat && current.lng === candidate.lng
-                      ? {
-                        ...current,
-                        country: reverse.country ?? current.country,
-                        city: reverse.city ?? current.city,
-                        district: reverse.district ?? current.district,
-                      }
-                      : current
-                  ));
-                  if (reverse.district) setDetailLocation((current) => current || reverse.district || '');
-                });
-              }}
+              onSelect={(candidate) => { void selectLocationCandidate(candidate); }}
               placeholder="地点"
               inputClassName="memory-editor-location-input"
               onPickOnMap={() => setShowLocationMap(true)}
             />
           </div>
           {locationName.trim() && !isLocationConfirmed && <p className="memory-editor-location-status">尚未定位到地图</p>}
+          {isLocationConfirmed && locationResolution === 'resolving' && <p className="memory-editor-location-status">正在确认地点行政信息…</p>}
+          {isLocationConfirmed && locationResolution === 'error' && <p className="memory-editor-location-status is-error">地点确认失败，请重新选择。</p>}
 
           {isFirstMemory && <p className="memory-editor-first-memory-note">先确认照片、时间和地点；其余内容都可以以后再写。</p>}
 
