@@ -80,12 +80,6 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     return getTimelineTicks(start, end, { width: trackWidth || 1028 });
   }, [bounds.max, bounds.min, trackWidth]);
   const currentYear = currentDate.getUTCFullYear();
-  const previewYears = useMemo(() => {
-    if (!dragging) return [];
-    return [-1, 0, 1]
-      .map((offset) => currentYear + offset)
-      .filter((year, index, values) => year >= bounds.min.getUTCFullYear() && year <= bounds.max.getUTCFullYear() && values.indexOf(year) === index);
-  }, [bounds.max, bounds.min, currentYear, dragging]);
 
   const commitProgress = (nextProgress: number) => {
     const nextDate = new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * clamp(nextProgress)) / DAY_MS) * DAY_MS);
@@ -203,11 +197,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
           <div className="crystal-formal-track"><span /></div>
           <span className="crystal-formal-handle" aria-hidden="true" />
           <div className="crystal-formal-current-years" aria-hidden="true">
-            {previewYears.map((year) => {
-              const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
-              return <span key={`preview-${year}`} className={year === currentYear ? 'is-current' : undefined} style={{ left: positionFor(yearProgress) }}>{year}</span>;
-            })}
-            {!dragging && <span className="crystal-formal-current-year" style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>}
+            <span className={`crystal-formal-current-year ${dragging ? 'is-current' : ''}`} style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>
           </div>
           <output className={`crystal-formal-popover ${dragging || hovering || expanded ? 'is-visible' : ''}`} aria-live="polite">
             <span className="crystal-formal-popover-month"><CalendarDays size={16} />{formatMonth(currentDate)}</span>
