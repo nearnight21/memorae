@@ -76,6 +76,16 @@ export interface PlaceCandidate {
   providerId?: string;
 }
 
+/**
+ * Leaflet may retain the longitude of a copied world when users pan across
+ * the antimeridian. Persist and send the canonical representation instead.
+ */
+export function normalizeLongitude(lng: number): number {
+  if (!Number.isFinite(lng)) return lng;
+  const normalized = ((lng + 180) % 360 + 360) % 360 - 180;
+  return normalized === -180 && lng > 0 ? 180 : normalized;
+}
+
 type GeoAddress = {
   country?: string;
   city?: string;
@@ -269,8 +279,9 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
 
 /** 地图点击和 GPS 反查：传入的坐标不在这里做二次搜索或移动。 */
 export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const key = `amap_reverse_v2_${lat.toFixed(5)}_${lng.toFixed(5)}`;
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng)) return null;
+  const normalizedLng = normalizeLongitude(lng);
+  const key = `amap_reverse_v2_${lat.toFixed(5)}_${normalizedLng.toFixed(5)}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return normalizeGeoResult(JSON.parse(cached) as GeoResult);
@@ -278,7 +289,7 @@ export async function reverseGeocodeCoordinates(lat: number, lng: number): Promi
     // Ignore malformed local cache entries.
   }
 
-  const reverse = await reverseGeocodeWithAmap({ lat, lng });
+  const reverse = await reverseGeocodeWithAmap({ lat, lng: normalizedLng });
   if (!reverse) return null;
   const result = geoFromReverse(reverse);
   try {

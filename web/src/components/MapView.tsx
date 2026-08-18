@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, ChevronLeft, History, ImagePlus, List, MapPin } from 'lucide-react';
 import { Memory, type MemoryFilters, type MemoryLocationDraft } from '../types';
-import { hasResolvedAdministrativeLocation, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, normalizeLongitude, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
 import {
   EMPTY_MEMORY_FILTERS,
@@ -488,7 +488,7 @@ export default function MapView({
       const height = Math.max(container.clientHeight, 36);
       setMapCreatePrompt({
         lat: event.latlng.lat,
-        lng: event.latlng.lng,
+        lng: normalizeLongitude(event.latlng.lng),
         x: Math.max(18, Math.min(width - 18, event.containerPoint.x)),
         y: Math.max(18, Math.min(height - 18, event.containerPoint.y)),
       });
@@ -508,7 +508,7 @@ export default function MapView({
       const rect = mapContainer.getBoundingClientRect();
       const point = map.containerPointToLatLng(L.point(event.clientX - rect.left, event.clientY - rect.top));
       setMapCreatePrompt(null);
-      onAddMemory?.({ name: '拖放位置', lat: point.lat, lng: point.lng }, file);
+      onAddMemory?.({ name: '拖放位置', lat: point.lat, lng: normalizeLongitude(point.lng) }, file);
     };
     mapContainer.addEventListener('dragover', onMapDragOver);
     mapContainer.addEventListener('drop', onMapDrop);
@@ -585,7 +585,7 @@ export default function MapView({
       event.preventDefault();
       const center = map.getCenter();
       setMapCreatePrompt(null);
-      onAddMemory?.({ name: '地图中心', lat: center.lat, lng: center.lng });
+      onAddMemory?.({ name: '地图中心', lat: center.lat, lng: normalizeLongitude(center.lng) });
     };
 
     window.addEventListener('keydown', onKeyDown);

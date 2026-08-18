@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasResolvedAdministrativeLocation, normalizeGeoResult } from '../src/lib/geo';
+import { hasResolvedAdministrativeLocation, normalizeGeoResult, normalizeLongitude } from '../src/lib/geo';
+
+test('normalizes longitudes from Leaflet world copies before reverse geocoding', () => {
+  assert.equal(normalizeLongitude(-221.00799), 138.99201);
+  assert.equal(normalizeLongitude(181), -179);
+  assert.equal(normalizeLongitude(-181), 179);
+});
 
 test('legacy Shanghai reverse response derives municipality city from formatted address', () => {
   const result = normalizeGeoResult({
@@ -29,4 +35,3 @@ test('legacy province and city are derived from a formatted Chinese address', ()
   assert.equal(result.district, '鄞州区');
   assert.equal(hasResolvedAdministrativeLocation(result), true);
 });
-

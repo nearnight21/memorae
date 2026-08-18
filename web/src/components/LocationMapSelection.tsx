@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Check, LoaderCircle, MapPin, RefreshCw, Search, X } from 'lucide-react';
-import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
+import { hasResolvedAdministrativeLocation, normalizeLongitude, reverseGeocodeCoordinates, searchPlaces, type GeoResult, type PlaceCandidate } from '../lib/geo';
 import { resolveLocationWithRetry } from '../lib/locationLookup';
 
 interface Coordinates {
@@ -54,7 +54,10 @@ export default function LocationMapSelection({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [selection, setSelection] = useState<Coordinates | null>(initialCoordinates);
+  const [selection, setSelection] = useState<Coordinates | null>(() => initialCoordinates && {
+    ...initialCoordinates,
+    lng: normalizeLongitude(initialCoordinates.lng),
+  });
   const [selectionCandidate, setSelectionCandidate] = useState<PlaceCandidate | null>(null);
   const [resolvedPlace, setResolvedPlace] = useState<GeoResult | null>(null);
   const [isResolving, setIsResolving] = useState(false);
@@ -70,7 +73,7 @@ export default function LocationMapSelection({
 
     const hasInitialLocation = initialCoordinates !== null;
     const map = L.map(containerRef.current, {
-      center: hasInitialLocation ? [initialCoordinates.lat, initialCoordinates.lng] : DEFAULT_CENTER,
+      center: hasInitialLocation ? [initialCoordinates.lat, normalizeLongitude(initialCoordinates.lng)] : DEFAULT_CENTER,
       zoom: hasInitialLocation ? DETAIL_ZOOM : DEFAULT_ZOOM,
       zoomControl: false,
       attributionControl: false,
@@ -84,7 +87,7 @@ export default function LocationMapSelection({
     map.on('click', (event: L.LeafletMouseEvent) => {
       // 地图点击拥有最终坐标；反查只为它补充名称。
       setSelectionCandidate(null);
-      setSelection({ lat: event.latlng.lat, lng: event.latlng.lng });
+      setSelection({ lat: event.latlng.lat, lng: normalizeLongitude(event.latlng.lng) });
     });
 
     mapRef.current = map;
@@ -138,7 +141,7 @@ export default function LocationMapSelection({
   }, [searchQuery]);
 
   const selectSearchResult = (result: PlaceCandidate) => {
-    const coordinates = { lat: result.lat, lng: result.lng };
+    const coordinates = { lat: result.lat, lng: normalizeLongitude(result.lng) };
     setSelectionCandidate(result);
     setSelection(coordinates);
     setSearchQuery('');
