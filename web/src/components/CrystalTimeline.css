@@ -6,11 +6,15 @@
   width: min(1120px, calc(100vw - 120px));
   height: 88px;
   transform: translateX(-50%);
-  color: #092b50;
+  color: rgba(28, 38, 48, 0.88);
   font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
   pointer-events: none;
 }
-.crystal-timeline-formal.is-expanded { height: 170px; }
+
+.crystal-timeline-formal.is-expanded {
+  height: 170px;
+}
+
 .crystal-timeline-formal-body {
   position: relative;
   width: 100%;
@@ -26,29 +30,345 @@
   transform: translateY(44px);
   transition: transform 180ms ease;
 }
-.crystal-timeline-formal.is-expanded .crystal-timeline-formal-body { transform: translateY(0); }
-.crystal-timeline-formal-body:focus-visible { outline: 1px solid rgba(78,148,207,.5); outline-offset: 4px; }
-.crystal-formal-glass,.crystal-formal-highlight,.crystal-formal-shade,.crystal-formal-focus,.crystal-formal-content { position:absolute; pointer-events:none; }
-.crystal-formal-glass { inset:0; overflow:hidden; border-radius:inherit; background:linear-gradient(180deg,rgba(238,249,255,.19),rgba(255,255,255,.08) 22%,rgba(220,240,251,.038) 58%,rgba(73,116,146,.092)); backdrop-filter:blur(1.7px) saturate(1.1) brightness(1.045); box-shadow:inset 0 2px 2px rgba(250,254,255,.54),inset 0 -2px 2px rgba(31,82,116,.17),0 2px 5px rgba(41,82,110,.08); }
-.crystal-formal-highlight { top:1px;left:25px;right:25px;height:24px;border-radius:999px 999px 42% 42%; background:linear-gradient(180deg,rgba(250,254,255,.92),rgba(234,247,255,.26) 38%,transparent 92%);filter:blur(.45px); }
-.crystal-formal-shade { left:22px;right:22px;bottom:1px;height:21px;border-radius:35% 35% 999px 999px;background:linear-gradient(180deg,transparent,rgba(51,103,138,.13) 48%,rgba(25,72,106,.31));filter:blur(.65px); }
-.crystal-formal-focus { top:1px;left:var(--crystal-position);width:clamp(76px,9.5%,92px);height:86px;transform:translateX(-50%);border-radius:46%;background:radial-gradient(ellipse at 50% 46%,rgba(225,246,255,.27),rgba(153,213,249,.11) 42%,transparent 84%);backdrop-filter:blur(.8px) saturate(1.17) brightness(1.085);box-shadow:inset 0 2px 2px rgba(250,254,255,.46),0 0 5px rgba(91,176,229,.08);transition:left 70ms linear; }
-.crystal-formal-focus span { position:absolute;inset:7px 16px;border-radius:48%;background:radial-gradient(ellipse,rgba(238,250,255,.24),rgba(161,217,250,.065) 52%,transparent 76%); }
-.crystal-formal-content { inset:0; }
-.crystal-formal-years span { position:absolute;top:18px;transform:translateX(-50%);font-size:16px;font-weight:500;line-height:22px;color:rgba(7,38,78,.88);text-shadow:0 1px 1px rgba(255,255,255,.34);white-space:nowrap; }
-.crystal-formal-years .crystal-formal-minor-tick { top:47px;width:4px;height:4px;border-radius:50%;background:rgba(18,72,111,.2);box-shadow:0 0 3px rgba(211,240,255,.55); }
-.crystal-formal-years .is-current-major { color:rgba(7,38,78,.5); }
-.crystal-formal-current-years { position:absolute;inset:0;pointer-events:none; }
-.crystal-formal-current-years span { position:absolute;top:41px;transform:translateX(-50%);font-size:13px;font-weight:700;line-height:18px;color:rgba(5,54,96,.96);text-shadow:0 1px 2px rgba(255,255,255,.8);white-space:nowrap; }
-.crystal-formal-current-years .is-current { top:39px; padding:2px 7px; border-radius:999px; color:#0b4f83; background:rgba(232,248,255,.68); box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 1px 4px rgba(34,98,137,.14); }
-.crystal-formal-current-year { top:39px !important; }
-.crystal-formal-track { position:absolute;right:46px;bottom:19.5px;left:46px;height:3px;border-radius:999px;background:rgba(17,57,88,.2);overflow:hidden; }
-.crystal-formal-track span { display:block;width:var(--crystal-progress);height:100%;background:linear-gradient(90deg,rgba(35,105,160,.16),rgba(29,122,194,.62)); }
-.crystal-formal-handle { position:absolute;left:var(--crystal-position);bottom:14px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle at 38% 32%,#f8fcff 0 21%,#4389c6 24% 48%,#0d5d9e 72%);box-shadow:0 1px 3px rgba(15,75,119,.2); }
-.crystal-formal-popover { position:absolute;top:96px;left:var(--crystal-position);min-width:130px;transform:translateX(-50%);display:flex;flex-direction:column;gap:4px;padding:9px 13px;border-radius:12px;color:rgba(8,42,77,.92);background:rgba(239,248,253,.72);backdrop-filter:blur(3px) saturate(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 10px rgba(28,58,80,.08);text-align:center;font-size:11px;line-height:16px;white-space:nowrap;opacity:0;transition:opacity 160ms ease,left 70ms linear; }
-.crystal-formal-popover.is-visible { opacity:1; }
-.crystal-formal-popover-month,.crystal-formal-popover-date { display:flex;align-items:center;justify-content:center;gap:6px; }
-.crystal-formal-popover-month { font-size:15px;font-weight:600; }
-.crystal-formal-popover-all { display:block; font-size:15px; font-weight:600; line-height:20px; }
-.crystal-formal-clear { position:absolute;right:18px;bottom:-27px;pointer-events:auto;border:0;background:transparent;color:#68635b;font-size:11px;cursor:pointer; }
-@media (max-width:720px) { .crystal-timeline-formal { left:50%;width:calc(100vw - 32px); } .crystal-formal-years span { font-size:12px; } .crystal-formal-current-years span { font-size:11px; } }
+
+.crystal-timeline-formal.is-expanded .crystal-timeline-formal-body {
+  transform: translateY(0);
+}
+
+.crystal-timeline-formal-body:focus-visible {
+  outline: 1px solid rgba(66, 92, 111, 0.62);
+  outline-offset: 5px;
+}
+
+.crystal-formal-glass,
+.crystal-formal-highlight,
+.crystal-formal-shade,
+.crystal-formal-focus,
+.crystal-formal-content {
+  position: absolute;
+  pointer-events: none;
+}
+
+.crystal-formal-glass {
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.2) 32%, rgba(219, 226, 232, 0.18) 100%),
+    rgba(246, 248, 249, 0.18);
+  backdrop-filter: blur(6px) saturate(1.08);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.82),
+    inset 0 -2px 4px rgba(85, 102, 116, 0.14),
+    0 8px 18px rgba(61, 74, 85, 0.14),
+    0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.crystal-formal-highlight {
+  top: 2px;
+  right: 34px;
+  left: 34px;
+  height: 24px;
+  border-radius: 999px 999px 46% 46%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.18) 58%, transparent 100%);
+  filter: blur(0.45px);
+}
+
+.crystal-formal-shade {
+  right: 28px;
+  bottom: 1px;
+  left: 28px;
+  height: 20px;
+  border-radius: 36% 36% 999px 999px;
+  background: linear-gradient(180deg, transparent, rgba(122, 137, 150, 0.08) 50%, rgba(83, 99, 112, 0.18));
+  filter: blur(0.8px);
+}
+
+.crystal-formal-focus {
+  top: 1px;
+  left: var(--crystal-position);
+  width: clamp(76px, 9.5%, 92px);
+  height: 86px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 45%, rgba(255, 255, 255, 0.42), rgba(210, 224, 235, 0.14) 48%, transparent 77%);
+  filter: blur(0.15px);
+  transition: left 70ms linear;
+}
+
+.crystal-formal-focus span {
+  position: absolute;
+  inset: 7px 16px;
+  border-radius: 48%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.48), rgba(220, 232, 240, 0.08) 56%, transparent 78%);
+}
+
+.crystal-formal-content {
+  inset: 0;
+}
+
+.crystal-formal-edge {
+  position: absolute;
+  top: 20px;
+  z-index: 2;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.7), rgba(221, 228, 233, 0.26) 58%, rgba(142, 157, 169, 0.18));
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.88),
+    inset 0 -2px 3px rgba(82, 96, 109, 0.16),
+    0 2px 6px rgba(71, 84, 96, 0.14);
+  color: rgba(36, 48, 58, 0.78);
+}
+
+.crystal-formal-edge-calendar {
+  left: 18px;
+}
+
+.crystal-formal-edge-plus {
+  right: 18px;
+}
+
+.crystal-formal-years span {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  color: rgba(51, 61, 70, 0.82);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22px;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.66);
+  white-space: nowrap;
+}
+
+.crystal-formal-years .crystal-formal-minor-tick {
+  top: 43px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(83, 95, 106, 0.34);
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.82);
+}
+
+.crystal-formal-years .is-current-major {
+  color: rgba(51, 61, 70, 0.82);
+}
+
+.crystal-formal-current-years {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crystal-formal-current-years span {
+  position: absolute;
+  top: -35px;
+  transform: translateX(-50%);
+  color: rgba(31, 39, 47, 0.96);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 32px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.86);
+  white-space: nowrap;
+}
+
+.crystal-formal-current-years .is-current {
+  top: -35px;
+  padding: 0;
+  border-radius: 0;
+  color: rgba(31, 39, 47, 0.96);
+  background: transparent;
+  box-shadow: none;
+}
+
+.crystal-formal-current-year {
+  top: -35px !important;
+}
+
+.crystal-formal-track {
+  position: absolute;
+  right: 46px;
+  bottom: 42px;
+  left: 46px;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(94, 104, 112, 0.35);
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.76);
+}
+
+.crystal-formal-track span {
+  display: block;
+  width: var(--crystal-progress);
+  height: 100%;
+  background: rgba(103, 111, 118, 0.54);
+}
+
+.crystal-formal-handle {
+  position: absolute;
+  left: var(--crystal-position);
+  bottom: 14px;
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background:
+    conic-gradient(from 18deg, rgba(255, 255, 255, 0.72), rgba(193, 206, 218, 0.28), rgba(255, 255, 255, 0.84), rgba(174, 190, 203, 0.24), rgba(255, 255, 255, 0.72)),
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.98), rgba(224, 232, 238, 0.36) 45%, rgba(151, 167, 180, 0.3));
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.96),
+    inset 0 -4px 5px rgba(92, 108, 121, 0.2),
+    0 3px 7px rgba(67, 80, 91, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.34);
+  transition: left 70ms linear, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.crystal-formal-handle::before,
+.crystal-formal-handle::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+}
+
+.crystal-formal-handle::before {
+  inset: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  clip-path: polygon(50% 0, 91% 28%, 82% 79%, 50% 100%, 16% 77%, 8% 27%);
+  transform: rotate(12deg);
+}
+
+.crystal-formal-handle::after {
+  top: 10px;
+  right: 18px;
+  width: 12px;
+  height: 23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  filter: blur(2px);
+  transform: rotate(24deg);
+}
+
+.crystal-formal-body:hover .crystal-formal-handle,
+.crystal-formal-body:focus-visible .crystal-formal-handle,
+.crystal-formal-body.is-dragging .crystal-formal-handle {
+  transform: translateX(-50%) scale(1.04);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.98),
+    inset 0 -4px 5px rgba(92, 108, 121, 0.2),
+    0 5px 12px rgba(67, 80, 91, 0.22),
+    0 0 0 4px rgba(255, 255, 255, 0.16);
+}
+
+.crystal-formal-popover {
+  position: absolute;
+  top: 96px;
+  left: var(--crystal-position);
+  display: flex;
+  min-width: 130px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 13px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.64);
+  border-radius: 12px;
+  background: rgba(250, 252, 253, 0.72);
+  backdrop-filter: blur(5px) saturate(1.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 4px 12px rgba(42, 56, 68, 0.12);
+  color: rgba(38, 48, 57, 0.88);
+  text-align: center;
+  font-size: 11px;
+  line-height: 16px;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 160ms ease, left 70ms linear;
+}
+
+.crystal-formal-popover.is-visible {
+  opacity: 1;
+}
+
+.crystal-formal-popover-month,
+.crystal-formal-popover-date {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.crystal-formal-popover-month {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.crystal-formal-popover-all {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.crystal-formal-clear {
+  position: absolute;
+  right: 18px;
+  bottom: -27px;
+  pointer-events: auto;
+  border: 0;
+  background: transparent;
+  color: rgba(77, 87, 95, 0.78);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.crystal-formal-clear:hover,
+.crystal-formal-clear:focus-visible {
+  color: rgba(37, 47, 55, 0.96);
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .crystal-timeline-formal {
+    left: 50%;
+    width: calc(100vw - 32px);
+  }
+
+  .crystal-formal-years span {
+    font-size: 12px;
+  }
+
+  .crystal-formal-current-years span {
+    font-size: 22px;
+  }
+
+  .crystal-formal-edge {
+    width: 42px;
+    height: 42px;
+  }
+
+  .crystal-formal-edge-calendar {
+    left: 14px;
+  }
+
+  .crystal-formal-edge-plus {
+    right: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crystal-timeline-formal-body,
+  .crystal-formal-focus,
+  .crystal-formal-handle,
+  .crystal-formal-popover {
+    transition: none;
+  }
+}

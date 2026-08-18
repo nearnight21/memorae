@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Plus } from 'lucide-react';
 import type { Memory, MemoryFilters } from '../types';
 import { memoryDateValue, throughDateRange } from '../lib/memoryFilters';
 import { getTimelineTicks } from '../lib/timelineTicks';
@@ -185,6 +185,8 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         <div className="crystal-formal-shade" aria-hidden="true" />
         <div className="crystal-formal-focus" aria-hidden="true"><span /></div>
         <div className="crystal-formal-content">
+          <span className="crystal-formal-edge crystal-formal-edge-calendar" aria-hidden="true"><CalendarDays size={18} strokeWidth={1.55} /></span>
+          <span className="crystal-formal-edge crystal-formal-edge-plus" aria-hidden="true"><Plus size={22} strokeWidth={1.45} /></span>
           <div className="crystal-formal-years" aria-hidden="true">
             {timelineTicks.minorYears.map((year) => {
               const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
