@@ -35,6 +35,8 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const pointerStartX = useRef<number | null>(null);
   const movedPointer = useRef(false);
   const draggingRef = useRef(false);
+  const pendingPreviewRef = useRef<number | null>(null);
+  const previewFrameRef = useRef<number | null>(null);
   const [expanded, setExpanded] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
@@ -50,6 +52,10 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     const observer = new ResizeObserver(updateWidth);
     observer.observe(element);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => () => {
+    if (previewFrameRef.current !== null) cancelAnimationFrame(previewFrameRef.current);
   }, []);
 
   const bounds = useMemo(() => {
@@ -93,6 +99,31 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
       ...filters,
       dateRange: throughDateRange(bounds.min, nextDate),
     });
+  };
+
+  const applyPreviewVisual = (nextProgress: number) => {
+    const element = bodyRef.current;
+    if (!element) return;
+    element.style.setProperty('--crystal-position', positionFor(nextProgress));
+    element.style.setProperty('--crystal-progress', `${nextProgress * 100}%`);
+  };
+
+  const schedulePreviewState = (nextProgress: number) => {
+    pendingPreviewRef.current = nextProgress;
+    applyPreviewVisual(nextProgress);
+    if (previewFrameRef.current !== null) return;
+    previewFrameRef.current = requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      const pending = pendingPreviewRef.current;
+      if (pending !== null) setDragProgress(pending);
+    });
+  };
+
+  const cancelPreviewState = (restoreProgress: number) => {
+    if (previewFrameRef.current !== null) cancelAnimationFrame(previewFrameRef.current);
+    previewFrameRef.current = null;
+    pendingPreviewRef.current = null;
+    applyPreviewVisual(restoreProgress);
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -157,17 +188,24 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
             movedPointer.current = true;
             setExpanded(true);
           }
-          if (movedPointer.current) setDragProgress(progressForPointer(event.currentTarget, event.clientX));
+          if (movedPointer.current) schedulePreviewState(progressForPointer(event.currentTarget, event.clientX));
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-          if (movedPointer.current) commitProgress(progressForPointer(event.currentTarget, event.clientX));
+          if (movedPointer.current) {
+            const nextProgress = progressForPointer(event.currentTarget, event.clientX);
+            cancelPreviewState(nextProgress);
+            commitProgress(nextProgress);
+          } else {
+            cancelPreviewState(committedProgress);
+          }
           draggingRef.current = false;
           setDragging(false);
           setDragProgress(null);
           pointerStartX.current = null;
         }}
         onPointerCancel={() => {
+          cancelPreviewState(committedProgress);
           draggingRef.current = false;
           setDragging(false);
           setDragProgress(null);
