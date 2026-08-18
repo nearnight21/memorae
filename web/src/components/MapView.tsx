@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, ChevronLeft, History, ImagePlus, List, MapPin } from 'lucide-react';
+import { ArrowLeft, Check, ChevronLeft, History, List, Plus } from 'lucide-react';
 import { Memory, type MemoryFilters, type MemoryLocationDraft } from '../types';
 import { hasResolvedAdministrativeLocation, normalizeLongitude, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
@@ -943,46 +943,52 @@ export default function MapView({
         ) : (
           <section className="map-context-card pointer-events-auto" aria-label="当前足迹范围">
             <p>足迹 / {contextTitle}</p>
-            <h1>{contextTitle}</h1>
+            <h1>
+              <button
+                id="btn-toggle-map-filter"
+                type="button"
+                onClick={() => setFilterMenuOpen((open) => !open)}
+                aria-label={`切换当前足迹范围，当前为${contextTitle}`}
+                aria-expanded={filterMenuOpen}
+                aria-haspopup="menu"
+                className="map-context-title-trigger"
+              >
+                {contextTitle}
+                {filtersActive && <i aria-label="筛选已启用" />}
+              </button>
+            </h1>
             <span>{contextMemories.length} 段记忆 · {contextRange}</span>
+            <AnimatePresence>
+              {filterMenuOpen && <motion.div initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -4, opacity: 0 }} className="map-ui-popover map-context-filter-popover absolute left-0 top-full z-[1004] mt-2 w-64 overflow-hidden rounded-xl border p-3 backdrop-blur-md">
+                <div className="mb-2 flex items-center justify-between"><span className="font-editorial-serif text-sm">筛选足迹</span><button type="button" onClick={() => updateFilters({ dateRange: null, regions: [], themes: [] })} className="map-ui-muted map-ui-accent-hover text-[10px] cursor-pointer">清除全部</button></div>
+                <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">定位地图</p>
+                <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+                  <button type="button" onClick={backToWorld} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">全部足迹</button>
+                  {availableCountries.map((country) => <button key={`navigate-${country}`} type="button" onClick={() => { void navigateToRegion(country); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{country}</button>)}
+                  {availableCityLocations.map(({ country, city }) => <button key={`navigate-${country}-${city}`} type="button" onClick={() => { void navigateToRegion(country, city); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{city}</button>)}
+                </div>
+                <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">地区</p>
+                <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                  {availableCountries.map((country) => { const active = activeFilters.regions.includes(country); return <button key={country} type="button" onClick={() => updateFilters({ regions: active ? activeFilters.regions.filter((value) => value !== country) : [...activeFilters.regions, country] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{country}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
+                  {availableCountries.length === 0 && <span className="map-ui-muted text-[11px]">暂无地区</span>}
+                </div>
+                <p className="map-ui-muted mb-1.5 mt-3 text-[10px] tracking-[0.12em]">主题</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {THEME_OPTIONS.map((theme) => { const active = activeFilters.themes.includes(theme.value); return <button key={theme.value} type="button" onClick={() => updateFilters({ themes: active ? activeFilters.themes.filter((value) => value !== theme.value) : [...activeFilters.themes, theme.value] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{theme.label}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
+                </div>
+                <p className="map-ui-muted mt-3 text-[10px]">时间由底部水晶时间轴控制</p>
+              </motion.div>}
+            </AnimatePresence>
           </section>
         )}
       </header>
 
-      {/* 回顾是全局浏览方式；地区筛选和当前结果列表各自保持独立职责。 */}
+      {/* 回顾是全局浏览方式；当前结果列表保留在右侧中部。 */}
       {!selectedMemory && <div className="absolute right-24 top-9 z-[1002] flex items-start gap-2">
         {onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-crystal" aria-label="进入回顾">
           <History className="h-4 w-4" strokeWidth={1.6} />
           <span>回顾</span>
         </button>}
-        <div className="relative">
-          <button id="btn-toggle-map-filter" type="button" onClick={() => setFilterMenuOpen((open) => !open)} aria-label="打开地区与主题筛选" aria-expanded={filterMenuOpen} className="map-region-filter-trigger">
-            <MapPin className="h-4 w-4" strokeWidth={1.6} />
-            <span>{contextTitle}</span>
-            {filtersActive && <i aria-label="筛选已启用" />}
-          </button>
-          <AnimatePresence>
-            {filterMenuOpen && <motion.div initial={{ y: -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -4, opacity: 0 }} className="map-ui-popover absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border p-3 backdrop-blur-md">
-              <div className="mb-2 flex items-center justify-between"><span className="font-editorial-serif text-sm">筛选足迹</span><button type="button" onClick={() => updateFilters({ dateRange: null, regions: [], themes: [] })} className="map-ui-muted map-ui-accent-hover text-[10px] cursor-pointer">清除全部</button></div>
-              <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">定位地图</p>
-              <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
-                <button type="button" onClick={backToWorld} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">全部足迹</button>
-                {availableCountries.map((country) => <button key={`navigate-${country}`} type="button" onClick={() => { void navigateToRegion(country); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{country}</button>)}
-                {availableCityLocations.map(({ country, city }) => <button key={`navigate-${country}-${city}`} type="button" onClick={() => { void navigateToRegion(country, city); }} className="map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer">{city}</button>)}
-              </div>
-              <p className="map-ui-muted mb-1.5 text-[10px] tracking-[0.12em]">地区</p>
-              <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
-                {availableCountries.map((country) => { const active = activeFilters.regions.includes(country); return <button key={country} type="button" onClick={() => updateFilters({ regions: active ? activeFilters.regions.filter((value) => value !== country) : [...activeFilters.regions, country] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{country}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
-                {availableCountries.length === 0 && <span className="map-ui-muted text-[11px]">暂无地区</span>}
-              </div>
-              <p className="map-ui-muted mb-1.5 mt-3 text-[10px] tracking-[0.12em]">主题</p>
-              <div className="flex flex-wrap gap-1.5">
-                {THEME_OPTIONS.map((theme) => { const active = activeFilters.themes.includes(theme.value); return <button key={theme.value} type="button" onClick={() => updateFilters({ themes: active ? activeFilters.themes.filter((value) => value !== theme.value) : [...activeFilters.themes, theme.value] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{theme.label}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
-              </div>
-              <p className="map-ui-muted mt-3 text-[10px]">时间由底部水晶时间轴控制</p>
-            </motion.div>}
-          </AnimatePresence>
-        </div>
       </div>}
 
       {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
@@ -1004,21 +1010,20 @@ export default function MapView({
         </div>
       )}
 
+      {!selectedMemory && onAddMemory && (
+        <button
+          type="button"
+          onClick={() => onAddMemory()}
+          className="map-create-memory-circle absolute z-[1002]"
+          aria-label="新建记忆"
+          title="新建记忆"
+        >
+          <Plus className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
+        </button>
+      )}
+
       {!selectedMemory && (
-        <div className="map-create-dock absolute right-0 top-1/2 z-[1002]" aria-label="记忆入口">
-          {onAddMemory && (
-            <button
-              type="button"
-              onClick={() => onAddMemory()}
-              className="map-create-dock-item map-create-memory-trigger"
-              aria-label="新建记忆"
-              title="新建记忆"
-            >
-              <ImagePlus className="h-[18px] w-[18px] shrink-0" strokeWidth={1.65} aria-hidden="true" />
-              <span className="map-create-dock-label map-create-dock-label-short">新建</span>
-              <span className="map-create-dock-label map-create-dock-label-long">新建记忆</span>
-            </button>
-          )}
+        <div className="map-create-dock absolute right-0 z-[1002]" aria-label="当前地点记忆入口">
           <button
             type="button"
             onClick={() => setIsResultListOpen(true)}
