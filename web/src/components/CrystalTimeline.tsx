@@ -34,6 +34,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const bodyRef = useRef<HTMLDivElement>(null);
   const pointerStartX = useRef<number | null>(null);
   const movedPointer = useRef(false);
+  const draggingRef = useRef(false);
   const [expanded, setExpanded] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
@@ -100,6 +101,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     event.stopPropagation();
     pointerStartX.current = event.clientX;
     movedPointer.current = false;
+    draggingRef.current = true;
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
   };
@@ -150,7 +152,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         aria-valuetext={hasDateSelection ? formatDate(currentDate) : '全部时间'}
         onPointerDown={handlePointerDown}
         onPointerMove={(event) => {
-          if (!dragging) return;
+          if (!draggingRef.current) return;
           if (pointerStartX.current !== null && Math.abs(event.clientX - pointerStartX.current) > 4) {
             movedPointer.current = true;
             setExpanded(true);
@@ -160,11 +162,13 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
           if (movedPointer.current) commitProgress(progressForPointer(event.currentTarget, event.clientX));
+          draggingRef.current = false;
           setDragging(false);
           setDragProgress(null);
           pointerStartX.current = null;
         }}
         onPointerCancel={() => {
+          draggingRef.current = false;
           setDragging(false);
           setDragProgress(null);
           pointerStartX.current = null;
@@ -212,9 +216,6 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
           </div>
           <div className="crystal-formal-track"><span /></div>
           <span className="crystal-formal-handle" aria-hidden="true" />
-          <div className="crystal-formal-current-years" aria-hidden="true">
-            {hasDateSelection && <span className={`crystal-formal-current-year ${dragging ? 'is-current' : ''}`} style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>}
-          </div>
           <output className={`crystal-formal-popover ${dragging || hovering || expanded ? 'is-visible' : ''}`} aria-live="polite">
             {hasDateSelection ? (
               <>

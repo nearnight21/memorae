@@ -175,38 +175,6 @@
   color: rgba(51, 61, 70, 0.82);
 }
 
-.crystal-formal-current-years {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.crystal-formal-current-years span {
-  position: absolute;
-  top: -35px;
-  transform: translateX(-50%);
-  color: rgba(31, 39, 47, 0.96);
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 32px;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.86);
-  white-space: nowrap;
-}
-
-.crystal-formal-current-years .is-current {
-  top: -35px;
-  padding: 0;
-  border-radius: 0;
-  color: rgba(31, 39, 47, 0.96);
-  background: transparent;
-  box-shadow: none;
-}
-
-.crystal-formal-current-year {
-  top: -35px !important;
-}
-
 .crystal-formal-track {
   position: absolute;
   right: 76px;
@@ -275,6 +243,18 @@
 
 .crystal-formal-body:hover .crystal-formal-handle,
 .crystal-formal-body:focus-visible .crystal-formal-handle,
+.crystal-formal-body.is-dragging .crystal-formal-handle {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.crystal-formal-body.is-dragging .crystal-formal-focus {
+  transition: none;
+}
+
+.crystal-formal-body.is-dragging .crystal-formal-popover {
+  transition: opacity 160ms ease;
+}
+
 .crystal-formal-body.is-dragging .crystal-formal-handle {
   transform: translateX(-50%) scale(1.04);
   box-shadow:
@@ -360,10 +340,6 @@
 
   .crystal-formal-years span {
     font-size: 12px;
-  }
-
-  .crystal-formal-current-years span {
-    font-size: 22px;
   }
 
   .crystal-formal-edge {
