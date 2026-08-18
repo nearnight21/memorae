@@ -115,6 +115,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     previewFrameRef.current = requestAnimationFrame(() => {
       previewFrameRef.current = null;
       const pending = pendingPreviewRef.current;
+      pendingPreviewRef.current = null;
       if (pending !== null) setDragProgress(pending);
     });
   };

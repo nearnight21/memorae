@@ -94,7 +94,7 @@
   border-radius: 50%;
   background: radial-gradient(ellipse at 50% 45%, rgba(255, 255, 255, 0.42), rgba(210, 224, 235, 0.14) 48%, transparent 77%);
   filter: blur(0.15px);
-  transition: left 70ms linear;
+  transition: none;
 }
 
 .crystal-formal-focus span {
@@ -212,7 +212,7 @@
     inset 0 -4px 5px rgba(92, 108, 121, 0.2),
     0 3px 7px rgba(67, 80, 91, 0.18),
     0 0 0 1px rgba(255, 255, 255, 0.34);
-  transition: left 70ms linear, transform 160ms ease, box-shadow 160ms ease;
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .crystal-formal-handle::before,
@@ -285,7 +285,7 @@
   line-height: 16px;
   opacity: 0;
   white-space: nowrap;
-  transition: opacity 160ms ease, left 70ms linear;
+  transition: opacity 160ms ease;
 }
 
 .crystal-formal-popover.is-visible {
