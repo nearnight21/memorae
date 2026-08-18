@@ -35,7 +35,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const bodyRef = useRef<HTMLDivElement>(null);
   const pointerStartX = useRef<number | null>(null);
   const movedPointer = useRef(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
