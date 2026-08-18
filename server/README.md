@@ -29,14 +29,15 @@ Docker Compose 默认把 API 暴露在本机 `127.0.0.1:8788`；如果该端口�
 如 Docker Desktop 的本机回环转发异常，可临时设置 `MEMORY_RECALL_API_BIND_HOST=0.0.0.0` 排查，
 确认后应优先恢复为 `127.0.0.1`。
 
-地图地点功能使用服务端代理的高德 Web 服务，不把 Key 发送给浏览器。要启用地点搜索、地图落点
-反查和照片 GPS 转换，设置：
+地图地点功能经由服务端代理：高德 Web 服务负责地点搜索、中国地图落点反查和照片 GPS 转换，
+高德未返回城市的海外坐标会由 BigDataCloud 反查补齐。浏览器不直接请求任一地点服务，也不会持有
+高德 Key。要启用地点服务，设置：
 
 ```powershell
 $env:MEMORY_RECALL_AMAP_WEB_SERVICE_KEY = '部署机密钥管理中的高德 Web 服务 Key'
 ```
 
-未设置该变量时，`/v1/location/*` 会明确返回“地点服务尚未配置”，网页不会回退到 OSM/Nominatim。
+未设置该变量时，`/v1/location/*` 会明确返回“地点服务尚未配置”。
 
 ## PostgreSQL 试运行模式
 
@@ -100,7 +101,8 @@ GET 和 SHA-256 校验，照片字节没有经过 API；Android/Web 三档真实
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
 - `PUT /v1/photos/:id`、`GET /v1/photos/:id`：仅在未配置 COS 时注册，供本地回归保存或读取原图密文。
 - `GET /v1/location/suggest`、`GET /v1/location/reverse`、`POST /v1/location/convert-gps`：高德地点提示、
-  反向地理编码和照片 WGS-84 GPS 到 GCJ-02 转换；均要求账号令牌，服务端保管高德 Key。
+  中国反向地理编码和照片 WGS-84 GPS 到 GCJ-02 转换；高德对海外落点未返回城市时，反查会在服务端回退到
+  BigDataCloud。均要求账号令牌，浏览器不持有任何地点服务凭据。
 - `POST /v1/photos/:id/:kind/upload`：为 `thumbnail`、`preview` 或 `original` 申请短期 COS PUT 地址。
 - `POST /v1/photos/:id/:kind/complete`：直传完成后检查对象长度并提交密文索引。
 - `GET /v1/photos/:id/:kind/download`：校验账号归属后返回短期 COS GET 地址和加密元数据。

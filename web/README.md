@@ -27,8 +27,8 @@ npm.cmd run dev
 验证工具仍可测试账号登录、固定令牌和手动双向密文传输，运行方法见
 [`memory-recall-server/README.md`](../memory-recall-server/README.md)。
 
-高德 Web 服务 Key 只配置在服务端的 `deploy/.env` 中，由 API 代理地点搜索、反向地理编码和照片 GPS
-转换；浏览器和 Web `.env.local` 都不应保存该 Key。
+高德 Web 服务 Key 只配置在服务端的 `deploy/.env` 中，由 API 代理地点搜索、中国反向地理编码和照片 GPS
+转换。高德未返回城市的海外落点会在服务端回退到 BigDataCloud；浏览器和 Web `.env.local` 都不应保存任何地点服务凭据。
 
 ## 验证
 

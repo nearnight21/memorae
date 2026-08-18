@@ -21,7 +21,7 @@ interface LocationMapSelectionProps {
     city?: string;
     district?: string;
     adcode?: string;
-    provider?: 'amap';
+    provider?: 'amap' | 'bigdatacloud';
     providerId?: string;
     resolved: boolean;
   }) => void;
@@ -166,7 +166,7 @@ export default function LocationMapSelection({
     ).then((result) => {
       if (cancelled) return;
       setResolvedPlace(result);
-      setLookupFailed(result === null);
+      setLookupFailed(!hasResolvedAdministrativeLocation(result));
       setIsResolving(false);
     });
 

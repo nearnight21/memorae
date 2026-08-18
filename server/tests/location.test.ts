@@ -111,6 +111,40 @@ test('高德直辖市反查在 city 为空时使用省级名称作为城市', as
   }
 });
 
+test('高德未返回海外行政信息时使用 BigDataCloud 反查城市', async () => {
+  const requested: string[] = [];
+  const service = new AmapWebLocationService({
+    key: 'private-service-key',
+    fetch: async (input) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.includes('restapi.amap.com')) {
+        return Response.json({ status: '1', regeocode: { addressComponent: {} } });
+      }
+      return Response.json({
+        countryName: '日本',
+        principalSubdivision: '群马县',
+        city: '榛东村',
+      });
+    },
+  });
+
+  const result = await service.reverse({ lat: 36.42787, lng: 138.99201 });
+  assert.deepEqual(result, {
+    lat: 36.42787,
+    lng: 138.99201,
+    label: '榛东村',
+    placeName: '榛东村',
+    formattedAddress: '榛东村 · 群马县 · 日本',
+    provider: 'bigdatacloud',
+    country: '日本',
+    province: '群马县',
+    city: '榛东村',
+  });
+  assert.match(requested[1], /latitude=36.42787/);
+  assert.match(requested[1], /longitude=138.99201/);
+});
+
 test('地点代理需要账号令牌，并在未配置服务时明确提示', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'memory-recall-location-'));
   const app = await buildApp({

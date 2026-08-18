@@ -24,7 +24,7 @@ export interface LocationReverseResult extends LocationCoordinates {
   label?: string;
   placeName?: string;
   formattedAddress?: string;
-  provider: 'amap';
+  provider: 'amap' | 'bigdatacloud';
   country?: string;
   province?: string | string[];
   city?: string | string[];
@@ -33,8 +33,8 @@ export interface LocationReverseResult extends LocationCoordinates {
 }
 
 /**
- * 地点请求必须经由所忆服务端：浏览器只发送当前账号令牌，绝不持有高德 Web 服务 Key。
- * 未配置在线服务时返回空结果，而不是回退到另一套地图服务和坐标系。
+ * 地点请求必须经由所忆服务端：浏览器只发送当前账号令牌，不直接持有或调用地点服务。
+ * 未配置在线服务时返回空结果。
  */
 async function requestLocation<T>(path: string, init: RequestInit = {}): Promise<T | null> {
   if (!MEMORY_RECALL_API_URL) return null;

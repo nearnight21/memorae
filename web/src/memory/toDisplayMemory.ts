@@ -51,7 +51,7 @@ export function toDisplayMemory(memory: VisibleMemoryV1 | VisibleMemoryV2): Memo
       city: location?.city,
       district: location?.district ?? location?.detail,
       adcode: location?.adcode,
-      locationProvider: location?.provider as 'amap' | undefined,
+      locationProvider: location?.provider as 'amap' | 'bigdatacloud' | undefined,
       locationProviderId: location?.providerId,
       lat: location?.lat,
       lng: location?.lng,

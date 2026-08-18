@@ -23,7 +23,7 @@ export interface MemoryLocationDraft {
   city?: string;
   district?: string;
   adcode?: string;
-  provider?: 'amap';
+  provider?: 'amap' | 'bigdatacloud';
   providerId?: string;
 }
 
@@ -55,11 +55,11 @@ export interface Memory {
   province?: string; // 标准化行政层级：省/直辖市
   city?: string; // 地区线钻取：城市
   district?: string; // 标准化行政层级：区县
-  adcode?: string; // 高德行政区编码
-  locationProvider?: 'amap';
+  adcode?: string; // 高德行政区编码（海外地点可能为空）
+  locationProvider?: 'amap' | 'bigdatacloud';
   locationProviderId?: string;
-  lat?: number; // 高德 GCJ-02 纬度（候选、地图落点或 EXIF 转换后写入）
-  lng?: number; // 高德 GCJ-02 经度
+  lat?: number; // 地图纬度；中国大陆为 GCJ-02，海外为 WGS-84
+  lng?: number; // 地图经度；中国大陆为 GCJ-02，海外为 WGS-84
   /** 详细位置备注（如"外公外婆家"），仅文字记录，不参与地图定位 */
   detailLocation?: string;
 }

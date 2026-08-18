@@ -1,8 +1,8 @@
 /**
  * 地点显示与缓存层。
  *
- * 所有网络地点数据由服务端代理高德服务返回。浏览器不再访问 Nominatim，
- * 这样搜索、地图落点和照片 GPS 会在同一套 GCJ-02 坐标中工作。
+ * 所有网络地点数据由服务端代理：高德负责中国地点，海外反查回退到
+ * BigDataCloud。浏览器不直接访问第三方地点服务。
  */
 import {
   reverseGeocodeWithAmap,
@@ -57,7 +57,7 @@ export interface GeoResult {
   placeName?: string;
   formattedAddress?: string;
   adcode?: string;
-  provider?: 'amap';
+  provider?: 'amap' | 'bigdatacloud';
   providerId?: string;
 }
 
@@ -281,7 +281,7 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
 export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
   if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng)) return null;
   const normalizedLng = normalizeLongitude(lng);
-  const key = `amap_reverse_v2_${lat.toFixed(5)}_${normalizedLng.toFixed(5)}`;
+  const key = `location_reverse_v3_${lat.toFixed(5)}_${normalizedLng.toFixed(5)}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return normalizeGeoResult(JSON.parse(cached) as GeoResult);

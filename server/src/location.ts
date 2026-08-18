@@ -20,7 +20,7 @@ export interface ReverseGeocodedLocation extends LocationCoordinates {
   label?: string;
   placeName?: string;
   formattedAddress?: string;
-  provider: 'amap';
+  provider: 'amap' | 'bigdatacloud';
   country?: string;
   province?: string;
   city?: string;
@@ -67,6 +67,13 @@ type AmapAddressComponent = {
   adcode?: string;
 };
 
+type BigDataCloudReverseResponse = {
+  countryName?: string;
+  principalSubdivision?: string;
+  city?: string;
+  locality?: string;
+};
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
@@ -104,6 +111,10 @@ function requireCoordinates(value: string | undefined): LocationCoordinates {
     throw new LocationProviderError('地点服务返回了无效坐标。');
   }
   return { lat, lng };
+}
+
+function hasAdministrativeCity(location: ReverseGeocodedLocation | null): boolean {
+  return Boolean(location?.country && location.city);
 }
 
 /**
@@ -171,18 +182,20 @@ export class AmapWebLocationService implements LocationService {
       };
     }>('https://restapi.amap.com/v3/geocode/regeo', params);
     const result = response.regeocode;
-    if (!result) return null;
-    const component = result.addressComponent ?? {};
-    const formattedAddress = stringValue(result.formatted_address);
-    const label = stringValue(result.pois?.[0]?.name) ?? formattedAddress;
-    return {
+    const amapLocation: ReverseGeocodedLocation | null = result ? {
       ...coordinates,
-      label,
-      placeName: label,
-      formattedAddress,
+      label: stringValue(result.pois?.[0]?.name) ?? stringValue(result.formatted_address),
+      placeName: stringValue(result.pois?.[0]?.name) ?? stringValue(result.formatted_address),
+      formattedAddress: stringValue(result.formatted_address),
       provider: 'amap',
-      ...normalizedAdministrativeLocation(component),
-    };
+      ...normalizedAdministrativeLocation(result.addressComponent ?? {}),
+    } : null;
+    if (hasAdministrativeCity(amapLocation)) return amapLocation;
+
+    // AMap's reverse-geocoding coverage is incomplete outside China. Keep it
+    // authoritative where it resolves a city, then use this server-side
+    // fallback for overseas coordinates without exposing another API to web clients.
+    return await this.reverseWithBigDataCloud(coordinates) ?? amapLocation ?? null;
   }
 
   async convertGps(coordinates: LocationCoordinates): Promise<LocationCoordinates> {
@@ -217,5 +230,47 @@ export class AmapWebLocationService implements LocationService {
       throw new LocationProviderError(stringValue(body.info) ?? '地点服务暂时不可用。');
     }
     return body;
+  }
+
+  private async reverseWithBigDataCloud(
+    coordinates: LocationCoordinates,
+  ): Promise<ReverseGeocodedLocation | null> {
+    const params = new URLSearchParams({
+      latitude: String(coordinates.lat),
+      longitude: String(coordinates.lng),
+      localityLanguage: 'zh',
+    });
+    let response: Response;
+    try {
+      response = await this.fetcher(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?${params.toString()}`,
+        { headers: { accept: 'application/json' } },
+      );
+    } catch {
+      return null;
+    }
+    if (!response.ok) return null;
+
+    let result: BigDataCloudReverseResponse;
+    try {
+      result = await response.json() as BigDataCloudReverseResponse;
+    } catch {
+      return null;
+    }
+    const country = stringValue(result.countryName);
+    const province = stringValue(result.principalSubdivision);
+    const city = stringValue(result.city) ?? stringValue(result.locality);
+    if (!country || !city) return null;
+    const formattedAddress = Array.from(new Set([city, province, country].filter(Boolean))).join(' · ');
+    return {
+      ...coordinates,
+      label: city,
+      placeName: city,
+      formattedAddress,
+      provider: 'bigdatacloud',
+      country,
+      province,
+      city,
+    };
   }
 }

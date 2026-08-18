@@ -42,7 +42,7 @@ interface SelectedLocation {
   city?: string;
   district?: string;
   adcode?: string;
-  provider?: 'amap';
+  provider?: 'amap' | 'bigdatacloud';
   providerId?: string;
 }
 
