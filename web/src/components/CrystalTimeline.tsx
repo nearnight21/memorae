@@ -6,7 +6,7 @@ import { getTimelineTicks } from '../lib/timelineTicks';
 import './CrystalTimeline.css';
 
 const DAY_MS = 86_400_000;
-const TRACK_INSET = 46;
+const TRACK_INSET = 76;
 
 interface CrystalTimelineProps {
   memories: Memory[];
@@ -185,7 +185,20 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         <div className="crystal-formal-shade" aria-hidden="true" />
         <div className="crystal-formal-focus" aria-hidden="true"><span /></div>
         <div className="crystal-formal-content">
-          <span className="crystal-formal-edge crystal-formal-edge-calendar" aria-hidden="true"><CalendarDays size={18} strokeWidth={1.55} /></span>
+          <button
+            type="button"
+            className="crystal-formal-edge crystal-formal-edge-calendar"
+            aria-label="回到当前时间"
+            title="回到当前时间"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              commitProgress(1);
+              setExpanded(true);
+            }}
+          >
+            <CalendarDays size={18} strokeWidth={1.55} aria-hidden="true" />
+          </button>
           <span className="crystal-formal-edge crystal-formal-edge-plus" aria-hidden="true"><Plus size={22} strokeWidth={1.45} /></span>
           <div className="crystal-formal-years" aria-hidden="true">
             {timelineTicks.minorYears.map((year) => {
