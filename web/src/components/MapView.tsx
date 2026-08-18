@@ -694,6 +694,9 @@ export default function MapView({
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) })
             .on('click', () => {
               map.flyTo(coords, POINT_ZOOM, { duration: 0.8 });
+              // 城市只有一条当前筛选结果时，进入城市层级即可直接阅读；
+              // 多条记忆仍停留在城市视图，避免替用户猜测要打开哪一条。
+              if (list.length === 1) onSelectMemory(list[0]);
             })
             .addTo(nextLayer);
         }
