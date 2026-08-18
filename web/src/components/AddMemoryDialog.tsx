@@ -186,6 +186,8 @@ export default function AddMemoryDialog({
       }
       confirmLocation({
         ...initialLocation,
+        // 地图创建入口只传坐标和占位名；反查成功后必须展示真实 POI 或格式化地址。
+        name: reverse.placeName?.trim() || reverse.label?.trim() || reverse.formattedAddress?.trim() || initialLocation.name,
         country: reverse.country ?? initialLocation.country,
         province: reverse.province ?? initialLocation.province,
         city: reverse.city ?? initialLocation.city,
