@@ -79,7 +79,9 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     const end = bounds.max.getUTCFullYear();
     return getTimelineTicks(start, end, { width: trackWidth || 1028 });
   }, [bounds.max, bounds.min, trackWidth]);
-  const currentYear = currentDate.getUTCFullYear();
+  const hasCommittedDateFilter = Boolean(filters.dateRange?.start || filters.dateRange?.end);
+  const hasDateSelection = hasCommittedDateFilter || dragProgress !== null;
+  const currentYear = hasDateSelection ? currentDate.getUTCFullYear() : null;
 
   const commitProgress = (nextProgress: number) => {
     const nextDate = new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * clamp(nextProgress)) / DAY_MS) * DAY_MS);
@@ -146,7 +148,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
         aria-valuemin={bounds.min.getTime()}
         aria-valuemax={bounds.max.getTime()}
         aria-valuenow={currentDate.getTime()}
-        aria-valuetext={formatDate(currentDate)}
+        aria-valuetext={hasDateSelection ? formatDate(currentDate) : '全部时间'}
         onPointerDown={handlePointerDown}
         onPointerMove={(event) => {
           if (!dragging) return;
@@ -197,11 +199,17 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
           <div className="crystal-formal-track"><span /></div>
           <span className="crystal-formal-handle" aria-hidden="true" />
           <div className="crystal-formal-current-years" aria-hidden="true">
-            <span className={`crystal-formal-current-year ${dragging ? 'is-current' : ''}`} style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>
+            {hasDateSelection && <span className={`crystal-formal-current-year ${dragging ? 'is-current' : ''}`} style={{ left: 'var(--crystal-position)' }}>{currentYear}</span>}
           </div>
           <output className={`crystal-formal-popover ${dragging || hovering || expanded ? 'is-visible' : ''}`} aria-live="polite">
-            <span className="crystal-formal-popover-month"><CalendarDays size={16} />{formatMonth(currentDate)}</span>
-            <span className="crystal-formal-popover-date">{formatDate(currentDate)}</span>
+            {hasDateSelection ? (
+              <>
+                <span className="crystal-formal-popover-month"><CalendarDays size={16} />{formatMonth(currentDate)}</span>
+                <span className="crystal-formal-popover-date">{formatDate(currentDate)}</span>
+              </>
+            ) : (
+              <span className="crystal-formal-popover-all">全部时间</span>
+            )}
           </output>
         </div>
       </div>

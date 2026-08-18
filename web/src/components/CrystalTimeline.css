@@ -49,5 +49,6 @@
 .crystal-formal-popover.is-visible { opacity:1; }
 .crystal-formal-popover-month,.crystal-formal-popover-date { display:flex;align-items:center;justify-content:center;gap:6px; }
 .crystal-formal-popover-month { font-size:15px;font-weight:600; }
+.crystal-formal-popover-all { display:block; font-size:15px; font-weight:600; line-height:20px; }
 .crystal-formal-clear { position:absolute;right:18px;bottom:-27px;pointer-events:auto;border:0;background:transparent;color:#68635b;font-size:11px;cursor:pointer; }
 @media (max-width:720px) { .crystal-timeline-formal { left:50%;width:calc(100vw - 32px); } .crystal-formal-years span { font-size:12px; } .crystal-formal-current-years span { font-size:11px; } }
