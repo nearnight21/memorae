@@ -904,10 +904,13 @@
 }
 
 .map-create-dock:has(.map-create-memory-trigger:hover),
-.map-create-dock:has(.map-create-memory-trigger:focus-visible),
+.map-create-dock:has(.map-create-memory-trigger:focus-visible) {
+  width: 112px;
+}
+
 .map-create-dock:has(.map-create-recall-trigger:hover),
 .map-create-dock:has(.map-create-recall-trigger:focus-visible) {
-  width: 112px;
+  width: 196px;
 }
 
 .map-create-dock-item {
@@ -984,6 +987,20 @@
 
 .map-create-dock:has(.map-create-memory-trigger:hover) .map-create-dock-label-long,
 .map-create-dock:has(.map-create-memory-trigger:focus-visible) .map-create-dock-label-long {
+  display: inline;
+}
+
+.map-create-dock-recall-long {
+  display: none;
+}
+
+.map-create-dock:has(.map-create-recall-trigger:hover) .map-create-dock-recall-short,
+.map-create-dock:has(.map-create-recall-trigger:focus-visible) .map-create-dock-recall-short {
+  display: none;
+}
+
+.map-create-dock:has(.map-create-recall-trigger:hover) .map-create-dock-recall-long,
+.map-create-dock:has(.map-create-recall-trigger:focus-visible) .map-create-dock-recall-long {
   display: inline;
 }
 

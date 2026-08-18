@@ -1023,11 +1023,12 @@ export default function MapView({
             type="button"
             onClick={() => setIsResultListOpen(true)}
             className="map-create-dock-item map-create-recall-trigger"
-            aria-label="查看当前地点的回顾入口"
-            title="回顾当前地点"
+            aria-label={`查看当前地点的回顾入口，当前页面 ${contextMemories.length} 条记忆`}
+            title={`当前页面 ${contextMemories.length} 条记忆`}
           >
             <List className="h-[18px] w-[18px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
-            <span>回顾</span>
+            <span className="map-create-dock-recall-short">回顾</span>
+            <span className="map-create-dock-recall-long">当前页面 {contextMemories.length} 条记忆</span>
           </button>
         </div>
       )}
