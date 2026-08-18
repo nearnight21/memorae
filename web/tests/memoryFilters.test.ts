@@ -5,6 +5,7 @@ import {
   EMPTY_MEMORY_FILTERS,
   filterMemories,
   isMemoryFiltersActive,
+  throughDateRange,
   yearDateRange,
 } from '../src/lib/memoryFilters';
 
@@ -59,6 +60,19 @@ test('timeline range keeps earlier memories visible when the handle is moved lat
   });
 
   assert.deepEqual(through2022.map((item) => item.id), ['earlier']);
+});
+
+test('timeline cutoff includes the selected year and excludes memories after it', () => {
+  const memories = [
+    memory({ id: '2007', date: '2007', year: 2007 }),
+    memory({ id: '2008', date: '2008', year: 2008 }),
+  ];
+  const through2007 = filterMemories(memories, {
+    ...EMPTY_MEMORY_FILTERS,
+    dateRange: throughDateRange(new Date('2007-01-01T00:00:00Z'), new Date('2007-12-31T00:00:00Z')),
+  });
+
+  assert.deepEqual(through2007.map((item) => item.id), ['2007']);
 });
 
 test('region filters match country, city and location labels', () => {

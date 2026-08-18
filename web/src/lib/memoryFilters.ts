@@ -57,6 +57,15 @@ export const yearDateRange = (year: number): MemoryDateRange => ({
   end: `${year}-12-31`,
 });
 
+/**
+ * 时间轴使用截止点语义：显示最早日期到截止日（含当天）的全部记忆。
+ * 起点由调用方提供，避免把时间轴误解成“只看某一年”。
+ */
+export const throughDateRange = (start: Date, end: Date): MemoryDateRange => ({
+  start: start.toISOString().slice(0, 10),
+  end: end.toISOString().slice(0, 10),
+});
+
 export const yearFromDateRange = (dateRange: MemoryDateRange | null): number | null => {
   if (!dateRange?.start || !dateRange.end) return null;
   const start = normalizeDate(dateRange.start);

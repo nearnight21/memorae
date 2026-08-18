@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { CalendarDays } from 'lucide-react';
 import type { Memory, MemoryFilters } from '../types';
-import { memoryDateValue } from '../lib/memoryFilters';
+import { memoryDateValue, throughDateRange } from '../lib/memoryFilters';
 import { getTimelineTicks } from '../lib/timelineTicks';
 import './CrystalTimeline.css';
 
@@ -15,7 +15,6 @@ interface CrystalTimelineProps {
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
-const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 const formatDate = (date: Date) => `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
 const formatMonth = (date: Date) => `${date.getUTCFullYear()} · ${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 
@@ -91,7 +90,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
     }
     onFiltersChange({
       ...filters,
-      dateRange: { start: isoDay(bounds.min), end: isoDay(nextDate) },
+      dateRange: throughDateRange(bounds.min, nextDate),
     });
   };
 
@@ -205,7 +204,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
             {hasDateSelection ? (
               <>
                 <span className="crystal-formal-popover-month"><CalendarDays size={16} />{formatMonth(currentDate)}</span>
-                <span className="crystal-formal-popover-date">{formatDate(currentDate)}</span>
+                <span className="crystal-formal-popover-date">截至 {formatDate(currentDate)}</span>
               </>
             ) : (
               <span className="crystal-formal-popover-all">全部时间</span>
