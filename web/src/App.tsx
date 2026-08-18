@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 // Data & Types
-import { Memory, type MemoryFilters } from './types';
+import { Memory, type MemoryFilters, type MemoryLocationDraft } from './types';
 import { type VaultSessionV1 } from './crypto';
 import { deleteProductMemory, loadProductMemories, loadProductOriginalPhoto, saveProductMemory } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
@@ -298,7 +298,15 @@ export default function App({
   
   // --- Dialog controllers ---
   const [showAddMemory, setShowAddMemory] = useState<boolean>(false);
+  const [createLocationDraft, setCreateLocationDraft] = useState<MemoryLocationDraft | null>(null);
+  const [createPhoto, setCreatePhoto] = useState<File | null>(null);
   const [showGuide, setShowGuide] = useState<boolean>(false);
+
+  const openAddMemory = (location?: MemoryLocationDraft, photo?: File) => {
+    setCreateLocationDraft(location ?? null);
+    setCreatePhoto(photo ?? null);
+    setShowAddMemory(true);
+  };
 
   // --- Adds a new memory Polaroid ---
   const handleAddMemory = async (newMem: Omit<Memory, 'id' | 'px' | 'py' | 'rotation'>) => {
@@ -866,7 +874,7 @@ export default function App({
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
             onLoadOriginalPhoto={handleLoadOriginalPhoto}
-            onAddMemory={() => setShowAddMemory(true)}
+            onAddMemory={openAddMemory}
             isFirstMemory={memories.length === 0}
             firstMemoryFeedback={firstMemoryFeedback}
             onDismissFirstMemoryFeedback={() => setFirstMemoryFeedback(null)}
@@ -905,12 +913,16 @@ export default function App({
           <AddMemoryDialog
             onClose={() => {
               setShowAddMemory(false);
+              setCreateLocationDraft(null);
+              setCreatePhoto(null);
               setEditingMemory(null);
             }}
             onAddMemory={handleAddMemory}
             onSaveMemory={handleSaveMemory}
             memory={editingMemory ?? undefined}
             isFirstMemory={!editingMemory && memories.length === 0}
+            initialLocation={!editingMemory ? createLocationDraft ?? undefined : undefined}
+            initialPhoto={!editingMemory ? createPhoto ?? undefined : undefined}
           />
         )}
 

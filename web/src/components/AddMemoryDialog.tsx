@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import type { CategoryType, Memory, PinnedBy } from '../types';
+import type { CategoryType, Memory, MemoryLocationDraft, PinnedBy } from '../types';
 import { selectLocalPhoto } from '../product/selectPhoto';
 import { readPhotoMetadata } from '../product/photoMetadata';
 import { hasResolvedAdministrativeLocation, resolvePlaceCandidate, reverseGeocodeCoordinates, type PlaceCandidate } from '../lib/geo';
@@ -25,6 +25,8 @@ interface AddMemoryDialogProps {
   onSaveMemory?: (memory: Memory) => Promise<void>;
   memory?: Memory;
   isFirstMemory?: boolean;
+  initialLocation?: MemoryLocationDraft;
+  initialPhoto?: File;
 }
 
 type CreateStep = 'source' | 'photo-review' | 'editor';
@@ -90,6 +92,22 @@ function selectedLocationFromMemory(memory?: Memory): SelectedLocation | null {
   };
 }
 
+function selectedLocationFromDraft(draft?: MemoryLocationDraft): SelectedLocation | null {
+  if (!draft || !Number.isFinite(draft.lat) || !Number.isFinite(draft.lng)) return null;
+  return {
+    name: draft.name,
+    lat: draft.lat,
+    lng: draft.lng,
+    country: draft.country,
+    province: draft.province,
+    city: draft.city,
+    district: draft.district,
+    adcode: draft.adcode,
+    provider: draft.provider,
+    providerId: draft.providerId,
+  };
+}
+
 function locationNeedsResolution(location: SelectedLocation | null): boolean {
   if (!location) return false;
   const country = location.country?.trim() || '';
@@ -105,9 +123,11 @@ export default function AddMemoryDialog({
   onSaveMemory,
   memory,
   isFirstMemory = false,
+  initialLocation: initialLocationDraft,
+  initialPhoto,
 }: AddMemoryDialogProps) {
   const isEditing = Boolean(memory);
-  const initialLocation = selectedLocationFromMemory(memory);
+  const initialLocation = selectedLocationFromMemory(memory) ?? selectedLocationFromDraft(initialLocationDraft);
   const [step, setStep] = useState<CreateStep>(() => isEditing ? 'editor' : 'source');
   const [title, setTitle] = useState(memory?.title ?? '');
   const [date, setDate] = useState(() => dateInputValue(memory?.date ?? '', memory?.year));
@@ -135,7 +155,7 @@ export default function AddMemoryDialog({
   const dateAutoRef = useRef(false);
   const locationAutoRef = useRef(false);
   const dateValueRef = useRef(date);
-  const locationValueRef = useRef(memory?.location?.name ?? '');
+  const locationValueRef = useRef(initialLocation?.name ?? '');
   const photoMetadataRequestRef = useRef(0);
   const locationRequestRef = useRef(0);
 
@@ -291,6 +311,11 @@ export default function AddMemoryDialog({
       setIsCoverUploading(false);
     }
   };
+
+  useEffect(() => {
+    if (isEditing || !initialPhoto) return;
+    void selectCover(initialPhoto, 'editor');
+  }, [initialPhoto, isEditing]);
 
   const selectGalleryPhoto = async (file: File | undefined) => {
     if (!file) return;

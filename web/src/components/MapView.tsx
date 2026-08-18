@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, ChevronLeft, History, List, MapPin, Plus } from 'lucide-react';
-import { Memory, type MemoryFilters } from '../types';
+import { ArrowLeft, Check, ChevronLeft, History, ImagePlus, List, MapPin } from 'lucide-react';
+import { Memory, type MemoryFilters, type MemoryLocationDraft } from '../types';
 import { hasResolvedAdministrativeLocation, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
 import {
@@ -43,7 +43,7 @@ interface MapViewProps {
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
-  onAddMemory?: () => void;
+  onAddMemory?: (location?: MemoryLocationDraft, photo?: File) => void;
   isFirstMemory?: boolean;
   firstMemoryFeedback?: Memory | null;
   onDismissFirstMemoryFeedback?: () => void;
@@ -53,6 +53,13 @@ interface MapViewProps {
 }
 
 type RegionFocus = ViewportRegion;
+
+interface MapCreatePrompt {
+  lat: number;
+  lng: number;
+  x: number;
+  y: number;
+}
 
 const countryOf = (m: Memory): string => m.country?.trim() || '';
 // 城市气泡只能使用行政城市字段；地点名可能是街道或景点，不能冒充城市标签。
@@ -222,6 +229,7 @@ export default function MapView({
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   const [showFirstMemoryPrompt, setShowFirstMemoryPrompt] = useState(isFirstMemory);
   const [localFilters, setLocalFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
+  const [mapCreatePrompt, setMapCreatePrompt] = useState<MapCreatePrompt | null>(null);
 
   const activeFilters = controlledFilters ?? localFilters;
   const updateFilters = (patch: Partial<MemoryFilters>) => {
@@ -471,6 +479,40 @@ export default function MapView({
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     mapRef.current = map;
 
+    // 双击只负责提出创建意图，确认后才打开完整编辑器，避免误触直接打断浏览。
+    map.doubleClickZoom.disable();
+    const onMapDoubleClick = (event: L.LeafletMouseEvent) => {
+      if (!onAddMemory) return;
+      const container = map.getContainer();
+      const width = Math.max(container.clientWidth, 36);
+      const height = Math.max(container.clientHeight, 36);
+      setMapCreatePrompt({
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+        x: Math.max(18, Math.min(width - 18, event.containerPoint.x)),
+        y: Math.max(18, Math.min(height - 18, event.containerPoint.y)),
+      });
+    };
+    const onMapClick = () => setMapCreatePrompt(null);
+    map.on('dblclick', onMapDoubleClick);
+    map.on('click', onMapClick);
+
+    const mapContainer = map.getContainer();
+    const onMapDragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+    };
+    const onMapDrop = (event: DragEvent) => {
+      const file = event.dataTransfer?.files?.[0];
+      if (!file || !file.type.startsWith('image/')) return;
+      event.preventDefault();
+      const rect = mapContainer.getBoundingClientRect();
+      const point = map.containerPointToLatLng(L.point(event.clientX - rect.left, event.clientY - rect.top));
+      setMapCreatePrompt(null);
+      onAddMemory?.({ name: '拖放位置', lat: point.lat, lng: point.lng }, file);
+    };
+    mapContainer.addEventListener('dragover', onMapDragOver);
+    mapContainer.addEventListener('drop', onMapDrop);
+
     if (TILE_MODE === 'dark') {
       // 中文地名标注层：随缩放级别显示对应城市名（全中文）
       const labelLayer = L.layerGroup().addTo(map);
@@ -517,6 +559,10 @@ export default function MapView({
     setZoomTick((t) => t + 1);
     return () => {
       mapEventHandlers.forEach(({ event, handler }) => map.off(event, handler));
+      map.off('dblclick', onMapDoubleClick);
+      map.off('click', onMapClick);
+      mapContainer.removeEventListener('dragover', onMapDragOver);
+      mapContainer.removeEventListener('drop', onMapDrop);
       window.removeEventListener('resize', onResize);
       resizeObserver?.disconnect();
       window.clearTimeout(readyFallbackTimer);
@@ -525,6 +571,26 @@ export default function MapView({
       layerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'n' || event.ctrlKey || event.metaKey || event.altKey || selectedMemory) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]'))
+        || containerRef.current?.closest('.invisible')
+      ) return;
+      const map = mapRef.current;
+      if (!map) return;
+      event.preventDefault();
+      const center = map.getCenter();
+      setMapCreatePrompt(null);
+      onAddMemory?.({ name: '地图中心', lat: center.lat, lng: center.lng });
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onAddMemory, selectedMemory]);
 
   // Leaflet only reports a stable viewport after moveend/zoomend. Delaying the
   // calculation avoids flicker while the user is still dragging or pinching.
@@ -837,7 +903,7 @@ export default function MapView({
           <h2>你的记忆地图还没有被点亮</h2>
           <p>从一张照片开始，把一段经历放回它发生的时间和地点。</p>
           <div>
-            <button type="button" onClick={onAddMemory} className="map-first-memory-primary">创建第一段记忆</button>
+            <button type="button" onClick={() => onAddMemory?.()} className="map-first-memory-primary">创建第一段记忆</button>
             <button type="button" onClick={() => setShowFirstMemoryPrompt(false)} className="map-first-memory-secondary">稍后再说</button>
           </div>
         </motion.section>
@@ -921,19 +987,50 @@ export default function MapView({
 
       {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
 
-      {!selectedMemory && (
-        <button
-          type="button"
-          onClick={() => setIsResultListOpen(true)}
-          className="map-current-results-trigger absolute right-0 top-1/2 z-[1002] -translate-y-1/2"
-          aria-label="查看当前记忆列表"
-          title="查看当前记忆列表"
+      {!selectedMemory && mapCreatePrompt && (
+        <div
+          className="map-create-prompt absolute z-[1003]"
+          style={{ left: mapCreatePrompt.x, top: mapCreatePrompt.y }}
         >
-          <List className="h-5 w-5" strokeWidth={1.6} aria-hidden="true" />
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              onAddMemory?.({ name: '地图选点', lat: mapCreatePrompt.lat, lng: mapCreatePrompt.lng });
+              setMapCreatePrompt(null);
+            }}
+          >
+            在这里新建记忆
+          </button>
+        </div>
       )}
 
-      {!selectedMemory && onAddMemory && <button id="btn-add-memory-from-map" type="button" onClick={onAddMemory} aria-label="添加记忆" title="添加记忆" className="map-add-memory-floating"><Plus className="h-6 w-6" strokeWidth={1.7} /></button>}
+      {!selectedMemory && (
+        <div className="map-create-dock absolute right-0 top-1/2 z-[1002]" aria-label="记忆入口">
+          {onAddMemory && (
+            <button
+              type="button"
+              onClick={() => onAddMemory()}
+              className="map-create-dock-item map-create-memory-trigger"
+              aria-label="新建记忆"
+              title="新建记忆"
+            >
+              <ImagePlus className="h-[18px] w-[18px] shrink-0" strokeWidth={1.65} aria-hidden="true" />
+              <span className="map-create-dock-label map-create-dock-label-short">新建</span>
+              <span className="map-create-dock-label map-create-dock-label-long">新建记忆</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsResultListOpen(true)}
+            className="map-create-dock-item map-create-recall-trigger"
+            aria-label="查看当前地点的回顾入口"
+            title="回顾当前地点"
+          >
+            <List className="h-[18px] w-[18px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
+            <span>回顾</span>
+          </button>
+        </div>
+      )}
 
       {/* 当前地图上下文的结果列表。抽屉开合不改变地图中心或缩放。 */}
       <AnimatePresence>

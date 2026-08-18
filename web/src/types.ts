@@ -13,6 +13,20 @@ export interface MemoryFilters {
   themes: CategoryType[];
 }
 
+/** 地图创建入口传给新增弹窗的地点草稿。 */
+export interface MemoryLocationDraft {
+  name: string;
+  lat: number;
+  lng: number;
+  country?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  adcode?: string;
+  provider?: 'amap';
+  providerId?: string;
+}
+
 export interface Memory {
   id: string;
   title: string;
