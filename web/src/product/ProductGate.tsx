@@ -7,6 +7,7 @@ import {
   getStoredAccountSession,
   getVaultEnvelope,
   markCipherSyncPending,
+  clearPrototypeDatabase,
   saveStoredAccountSession,
   saveVaultEnvelope,
 } from '../prototype/storage';
@@ -33,6 +34,8 @@ export default function ProductGate() {
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [localVaultMismatch, setLocalVaultMismatch] = useState(false);
+  const [clearLocalArmed, setClearLocalArmed] = useState(false);
 
   useEffect(() => {
     void Promise.all([getVaultEnvelope(), getStoredAccountSession()])
@@ -177,7 +180,38 @@ export default function ProductGate() {
         await finishUnlock(await unlockVault(vault, password));
       }
     } catch (submitError) {
+      setLocalVaultMismatch(submitError instanceof VaultMismatchError);
+      setClearLocalArmed(false);
       setError(submitError instanceof Error ? submitError.message : '无法打开私密空间。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearLocalSpaceForAccountSwitch = async () => {
+    if (!clearLocalArmed) {
+      setClearLocalArmed(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (session) destroyVaultSession(session);
+      revokeRegisteredPhotos();
+      await clearPrototypeDatabase();
+      await clearStoredAccountSession();
+      setVault(null);
+      setSession(null);
+      setAccountSession(null);
+      setMemories([]);
+      setPassword('');
+      setConfirmation('');
+      setAccountPassword('');
+      setError('');
+      setLocalVaultMismatch(false);
+      setClearLocalArmed(false);
+      setPhase('account');
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : '本机数据清除失败，请重试。');
     } finally {
       setBusy(false);
     }
@@ -263,6 +297,33 @@ export default function ProductGate() {
               {busy ? '正在处理' : phase === 'account' ? '登录' : phase === 'setup' ? '创建并进入所忆' : '解锁并进入所忆'}
             </button>
           </form>
+        )}
+        {phase === 'account' && localVaultMismatch && (
+          <section className="mt-5 border-t border-[#6E5A39]/60 pt-5" aria-label="切换所忆账号">
+            <p className="text-xs leading-5 text-[#BDB3A1]">
+              清除本机私密空间后可切换到当前云端账号；云端记忆和照片不会被删除。
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void clearLocalSpaceForAccountSwitch()}
+                disabled={busy}
+                className="flex-1 rounded-xl border border-red-700/50 px-3 py-2.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-950/30 disabled:opacity-55"
+              >
+                {clearLocalArmed ? '再次点击确认清除' : '清除本机数据并切换'}
+              </button>
+              {clearLocalArmed && (
+                <button
+                  type="button"
+                  onClick={() => setClearLocalArmed(false)}
+                  disabled={busy}
+                  className="rounded-xl border border-[#6E5A39] px-3 py-2.5 text-xs text-[#D6C6AB] transition-colors hover:bg-[#2B251C] disabled:opacity-55"
+                >
+                  取消
+                </button>
+              )}
+            </div>
+          </section>
         )}
         {import.meta.env.DEV && (
           <a className="mt-7 block text-center text-[11px] text-[#7E725F] hover:text-[#B89A68]" href="?dev-vault=1">开发人员：打开密文验证工具</a>
