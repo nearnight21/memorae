@@ -281,10 +281,14 @@ export async function geocodeAddress(query: string): Promise<GeoResult | null> {
 export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<GeoResult | null> {
   if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng)) return null;
   const normalizedLng = normalizeLongitude(lng);
-  const key = `location_reverse_v3_${lat.toFixed(5)}_${normalizedLng.toFixed(5)}`;
+  const key = `location_reverse_v4_${lat.toFixed(5)}_${normalizedLng.toFixed(5)}`;
   try {
     const cached = localStorage.getItem(key);
-    if (cached) return normalizeGeoResult(JSON.parse(cached) as GeoResult);
+    if (cached) {
+      const result = normalizeGeoResult(JSON.parse(cached) as GeoResult);
+      if (hasResolvedAdministrativeLocation(result)) return result;
+      localStorage.removeItem(key);
+    }
   } catch {
     // Ignore malformed local cache entries.
   }
@@ -292,10 +296,12 @@ export async function reverseGeocodeCoordinates(lat: number, lng: number): Promi
   const reverse = await reverseGeocodeWithAmap({ lat, lng: normalizedLng });
   if (!reverse) return null;
   const result = geoFromReverse(reverse);
-  try {
-    localStorage.setItem(key, JSON.stringify(result));
-  } catch {
-    // Cache is only an optimisation.
+  if (hasResolvedAdministrativeLocation(result)) {
+    try {
+      localStorage.setItem(key, JSON.stringify(result));
+    } catch {
+      // Cache is only an optimisation.
+    }
   }
   return result;
 }
