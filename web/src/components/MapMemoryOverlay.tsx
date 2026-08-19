@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bookmark, ChevronLeft, ChevronRight, Cloud, Edit3, LoaderCircle, RefreshCw, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, LoaderCircle, MoreHorizontal, RefreshCw, Trash2, X } from 'lucide-react';
 import { CategoryType, Memory } from '../types';
 import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from '../lib/geo';
 import LocationPicker from './LocationPicker';
@@ -15,7 +15,6 @@ interface MapMemoryOverlayProps {
   anchor: ScreenPoint | null;
   viewport: { width: number; height: number };
   onClose: () => void;
-  onEditMemory?: (memory: Memory) => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
@@ -50,7 +49,6 @@ export default function MapMemoryOverlay({
   anchor,
   viewport,
   onClose,
-  onEditMemory,
   onSaveMemory,
   onDeleteMemory,
   onLoadOriginalPhoto,
@@ -69,6 +67,7 @@ export default function MapMemoryOverlay({
   const [draftMemory, setDraftMemory] = useState<Memory>(memory);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [deleteArmed, setDeleteArmed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isOriginalOpen, setIsOriginalOpen] = useState(false);
   const [originalState, setOriginalState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
@@ -86,6 +85,7 @@ export default function MapMemoryOverlay({
     setDraftMemory(memory);
     setSaveStatus('idle');
     setDeleteArmed(false);
+    setMoreOpen(false);
     setIsDeleting(false);
     setIsOriginalOpen(false);
     setOriginalState('loading');
@@ -102,6 +102,12 @@ export default function MapMemoryOverlay({
     .map((part) => part?.trim())
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index);
   const locationText = locationParts.join(' · ');
+  const displayDate = activeMemory.date.replace(/[\-/]/g, '.');
+  const detailLocation = [activeMemory.city, activeMemory.detailLocation]
+    .map((part) => part?.trim())
+    .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
+    .join(' / ') || activeMemory.location?.name?.trim() || '';
+  const metadataLocation = detailLocation || locationText;
 
   const photoCenter = {
     x: viewport.width * (viewport.width < 900 ? 0.39 : 0.34),
@@ -121,13 +127,18 @@ export default function MapMemoryOverlay({
   };
 
   const beginEditing = () => {
-    if (onEditMemory) {
-      onEditMemory(memory);
-      return;
-    }
     setDraftMemory(memory);
     setSaveStatus('idle');
     setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    locationRequestRef.current += 1;
+    setDraftMemory(memory);
+    setLocationQuery('');
+    setLocationResolution(locationNeedsResolution(memory) ? 'idle' : 'resolved');
+    setSaveStatus('idle');
+    setIsEditing(false);
   };
 
   const updateDraft = <K extends keyof Memory>(key: K, value: Memory[K]) => {
@@ -346,55 +357,101 @@ export default function MapMemoryOverlay({
         )}
       </motion.div>
 
-      <p className="map-memory-breadcrumb map-ui-muted pointer-events-none absolute left-12 top-8 z-30 text-[11px] tracking-[0.08em]">
-        足迹 / {locationText || '未标注地点'}
-      </p>
-
-      {isEditing && onSaveMemory && <button
-        type="button"
-        onClick={() => void completeEditing()}
-        disabled={saveStatus === 'saving' || (draftMemory.location?.name.trim() !== '' && locationResolution !== 'resolved')}
-        aria-label="保存修改并完成编辑"
-        title="保存修改并完成编辑"
-        className="map-memory-complete map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 min-w-[82px] items-center justify-center rounded-full border px-4 text-[12px] transition-colors disabled:opacity-60 cursor-pointer"
-      >
-        {saveStatus === 'saving' ? '保存中…' : '完成'}
-      </button>}
-
       <motion.article
-        className="map-memory-copy-feather map-ui-body pointer-events-auto absolute right-[2.5%] top-[15%] z-20 max-h-[72%] w-[43%] overflow-y-auto px-[5%] py-10 sm:right-[3.5%] sm:w-[40%]"
+        className="map-memory-copy-feather map-ui-body pointer-events-auto absolute right-[2.5%] top-[12%] z-20 max-h-[76%] w-[43%] overflow-y-auto px-[5.5%] py-7 sm:right-[3.5%] sm:w-[40%] sm:py-8"
         initial={{ opacity: 0, x: 28 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 20 }}
         transition={{ duration: 0.38, delay: 0.14 }}
       >
-        <div className="mb-7">
+        <div className="map-memory-paper-header">
+          <div className="map-memory-paper-status" aria-live="polite">
+            {isEditing
+              ? (saveStatus === 'saving' ? '正在保存' : saveStatus === 'saved' ? '已保存' : '编辑中')
+              : (saveStatus === 'saved' ? '已保存' : '已同步')}
+          </div>
+          <div className="map-memory-paper-actions">
+            {!isEditing && onSaveMemory && <button
+              type="button"
+              onClick={beginEditing}
+              className="map-memory-paper-action map-memory-paper-edit"
+              aria-label="编辑记忆"
+              title="编辑记忆"
+            >
+              <Edit3 className="h-3.5 w-3.5" strokeWidth={1.6} />
+              编辑
+            </button>}
+            {isEditing && onSaveMemory && <button
+              type="button"
+              onClick={() => void completeEditing()}
+              disabled={saveStatus === 'saving' || (draftMemory.location?.name.trim() !== '' && locationResolution !== 'resolved')}
+              className="map-memory-paper-complete"
+            >
+              {saveStatus === 'saving' ? '保存中…' : '完成'}
+            </button>}
+            {isEditing && <button
+              type="button"
+              onClick={cancelEditing}
+              disabled={saveStatus === 'saving'}
+              className="map-memory-paper-action"
+            >
+              取消
+            </button>}
+            {onDeleteMemory && <div className="map-memory-more-wrap">
+              <button
+                type="button"
+                className="map-memory-more"
+                onClick={() => setMoreOpen((open) => !open)}
+                aria-label="更多操作"
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                title="更多操作"
+              >
+                <MoreHorizontal className="h-4.5 w-4.5" strokeWidth={1.6} />
+              </button>
+              {moreOpen && <div className="map-memory-more-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setMoreOpen(false); setDeleteArmed(true); }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
+                  删除记忆
+                </button>
+              </div>}
+            </div>}
+          </div>
+        </div>
+
+        <div className="map-memory-paper-intro">
           {isEditing ? (
             <input
               value={draftMemory.title}
               onChange={(event) => updateDraft('title', event.target.value)}
-              className="map-memory-inline-title map-ui-body w-full border-0 border-b bg-transparent pb-2 font-editorial-serif text-[30px] leading-tight outline-none sm:text-[38px]"
+              className="map-memory-inline-title map-ui-body w-full bg-transparent font-editorial-serif text-[30px] leading-tight outline-none sm:text-[38px]"
               aria-label="编辑记忆标题"
             />
           ) : (
-            <h2 className="font-editorial-serif text-[32px] leading-tight tracking-[0.08em] sm:text-[42px]">
+            <h2 className="map-memory-paper-title font-editorial-serif text-[32px] leading-tight sm:text-[42px]">
               {memory.title}
             </h2>
           )}
 
-          <div className="map-memory-meta-row mt-5 flex flex-wrap items-center gap-2">
+          <div className="map-memory-meta-row">
             {isEditing ? (
               <input
                 value={draftMemory.date}
                 onChange={(event) => updateDraft('date', event.target.value)}
-                className="map-memory-edit-chip map-memory-edit-date"
+                className="map-memory-meta-edit map-memory-edit-date"
                 aria-label="编辑记忆日期"
                 placeholder="YYYY.MM.DD"
               />
-            ) : <span className="map-memory-meta-chip">{memory.date}</span>}
+            ) : <span className="map-memory-meta-text">{displayDate}</span>}
+
+            <span className="map-memory-meta-separator" aria-hidden="true">·</span>
 
             {isEditing ? (
-              <div className="map-memory-edit-chip map-memory-edit-location">
+              <div className="map-memory-meta-edit map-memory-edit-location">
                 <LocationPicker
                   selectedLabel={draftMemory.location?.name ?? ''}
                   query={locationQuery}
@@ -448,109 +505,56 @@ export default function MapMemoryOverlay({
                   inputClassName="map-memory-edit-chip-input"
                 />
               </div>
-            ) : (memory.location?.name || locationText) && (
-              <span className="map-memory-meta-chip">{memory.location?.name || locationText}</span>
+            ) : metadataLocation && (
+              <span className="map-memory-meta-text">{metadataLocation}</span>
             )}
+
+            <span className="map-memory-meta-separator" aria-hidden="true">·</span>
 
             {isEditing ? (
               <select
                 value={draftMemory.category}
                 onChange={(event) => updateDraft('category', event.target.value as CategoryType)}
-                className="map-memory-edit-chip map-memory-edit-select"
+                className="map-memory-meta-edit map-memory-edit-select"
                 aria-label="编辑记忆主题"
               >
                 {CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-            ) : <span className="map-memory-meta-chip">{categoryLabel(memory.category)}</span>}
+            ) : <span className="map-memory-meta-tag">{categoryLabel(memory.category)}</span>}
           </div>
         </div>
 
-        <div className="map-ui-accent-border mt-7 border-l pl-7">
-          <section className="relative pb-7">
-            <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
-              昔
-            </span>
-            <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">当时的我</h3>
+        <div className="map-memory-reflections">
+          <section className="map-memory-reflection map-memory-reflection-past">
+            <h3 className="map-memory-reflection-heading font-editorial-serif">当时的我</h3>
             {isEditing ? (
               <textarea
                 value={draftMemory.pastSelf}
                 onChange={(event) => updateDraft('pastSelf', event.target.value)}
-                className="map-memory-edit-textarea map-ui-body-text mt-3 min-h-28 w-full resize-y px-3 py-2 text-[13px] leading-7 outline-none"
+                className="map-memory-edit-textarea map-ui-body-text"
                 aria-label="编辑当时的我"
               />
-            ) : <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.pastSelf}</p>}
+            ) : <p className="map-ui-body-text">{memory.pastSelf}</p>}
           </section>
 
-          {(readerMode === 'reflection' || isEditing) && <section className="relative">
-            <span className="map-ui-accent map-ui-accent-border map-ui-subtle font-editorial-serif absolute -left-[43px] top-0 flex h-8 w-8 items-center justify-center rounded-full border text-sm">
-              今
-            </span>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="map-ui-accent font-editorial-serif text-[16px] tracking-[0.12em]">现在的我</h3>
-              {!isEditing && onSaveMemory && <button
-                type="button"
-                onClick={beginEditing}
-                className="map-ui-accent map-ui-accent-hover flex items-center gap-1.5 text-[10px] transition-colors cursor-pointer"
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-                编辑
-              </button>}
-            </div>
+          {(readerMode === 'reflection' || isEditing) && <section className="map-memory-reflection map-memory-reflection-present">
+              <h3 className="map-memory-reflection-heading font-editorial-serif">现在的我</h3>
             {isEditing ? (
               <textarea
                 value={draftMemory.presentSelf}
                 onChange={(event) => updateDraft('presentSelf', event.target.value)}
-                className="map-memory-edit-textarea map-ui-body-text mt-3 min-h-24 w-full resize-y px-3 py-2 text-[13px] leading-7 outline-none"
+                className="map-memory-edit-textarea map-ui-body-text"
                 aria-label="编辑现在的我"
               />
             ) : (
-              <p className="map-ui-body-text mt-3 whitespace-pre-wrap text-[13px] leading-7">{memory.presentSelf}</p>
+              <p className="map-ui-body-text">{memory.presentSelf}</p>
             )}
           </section>}
         </div>
 
-        {onSaveMemory && <div className="mt-8 flex items-center gap-3 text-[11px]">
-          {isEditing && <button
-            type="button"
-            onClick={() => void saveMemory()}
-            disabled={saveStatus === 'saving'}
-            className="map-ui-accent map-ui-accent-hover flex items-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
-            aria-label="保存记忆修改"
-          >
-            <Bookmark className="h-4 w-4" strokeWidth={1.5} />
-            {saveStatus === 'saving' ? '保存中…' : saveStatus === 'saved' ? '已保存' : '保存修改'}
-          </button>}
-          {!isEditing && <button
-            type="button"
-            onClick={() => void saveMemory()}
-            disabled={saveStatus === 'saving'}
-            className="map-ui-accent map-ui-accent-hover flex items-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            <Bookmark className="h-4.5 w-4.5" strokeWidth={1.5} />
-            {saveStatus === 'saving' ? '保存中…' : '保存记忆'}
-          </button>}
-          {!isEditing && <span className="map-ui-muted">|</span>}
-          <span className={`map-ui-save-status flex items-center gap-1.5 ${saveStatus === 'error' ? 'is-error' : ''}`}>
-            <Cloud className="h-4 w-4" strokeWidth={1.5} />
-            {isEditing
-              ? (saveStatus === 'saving' ? '正在保存草稿…' : saveStatus === 'error' ? '草稿保存失败' : '草稿已保存 · Ctrl + Enter 完成')
-              : (saveStatus === 'error' ? '同步失败' : saveStatus === 'saved' ? '已同步' : '等待保存')}
-          </span>
-        </div>}
-
-        {onDeleteMemory && (
-          <div className="mt-5 border-t border-[color:var(--color-border-subtle)] pt-4 text-[11px]">
-            <button
-              type="button"
-              aria-label="删除记忆"
-              onClick={() => setDeleteArmed(true)}
-              className="map-ui-save-status inline-flex items-center gap-2 transition-colors hover:text-[var(--color-danger)] cursor-pointer"
-            >
-              <Trash2 className="h-4 w-4" strokeWidth={1.5} />
-              删除记忆
-            </button>
-          </div>
-        )}
+        {isEditing && <p className={`map-memory-edit-hint ${saveStatus === 'error' ? 'is-error' : ''}`}>
+          {saveStatus === 'error' ? '草稿保存失败，请检查地点后重试。' : '修改会即时保存在本地草稿中。'}
+        </p>}
       </motion.article>
 
       <button

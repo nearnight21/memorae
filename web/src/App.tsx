@@ -154,7 +154,6 @@ export default function App({
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [focusMemory, setFocusMemory] = useState<Memory | null>(null);
   const [firstMemoryFeedback, setFirstMemoryFeedback] = useState<Memory | null>(null);
-  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
   const [showRecall, setShowRecall] = useState(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
   // Formal product entry is the footprint map. Legacy view state remains in the
@@ -867,10 +866,6 @@ export default function App({
             focusMemory={focusMemory}
             onSelectMemory={setSelectedMemory}
             onCloseMemory={() => setSelectedMemory(null)}
-            onEditMemory={(memory) => {
-              setSelectedMemory(null);
-              setEditingMemory(memory);
-            }}
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
             onLoadOriginalPhoto={handleLoadOriginalPhoto}
@@ -909,20 +904,18 @@ export default function App({
         )}
 
         {/* Pin New Memory Form Interface */}
-        {(showAddMemory || editingMemory) && (
+        {showAddMemory && (
           <AddMemoryDialog
             onClose={() => {
               setShowAddMemory(false);
               setCreateLocationDraft(null);
               setCreatePhoto(null);
-              setEditingMemory(null);
             }}
             onAddMemory={handleAddMemory}
             onSaveMemory={handleSaveMemory}
-            memory={editingMemory ?? undefined}
-            isFirstMemory={!editingMemory && memories.length === 0}
-            initialLocation={!editingMemory ? createLocationDraft ?? undefined : undefined}
-            initialPhoto={!editingMemory ? createPhoto ?? undefined : undefined}
+            isFirstMemory={memories.length === 0}
+            initialLocation={createLocationDraft ?? undefined}
+            initialPhoto={createPhoto ?? undefined}
           />
         )}
 
