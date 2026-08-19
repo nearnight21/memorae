@@ -747,7 +747,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: rgba(42, 38, 32, 0.055);
+  background: rgba(42, 38, 32, 0.2);
   content: '';
   pointer-events: none;
 }
