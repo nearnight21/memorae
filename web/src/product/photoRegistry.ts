@@ -1,9 +1,14 @@
+import type { PhotoKind } from '../crypto';
+
 interface RegisteredPhoto {
   file?: File;
   id?: string;
   mimeType: string;
 }
 const photos = new Map<string, RegisteredPhoto>();
+const decryptedVariants = new Map<string, string>();
+
+const variantKey = (id: string, kind: PhotoKind) => `${id}:${kind}`;
 
 export function registerSelectedPhoto(file: File): string {
   const url = URL.createObjectURL(file);
@@ -11,8 +16,18 @@ export function registerSelectedPhoto(file: File): string {
   return url;
 }
 
-export function registerDecryptedPhoto(url: string, id: string, mimeType: string): void {
+export function registerDecryptedPhoto(
+  url: string,
+  id: string,
+  mimeType: string,
+  kind?: PhotoKind,
+): void {
   photos.set(url, { id, mimeType });
+  if (kind) decryptedVariants.set(variantKey(id, kind), url);
+}
+
+export function getRegisteredDecryptedPhoto(id: string, kind: PhotoKind): string | undefined {
+  return decryptedVariants.get(variantKey(id, kind));
 }
 
 export function getRegisteredPhoto(url: string): RegisteredPhoto | undefined {
@@ -22,4 +37,5 @@ export function getRegisteredPhoto(url: string): RegisteredPhoto | undefined {
 export function revokeRegisteredPhotos(): void {
   for (const url of photos.keys()) URL.revokeObjectURL(url);
   photos.clear();
+  decryptedVariants.clear();
 }

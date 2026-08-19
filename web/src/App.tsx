@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -25,8 +25,16 @@ import {
 // Data & Types
 import { Memory, type MemoryFilters, type MemoryLocationDraft } from './types';
 import { type VaultSessionV1 } from './crypto';
-import { deleteProductMemory, loadProductMemories, loadProductOriginalPhoto, saveProductMemory } from './product/productStore';
+import {
+  deleteProductMemory,
+  loadProductMemories,
+  loadProductOriginalPhoto,
+  loadProductPreviewPhoto,
+  saveProductMemory,
+} from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
+import { MEMORY_RECALL_API_URL } from './sync/config';
+import { MemoryRecallSyncClient, SyncRequestError } from './sync/syncClient';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
 import { geocodeAddress, hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from './lib/geo';
 import { EMPTY_MEMORY_FILTERS, filterMemories } from './lib/memoryFilters';
@@ -60,6 +68,14 @@ export default function App({
     accountSession,
     onSessionExpired: onAccountSessionExpired,
   });
+  const photoSyncClient = useMemo(() => (
+    MEMORY_RECALL_API_URL && accountSession
+      ? new MemoryRecallSyncClient({
+          baseUrl: MEMORY_RECALL_API_URL,
+          token: accountSession.accessToken,
+        })
+      : undefined
+  ), [accountSession]);
 
   // --- Persistent States ---
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
@@ -387,7 +403,30 @@ export default function App({
     if (locationChanged) setFocusMemory(updatedMem);
   };
 
-  const handleLoadOriginalPhoto = (photoId: string) => loadProductOriginalPhoto(session, photoId);
+  const loadPhotoOnDemand = useCallback(async (
+    photoId: string,
+    kind: 'preview' | 'original',
+  ) => {
+    try {
+      return kind === 'preview'
+        ? await loadProductPreviewPhoto(session, photoId, photoSyncClient)
+        : await loadProductOriginalPhoto(session, photoId, photoSyncClient);
+    } catch (error) {
+      if (error instanceof SyncRequestError && error.status === 401) {
+        onAccountSessionExpired();
+      }
+      throw error;
+    }
+  }, [onAccountSessionExpired, photoSyncClient, session]);
+
+  const handleLoadPreviewPhoto = useCallback(
+    (photoId: string) => loadPhotoOnDemand(photoId, 'preview'),
+    [loadPhotoOnDemand],
+  );
+  const handleLoadOriginalPhoto = useCallback(
+    (photoId: string) => loadPhotoOnDemand(photoId, 'original'),
+    [loadPhotoOnDemand],
+  );
 
   const handleDeleteMemory = async (id: string) => {
     await deleteProductMemory(id);
@@ -868,6 +907,7 @@ export default function App({
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
+            onLoadPreviewPhoto={handleLoadPreviewPhoto}
             onLoadOriginalPhoto={handleLoadOriginalPhoto}
             onAddMemory={openAddMemory}
             isFirstMemory={memories.length === 0}

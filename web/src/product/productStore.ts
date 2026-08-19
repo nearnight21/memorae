@@ -8,19 +8,36 @@ import {
   type EncryptedPhotoV1,
   type MemoryPhotoV1,
   type MemoryV2,
+  type PhotoKind,
   type VaultSessionV1,
 } from '../crypto';
 import { createJpegPhotoVariant, PHOTO_VARIANT_SPECS } from '../photos/photoVariants';
 import {
   deleteEncryptedPhotoVariants,
+  getEncryptedPhotoVariant,
   listEncryptedMemories,
   listEncryptedPhotos,
   saveEncryptedMemory,
   saveEncryptedPhoto,
 } from '../prototype/storage';
-import { getRegisteredPhoto, registerDecryptedPhoto, revokeRegisteredPhotos } from './photoRegistry';
+import { cipherSyncStorage } from '../sync/cipherSyncStorage';
+import { downloadPhotoVariant } from '../sync/syncActions';
+import {
+  MemoryRecallSyncClient,
+  PhotoVariantNotFoundError,
+} from '../sync/syncClient';
+import {
+  getRegisteredDecryptedPhoto,
+  getRegisteredPhoto,
+  registerDecryptedPhoto,
+  revokeRegisteredPhotos,
+} from './photoRegistry';
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
+const pendingVariantDownloads = new WeakMap<
+  MemoryRecallSyncClient,
+  Map<string, Promise<EncryptedPhotoV1>>
+>();
 
 function displayDate(date: string): string {
   return date.replaceAll('-', '.');
@@ -63,24 +80,79 @@ function toDisplayMemory(memory: MemoryV2, photoUrls: string[]): Memory {
   };
 }
 
-/**
- * Original files stay encrypted until a reader explicitly asks for one. The
- * normal map view continues to use the preview variant returned by
- * loadProductMemories.
- */
-export async function loadProductOriginalPhoto(session: VaultSessionV1, photoId: string): Promise<string> {
-  const original = (await listEncryptedPhotos()).find((photo) => (
-    photo.id === photoId && photo.kind === 'original'
-  ));
-  if (!original) throw new Error('原图不可用。');
-  const decrypted = await decryptPhoto(session, original);
+async function decryptPhotoUrl(
+  session: VaultSessionV1,
+  encrypted: EncryptedPhotoV1,
+): Promise<string> {
+  const decrypted = await decryptPhoto(session, encrypted);
   try {
     const url = URL.createObjectURL(new Blob([decrypted.bytes], { type: decrypted.metadata.mimeType }));
-    registerDecryptedPhoto(url, photoId, decrypted.metadata.mimeType);
+    registerDecryptedPhoto(url, encrypted.id, decrypted.metadata.mimeType, encrypted.kind);
     return url;
   } finally {
     decrypted.bytes.fill(0);
   }
+}
+
+function downloadVariantOnce(
+  client: MemoryRecallSyncClient,
+  photoId: string,
+  kind: PhotoKind,
+): Promise<EncryptedPhotoV1> {
+  let pending = pendingVariantDownloads.get(client);
+  if (!pending) {
+    pending = new Map();
+    pendingVariantDownloads.set(client, pending);
+  }
+  const key = `${photoId}:${kind}`;
+  const existing = pending.get(key);
+  if (existing) return existing;
+  const request = (async () => {
+    try {
+      return await downloadPhotoVariant(client, cipherSyncStorage, photoId, kind);
+    } catch (error) {
+      if (kind === 'original' && error instanceof PhotoVariantNotFoundError) {
+        return client.getPhoto(photoId);
+      }
+      throw error;
+    } finally {
+      pending?.delete(key);
+    }
+  })();
+  pending.set(key, request);
+  return request;
+}
+
+async function loadProductPhotoVariant(
+  session: VaultSessionV1,
+  photoId: string,
+  kind: PhotoKind,
+  client?: MemoryRecallSyncClient,
+): Promise<string> {
+  const registered = getRegisteredDecryptedPhoto(photoId, kind);
+  if (registered) return registered;
+  const encrypted = await getEncryptedPhotoVariant(photoId, kind)
+    ?? (client ? await downloadVariantOnce(client, photoId, kind) : null);
+  if (!encrypted) throw new Error(`${kind === 'original' ? '原图' : '预览'}不可用。`);
+  return decryptPhotoUrl(session, encrypted);
+}
+
+/** Preview ciphertext is fetched and cached only after a reader opens a photo. */
+export async function loadProductPreviewPhoto(
+  session: VaultSessionV1,
+  photoId: string,
+  client?: MemoryRecallSyncClient,
+): Promise<string> {
+  return loadProductPhotoVariant(session, photoId, 'preview', client);
+}
+
+/** Original ciphertext is fetched only after an explicit original-photo action. */
+export async function loadProductOriginalPhoto(
+  session: VaultSessionV1,
+  photoId: string,
+  client?: MemoryRecallSyncClient,
+): Promise<string> {
+  return loadProductPhotoVariant(session, photoId, 'original', client);
 }
 
 async function decryptDisplayPhoto(
@@ -91,12 +163,8 @@ async function decryptDisplayPhoto(
   const encrypted = photoMap.get(`${photoId}:preview`)
     ?? photoMap.get(`${photoId}:original`)
     ?? photoMap.get(`${photoId}:thumbnail`);
-  if (!encrypted) throw new Error(`缺少照片密文：${photoId}。`);
-  const decrypted = await decryptPhoto(session, encrypted);
-  const url = URL.createObjectURL(new Blob([decrypted.bytes], { type: decrypted.metadata.mimeType }));
-  decrypted.bytes.fill(0);
-  registerDecryptedPhoto(url, photoId, decrypted.metadata.mimeType);
-  return url;
+  if (!encrypted) return '';
+  return decryptPhotoUrl(session, encrypted);
 }
 
 export async function loadProductMemories(session: VaultSessionV1): Promise<Memory[]> {

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { EncryptedMemoryV1, VaultEnvelopeV1 } from '../src/crypto';
-import { downloadCiphertext, type CipherSyncStorage } from '../src/sync/syncActions';
+import type {
+  EncryptedMemoryV1,
+  EncryptedPhotoV1,
+  PhotoKind,
+  VaultEnvelopeV1,
+} from '../src/crypto';
+import {
+  downloadCiphertext,
+  downloadPhotoVariant,
+  type CipherSyncStorage,
+} from '../src/sync/syncActions';
 import type { MemoryRecallSyncClient } from '../src/sync/syncClient';
 
 const sealed = {
@@ -33,6 +42,14 @@ const memory: EncryptedMemoryV1 = {
   deleted: false,
   payload: sealed,
 };
+
+const photo = (kind: PhotoKind, id = 'photo-001'): EncryptedPhotoV1 => ({
+  id,
+  kind,
+  cryptoVersion: 1,
+  metadata: sealed,
+  content: sealed,
+});
 
 test('本机与服务器相同版本相同密文时不会重复下载照片', async () => {
   let decryptCalls = 0;
@@ -67,4 +84,63 @@ test('本机与服务器相同版本相同密文时不会重复下载照片', as
     requiresUnlock: false,
     importedVault: false,
   });
+});
+
+test('首次恢复只下载缩略图，不预取预览和原图', async () => {
+  const photoIds = Array.from({ length: 18 }, (_, index) => `photo-${String(index + 1).padStart(3, '0')}`);
+  const requestedKinds: PhotoKind[] = [];
+  const cachedKinds: PhotoKind[] = [];
+  const permanentlySavedKinds: PhotoKind[] = [];
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [],
+    listPhotos: async () => [],
+    saveMemory: async () => undefined,
+    savePhoto: async (encryptedPhoto) => { permanentlySavedKinds.push(encryptedPhoto.kind); },
+    saveCachedPhoto: async (encryptedPhoto) => { cachedKinds.push(encryptedPhoto.kind); },
+  };
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    listMemories: async (): Promise<EncryptedMemoryV1[]> => [memory],
+    getPhotoVariant: async (photoId: string, kind: PhotoKind) => {
+      requestedKinds.push(kind);
+      return photo(kind, photoId);
+    },
+    getPhoto: async () => {
+      throw new Error('首次恢复不应调用旧版原图下载接口。');
+    },
+  } as unknown as MemoryRecallSyncClient;
+
+  const result = await downloadCiphertext({
+    client,
+    storage,
+    decryptMemory: async () => ({ photos: photoIds.map((id) => ({ id })) }),
+  });
+
+  assert.deepEqual(requestedKinds, Array<PhotoKind>(18).fill('thumbnail'));
+  assert.deepEqual(cachedKinds, Array<PhotoKind>(18).fill('thumbnail'));
+  assert.deepEqual(permanentlySavedKinds, []);
+  assert.equal(result.photos, 18);
+});
+
+test('按需照片下载只请求指定档位，原图不写入默认缓存', async () => {
+  const requestedKinds: PhotoKind[] = [];
+  const cachedKinds: PhotoKind[] = [];
+  const storage = {
+    savePhoto: async (encryptedPhoto: EncryptedPhotoV1) => { cachedKinds.push(encryptedPhoto.kind); },
+    saveCachedPhoto: async (encryptedPhoto: EncryptedPhotoV1) => { cachedKinds.push(encryptedPhoto.kind); },
+  } as CipherSyncStorage;
+  const client = {
+    getPhotoVariant: async (_photoId: string, kind: PhotoKind) => {
+      requestedKinds.push(kind);
+      return photo(kind);
+    },
+  } as unknown as MemoryRecallSyncClient;
+
+  await downloadPhotoVariant(client, storage, 'photo-001', 'preview');
+  await downloadPhotoVariant(client, storage, 'photo-001', 'original');
+
+  assert.deepEqual(requestedKinds, ['preview', 'original']);
+  assert.deepEqual(cachedKinds, ['preview']);
 });

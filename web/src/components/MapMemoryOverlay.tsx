@@ -17,6 +17,7 @@ interface MapMemoryOverlayProps {
   onClose: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
+  onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
   readerMode?: 'reflection' | 'journal';
 }
@@ -51,6 +52,7 @@ export default function MapMemoryOverlay({
   onClose,
   onSaveMemory,
   onDeleteMemory,
+  onLoadPreviewPhoto,
   onLoadOriginalPhoto,
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
@@ -72,11 +74,13 @@ export default function MapMemoryOverlay({
   const [isOriginalOpen, setIsOriginalOpen] = useState(false);
   const [originalState, setOriginalState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
   const [originalUrl, setOriginalUrl] = useState('');
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [locationQuery, setLocationQuery] = useState('');
   const [locationResolution, setLocationResolution] = useState<'idle' | 'resolving' | 'resolved' | 'error'>(
     locationNeedsResolution(memory) ? 'idle' : 'resolved',
   );
   const locationRequestRef = useRef(0);
+  const previewRequestsRef = useRef(new Set<string>());
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -90,13 +94,19 @@ export default function MapMemoryOverlay({
     setIsOriginalOpen(false);
     setOriginalState('loading');
     setOriginalUrl('');
+    setPreviewUrls({});
     setLocationQuery('');
     setLocationResolution(locationNeedsResolution(memory) ? 'idle' : 'resolved');
     locationRequestRef.current += 1;
+    previewRequestsRef.current.clear();
   }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
   const currentPhoto = availablePhotos[photoIdx] || availablePhotos[0] || '';
+  const currentPhotoId = memory.photoIds?.[
+    [memory.image, ...memory.gallery].indexOf(currentPhoto)
+  ];
+  const displayedPhoto = currentPhotoId ? previewUrls[currentPhotoId] ?? currentPhoto : currentPhoto;
   const activeMemory = isEditing ? draftMemory : memory;
   const locationParts = [activeMemory.country, activeMemory.city, activeMemory.detailLocation]
     .map((part) => part?.trim())
@@ -108,6 +118,27 @@ export default function MapMemoryOverlay({
     .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
     .join(' / ') || activeMemory.location?.name?.trim() || '';
   const metadataLocation = detailLocation || locationText;
+
+  useEffect(() => {
+    if (
+      !currentPhotoId
+      || !onLoadPreviewPhoto
+      || previewUrls[currentPhotoId]
+      || previewRequestsRef.current.has(currentPhotoId)
+    ) return;
+    previewRequestsRef.current.add(currentPhotoId);
+    let cancelled = false;
+    void onLoadPreviewPhoto(currentPhotoId).then((source) => {
+      if (!cancelled) {
+        setPreviewUrls((current) => ({ ...current, [currentPhotoId]: source }));
+      }
+    }).catch(() => {
+      // Keep showing the thumbnail when the preview is unavailable or offline.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPhotoId, onLoadPreviewPhoto, previewUrls]);
 
   const photoCenter = {
     x: viewport.width * (viewport.width < 900 ? 0.39 : 0.34),
@@ -224,18 +255,16 @@ export default function MapMemoryOverlay({
   };
 
   const loadOriginal = () => {
-    const sourceIndex = photos.indexOf(currentPhoto);
-    const photoId = sourceIndex >= 0 ? memory.photoIds?.[sourceIndex] : undefined;
     const probeOriginal = (source: string) => {
       const probe = new Image();
       probe.onload = () => setOriginalState('ready');
       probe.onerror = () => setOriginalState('unavailable');
       probe.src = source;
     };
-    if (photoId && onLoadOriginalPhoto) {
+    if (currentPhotoId && onLoadOriginalPhoto) {
       setOriginalState('loading');
       setOriginalUrl('');
-      void onLoadOriginalPhoto(photoId).then((source) => {
+      void onLoadOriginalPhoto(currentPhotoId).then((source) => {
         setOriginalUrl(source);
         probeOriginal(source);
       }).catch(() => setOriginalState('unavailable'));
@@ -246,8 +275,8 @@ export default function MapMemoryOverlay({
       return;
     }
     setOriginalState('loading');
-    setOriginalUrl(currentPhoto);
-    probeOriginal(currentPhoto);
+    setOriginalUrl(displayedPhoto);
+    probeOriginal(displayedPhoto);
   };
 
   const openOriginal = () => {
@@ -307,8 +336,8 @@ export default function MapMemoryOverlay({
       >
         <AnimatePresence mode="wait">
           <motion.img
-            key={currentPhoto}
-            src={currentPhoto}
+            key={displayedPhoto}
+            src={displayedPhoto}
             alt={memory.title}
             referrerPolicy="no-referrer"
             initial={{ opacity: 0.25, scale: 1.025 }}
@@ -317,6 +346,14 @@ export default function MapMemoryOverlay({
             transition={{ duration: 0.28 }}
             onError={() => {
               if (!currentPhoto) return;
+              if (displayedPhoto !== currentPhoto && currentPhotoId) {
+                setPreviewUrls((current) => {
+                  const next = { ...current };
+                  delete next[currentPhotoId];
+                  return next;
+                });
+                return;
+              }
               setFailedPhotos((failed) => failed.includes(currentPhoto) ? failed : [...failed, currentPhoto]);
               setPhotoIdx(0);
             }}
@@ -614,7 +651,7 @@ export default function MapMemoryOverlay({
           {originalState === 'ready' && <img src={originalUrl} alt={memory.title} referrerPolicy="no-referrer" onError={() => setOriginalState('unavailable')} className="h-full w-full object-contain" />}
           {originalState !== 'ready' && <section className="absolute left-1/2 top-1/2 w-[min(620px,calc(100%-40px))] -translate-x-1/2 -translate-y-1/2 bg-[rgba(10,13,13,0.84)] px-14 py-10">
             <h2 className="text-[26px] font-bold">{originalState === 'loading' ? '正在加载原图' : '原图暂时不可用'}</h2>
-            <p className="mt-4 text-[15px] leading-7 text-[#d6d6cc]">{originalState === 'loading' ? '原图较大，正在从本地安全存储读取。' : '预览仍可查看。原图读取失败，请重试或继续使用当前清晰度。'}</p>
+            <p className="mt-4 text-[15px] leading-7 text-[#d6d6cc]">{originalState === 'loading' ? '原图较大，正在按需安全读取。' : '预览仍可查看。原图读取失败，请重试或继续使用当前清晰度。'}</p>
             {originalState === 'loading' ? <div className="mt-7 h-2 overflow-hidden bg-[#30342f]"><div className="h-full w-2/3 animate-pulse bg-[var(--color-accent-fill)]" /></div> : <button type="button" onClick={loadOriginal} className="mt-6 inline-flex items-center gap-2 text-[15px] font-bold text-[var(--color-accent-fill)] cursor-pointer"><RefreshCw className="h-4 w-4" />重试加载原图</button>}
           </section>}
         </motion.div>}

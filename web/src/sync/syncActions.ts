@@ -1,6 +1,7 @@
 import type {
   EncryptedMemoryV1,
   EncryptedPhotoV1,
+  PhotoKind,
   VaultEnvelopeV1,
 } from '../crypto';
 import {
@@ -95,6 +96,19 @@ export async function uploadCiphertext(
   };
 }
 
+export async function downloadPhotoVariant(
+  client: MemoryRecallSyncClient,
+  storage: CipherSyncStorage,
+  photoId: string,
+  kind: PhotoKind,
+): Promise<EncryptedPhotoV1> {
+  const photo = await client.getPhotoVariant(photoId, kind);
+  if (kind !== 'original') {
+    await (storage.saveCachedPhoto ?? storage.savePhoto)(photo);
+  }
+  return photo;
+}
+
 export async function downloadCiphertext(
   options: DownloadCiphertextOptions,
 ): Promise<CipherSyncResult> {
@@ -135,26 +149,19 @@ export async function downloadCiphertext(
     for (const photo of memory.photos) photoIds.add(photo.id);
   }
 
+  // Metadata is the durable restore result. Photo thumbnails are a best-effort
+  // display cache and must not block the accepted memory ciphertext from landing.
+  for (const memory of acceptedMemories) await options.storage.saveMemory(memory);
+
   let downloadedPhotos = 0;
   for (const photoId of photoIds) {
-    for (const kind of ['thumbnail', 'preview'] as const) {
-      try {
-        const photo = await options.client.getPhotoVariant(photoId, kind);
-        await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(photo);
-        downloadedPhotos += 1;
-      } catch (error) {
-        if (!(error instanceof PhotoVariantNotFoundError)) throw error;
-      }
-    }
     try {
-      await options.storage.savePhoto(await options.client.getPhotoVariant(photoId, 'original'));
+      await downloadPhotoVariant(options.client, options.storage, photoId, 'thumbnail');
+      downloadedPhotos += 1;
     } catch (error) {
       if (!(error instanceof PhotoVariantNotFoundError)) throw error;
-      await options.storage.savePhoto(await options.client.getPhoto(photoId));
     }
-    downloadedPhotos += 1;
   }
-  for (const memory of acceptedMemories) await options.storage.saveMemory(memory);
 
   return {
     memories: memories.length,

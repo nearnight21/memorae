@@ -1,4 +1,9 @@
-import type { EncryptedMemoryV1, EncryptedPhotoV1, VaultEnvelopeV1 } from '../crypto';
+import type {
+  EncryptedMemoryV1,
+  EncryptedPhotoV1,
+  PhotoKind,
+  VaultEnvelopeV1,
+} from '../crypto';
 import {
   isStoredAccountSession,
   type StoredAccountSession,
@@ -127,6 +132,21 @@ export async function listEncryptedPhotos(): Promise<EncryptedPhotoV1[]> {
       transaction.objectStore(PHOTO_STORE).getAll() as IDBRequest<StoredEncryptedPhoto[]>,
     );
     return stored.map(({ cacheStoredAt: _cacheStoredAt, cacheBytes: _cacheBytes, ...photo }) => photo);
+  });
+}
+
+export async function getEncryptedPhotoVariant(
+  photoId: string,
+  kind: PhotoKind,
+): Promise<EncryptedPhotoV1 | null> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(PHOTO_STORE, 'readonly');
+    const stored = await requestResult(
+      transaction.objectStore(PHOTO_STORE).get([photoId, kind]) as IDBRequest<StoredEncryptedPhoto | undefined>,
+    );
+    if (!stored) return null;
+    const { cacheStoredAt: _cacheStoredAt, cacheBytes: _cacheBytes, ...photo } = stored;
+    return photo;
   });
 }
 
