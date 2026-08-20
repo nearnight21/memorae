@@ -234,6 +234,38 @@
   margin-top: 34px;
 }
 
+.account-login-loading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 112px;
+  margin-top: 34px;
+  color: var(--color-text-secondary);
+}
+
+.account-login-loading svg {
+  flex: 0 0 auto;
+  color: var(--color-accent-fill);
+}
+
+.account-login-loading h2,
+.account-login-loading p {
+  margin: 0;
+  font-weight: 400;
+}
+
+.account-login-loading h2 {
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 26px;
+}
+
+.account-login-loading p {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .account-login-unlock-intro h2,
 .account-login-unlock-intro p {
   margin: 0;
