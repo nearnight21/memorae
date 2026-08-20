@@ -48,6 +48,7 @@ import AddMemoryDialog from './components/AddMemoryDialog';
 import TimelineView from './components/TimelineView';
 import MapView from './components/MapView';
 import SimpleRecallV2 from './components/SimpleRecallV2';
+import { getOrCreatePreviewRequest, openMemoryWithPreview } from './components/previewRequests';
 
 interface AppProps {
   session: VaultSessionV1;
@@ -76,6 +77,7 @@ export default function App({
         })
       : undefined
   ), [accountSession]);
+  const previewRequestsRef = useRef(new Map<string, Promise<string>>());
 
   // --- Persistent States ---
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
@@ -420,13 +422,20 @@ export default function App({
   }, [onAccountSessionExpired, photoSyncClient, session]);
 
   const handleLoadPreviewPhoto = useCallback(
-    (photoId: string) => loadPhotoOnDemand(photoId, 'preview'),
+    (photoId: string) => getOrCreatePreviewRequest(
+      previewRequestsRef.current,
+      photoId,
+      (requestedPhotoId) => loadPhotoOnDemand(requestedPhotoId, 'preview'),
+    ),
     [loadPhotoOnDemand],
   );
   const handleLoadOriginalPhoto = useCallback(
     (photoId: string) => loadPhotoOnDemand(photoId, 'original'),
     [loadPhotoOnDemand],
   );
+  const handleSelectMemory = useCallback((memory: Memory) => {
+    openMemoryWithPreview(memory, handleLoadPreviewPhoto, setSelectedMemory);
+  }, [handleLoadPreviewPhoto]);
 
   const handleDeleteMemory = async (id: string) => {
     await deleteProductMemory(id);
@@ -903,7 +912,7 @@ export default function App({
             onFiltersChange={setFilters}
             selectedMemory={selectedMemory}
             focusMemory={focusMemory}
-            onSelectMemory={setSelectedMemory}
+            onSelectMemory={handleSelectMemory}
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
             onDeleteMemory={handleDeleteMemory}
@@ -922,7 +931,7 @@ export default function App({
               onClose={() => setShowRecall(false)}
               onSelectMemory={(memory) => {
                 setShowRecall(false);
-                setSelectedMemory(memory);
+                handleSelectMemory(memory);
               }}
             />
           )}
