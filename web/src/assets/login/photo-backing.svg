@@ -1,0 +1,23 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="579.003" height="708.003" viewBox="0 0 579.003 708.003" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Photo / Aged paper backing" filter="url(#filter0_di_0_8)">
+<path d="M21.5019 18.5008L94.5019 12.5008L162.502 15.5008L230.502 11.5008L298.502 14.5008L370.502 10.5008L440.502 14.5008L508.502 11.5008L557.502 16.5008L560.502 91.5008L556.502 167.501L561.502 245.501L557.502 323.501L561.502 403.501L555.502 481.501L559.502 557.501C555.502 605.501 548.502 645.501 534.502 681.501L462.502 676.501L394.502 682.501L326.502 677.501L258.502 683.501L190.502 677.501L124.502 682.501L64.5019 677.501L19.5019 665.501L23.5019 591.501L18.5019 515.501L23.5019 439.501L17.5019 361.501L22.5019 285.501L18.5019 207.501L23.5019 131.501L17.5019 71.5008L21.5019 18.5008Z" fill="#F4EDDE"/>
+<path d="M21.5019 18.5008L94.5019 12.5008L162.502 15.5008L230.502 11.5008L298.502 14.5008L370.502 10.5008L440.502 14.5008L508.502 11.5008L557.502 16.5008L560.502 91.5008L556.502 167.501L561.502 245.501L557.502 323.501L561.502 403.501L555.502 481.501L559.502 557.501C555.502 605.501 548.502 645.501 534.502 681.501L462.502 676.501L394.502 682.501L326.502 677.501L258.502 683.501L190.502 677.501L124.502 682.501L64.5019 677.501L19.5019 665.501L23.5019 591.501L18.5019 515.501L23.5019 439.501L17.5019 361.501L22.5019 285.501L18.5019 207.501L23.5019 131.501L17.5019 71.5008L21.5019 18.5008Z" stroke="#E5DFD4"/>
+</g>
+<defs>
+<filter id="filter0_di_0_8" x="-4.17233e-07" y="4.17233e-07" width="579.003" height="708.003" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="7"/>
+<feGaussianBlur stdDeviation="8.5"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.239 0 0 0 0 0.212 0 0 0 0 0.173 0 0 0 0.24 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_8"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_8" result="shape"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="1"/>
+<feGaussianBlur stdDeviation="1.5"/>
+<feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.36 0 0 0 0 0.3 0 0 0 0 0.22 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="shape" result="effect2_innerShadow_0_8"/>
+</filter>
+</defs>
+</svg>

@@ -1,0 +1,482 @@
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("../assets/fonts/login/noto-serif-sc-400.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("../assets/fonts/login/noto-sans-sc-400.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("../assets/fonts/login/noto-sans-sc-500.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+.account-login-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-family: "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+.account-login-map,
+.account-login-map-wash {
+  position: absolute;
+  inset: 0;
+}
+
+.account-login-map {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.account-login-map .leaflet-container {
+  background: var(--color-bg-canvas);
+}
+
+.account-login-map .leaflet-control-container {
+  display: none;
+}
+
+.account-login-map-wash {
+  z-index: 1;
+  background: rgba(var(--color-bg-surface-rgb), 0.58);
+  -webkit-backdrop-filter: saturate(0.62) contrast(0.88) brightness(1.08);
+  backdrop-filter: saturate(0.62) contrast(0.88) brightness(1.08);
+}
+
+.account-login-photo {
+  position: absolute;
+  z-index: 3;
+  top: 7.8vh;
+  left: -7.1vw;
+  width: auto;
+  height: min(74vh, 710px);
+  aspect-ratio: 556 / 710;
+  margin: 0;
+  transform: rotate(3.25deg);
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 14px 17px rgba(61, 54, 44, 0.2));
+}
+
+.account-login-photo-backing {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.account-login-photo-emulsion {
+  position: absolute;
+  z-index: 1;
+  top: 2.1%;
+  left: 3.2%;
+  width: 93.5%;
+  height: 91.1%;
+  overflow: visible;
+}
+
+.account-login-photo-emulsion img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  filter: saturate(0.98) contrast(1.01);
+}
+
+.account-login-photo time {
+  position: absolute;
+  z-index: 3;
+  right: 10.5%;
+  bottom: 10.3%;
+  color: color-mix(in srgb, var(--color-bg-surface) 88%, transparent);
+  font: 500 11px/16px Inter, "Noto Sans SC", sans-serif;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(40, 38, 35, 0.45);
+}
+
+.account-login-photo-curl {
+  position: absolute;
+  z-index: 4;
+  right: 3.6%;
+  bottom: 3.8%;
+  width: clamp(32px, 3.5vw, 50px);
+  height: clamp(28px, 3vw, 43px);
+  clip-path: polygon(0 100%, 100% 0, 100% 100%);
+  background: linear-gradient(140deg, #d7c8ab 0 46%, #efe4cf 48% 73%, #f7f0e2 75% 100%);
+  box-shadow: -5px -4px 7px rgba(61, 54, 44, 0.2);
+  transform: rotate(-2deg);
+  transform-origin: 100% 100%;
+}
+
+.account-login-photo-curl::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-top: 1px solid rgba(117, 93, 57, 0.32);
+  transform: rotate(-43deg) translate(-14%, 48%);
+  transform-origin: 50% 50%;
+}
+
+.account-login-timeline {
+  position: absolute;
+  z-index: 2;
+  top: 48.75vh;
+  left: 29.16vw;
+  width: min(29.86vw, 430px);
+  height: min(33.33vh, 320px);
+  pointer-events: none;
+}
+
+.account-login-time-path {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 94.2%;
+  height: 76.9%;
+}
+
+.account-login-time-node {
+  position: absolute;
+  display: block;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  color: var(--color-accent-text);
+  font: 500 11px/16px Inter, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.account-login-time-node img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.account-login-time-node b {
+  position: absolute;
+  top: -5px;
+  left: 11px;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.account-login-time-node b.is-leading {
+  left: auto;
+  right: 11px;
+}
+
+.account-login-form-wash {
+  position: absolute;
+  z-index: 2;
+  top: 11.25vh;
+  left: 53.47vw;
+  width: min(37.5vw, 540px);
+  height: min(72.9vh, 700px);
+  background: rgba(var(--color-bg-surface-rgb), 0.68);
+  filter: blur(36px);
+  pointer-events: none;
+}
+
+.account-login-content {
+  position: absolute;
+  z-index: 4;
+  top: 17.3vh;
+  left: 58.88vw;
+  width: min(388px, calc(41.12vw - 32px));
+  min-width: 330px;
+}
+
+.account-login-brand {
+  font-family: "Noto Serif SC", "Songti SC", STSong, SimSun, serif;
+  font-weight: 400;
+  color: var(--color-text-primary);
+}
+
+.account-login-brand h1,
+.account-login-brand p {
+  margin: 0;
+  font-weight: 400;
+}
+
+.account-login-brand h1 {
+  font-size: 64px;
+  line-height: 80px;
+  letter-spacing: 2px;
+}
+
+.account-login-brand p {
+  font-size: 18px;
+  line-height: 28px;
+  letter-spacing: 7px;
+}
+
+.account-login-form {
+  display: flex;
+  flex-direction: column;
+  margin-top: 34px;
+}
+
+.account-login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+  transition: border-color 160ms ease;
+}
+
+.account-login-field + .account-login-field {
+  margin-top: 26px;
+}
+
+.account-login-field:focus-within {
+  border-bottom-color: var(--color-accent-fill);
+}
+
+.account-login-field input {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  padding: 0 0 8px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: 400 16px/26px "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  box-shadow: none;
+}
+
+.account-login-field input::placeholder {
+  color: color-mix(in srgb, var(--color-text-secondary) 68%, transparent);
+  opacity: 1;
+}
+
+.account-login-password-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.account-login-password-row button {
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-text);
+  font: 400 13px/20px "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+}
+
+.account-login-password-row button:hover,
+.account-login-password-row button:focus-visible {
+  color: var(--color-accent-strong);
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.account-login-error {
+  margin: 18px 0 -12px;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-danger);
+  color: var(--color-danger);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.account-login-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 56px;
+  margin-top: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-accent-fill);
+  color: var(--color-bg-surface);
+  font: 500 16px/26px "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.account-login-submit:hover:not(:disabled) {
+  background: var(--color-accent-strong);
+}
+
+.account-login-submit:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 3px;
+}
+
+.account-login-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.account-login-submit:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
+.account-login-invite-note {
+  margin: 20px 0 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.account-login-switch {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.account-login-switch p {
+  margin: 0;
+}
+
+.account-login-switch div {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.account-login-switch button {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 55%, transparent);
+  border-radius: 6px;
+  background: rgba(var(--color-bg-surface-rgb), 0.42);
+  color: var(--color-danger);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .account-login-photo {
+    left: -11vw;
+  }
+
+  .account-login-content {
+    left: 58vw;
+    width: calc(42vw - 28px);
+  }
+
+  .account-login-form-wash {
+    left: 53vw;
+  }
+}
+
+@media (max-width: 900px) {
+  .account-login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    overflow-y: auto;
+    background: #17140f;
+  }
+
+  .account-login-map,
+  .account-login-map-wash,
+  .account-login-photo,
+  .account-login-timeline,
+  .account-login-form-wash {
+    display: none;
+  }
+
+  .account-login-content {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(100%, 448px);
+    min-width: 0;
+    padding: 32px;
+    border: 1px solid rgba(141, 113, 69, 0.35);
+    border-radius: 28px;
+    background: #211d17;
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+  }
+
+  .account-login-brand,
+  .account-login-field,
+  .account-login-field input,
+  .account-login-invite-note {
+    color: #f0e7d5;
+  }
+
+  .account-login-brand h1 {
+    font-size: 48px;
+    line-height: 60px;
+  }
+
+  .account-login-brand p {
+    color: #bdb3a1;
+  }
+
+  .account-login-field {
+    border-bottom-color: #6e5a39;
+    color: #b9aa91;
+  }
+
+  .account-login-field input::placeholder {
+    color: #817667;
+  }
+
+  .account-login-submit {
+    color: #17130d;
+  }
+
+  .account-login-switch {
+    border-top-color: rgba(110, 90, 57, 0.6);
+    color: #bdb3a1;
+  }
+
+  .account-login-switch button {
+    background: rgba(74, 27, 26, 0.18);
+    color: #fecaca;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-login-page {
+    padding: 24px 16px;
+  }
+
+  .account-login-content {
+    padding: 28px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-login-submit,
+  .account-login-field {
+    transition: none;
+  }
+}

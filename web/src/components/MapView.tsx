@@ -50,6 +50,8 @@ interface MapViewProps {
   onLock?: () => void;
   onOpenRecall?: () => void;
   readerMode?: 'reflection' | 'journal';
+  /** 登录页只读地图背景：复用真实瓦片，但不显示或启用足迹业务控件。 */
+  signedOutBackdrop?: boolean;
 }
 
 type RegionFocus = ViewportRegion;
@@ -210,6 +212,7 @@ export default function MapView({
   onDismissFirstMemoryFeedback,
   onOpenRecall,
   readerMode,
+  signedOutBackdrop = false,
 }: MapViewProps) {
   const crystalMapCenter: L.LatLngExpression = [35, 100];
   const crystalMapZoom = 4;
@@ -428,12 +431,18 @@ export default function MapView({
       center: crystalMapCenter,
       zoom: crystalMapZoom,
       zoomControl: false,
+      dragging: !signedOutBackdrop,
+      scrollWheelZoom: !signedOutBackdrop,
+      doubleClickZoom: false,
+      boxZoom: !signedOutBackdrop,
+      keyboard: !signedOutBackdrop,
+      touchZoom: !signedOutBackdrop,
       zoomAnimation: true,
       markerZoomAnimation: true,
       worldCopyJump: true,
       minZoom: MIN_OVERVIEW_ZOOM,
       maxZoom: 14,
-      attributionControl: true,
+      attributionControl: !signedOutBackdrop,
     });
     if (TILE_MODE === 'dark') {
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
@@ -476,7 +485,7 @@ export default function MapView({
       );
       amapTiles.once('load', markBaseMapReady).addTo(map);
     }
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    if (!signedOutBackdrop) L.control.zoom({ position: 'bottomright' }).addTo(map);
     mapRef.current = map;
 
     // 双击只负责提出创建意图，确认后才打开完整编辑器，避免误触直接打断浏览。
@@ -881,6 +890,18 @@ export default function MapView({
     if (!coordinates) return;
     map.flyTo(coordinates, city ? POINT_ZOOM : CITY_ZOOM, { duration: 0.8 });
   };
+
+  if (signedOutBackdrop) {
+    return (
+      <div className="map-experience-root h-full w-full relative overflow-hidden">
+        <div
+          className={`map-loading-poster absolute inset-0 z-[1] ${baseMapReady ? 'is-ready' : ''}`}
+          aria-hidden="true"
+        />
+        <div ref={containerRef} className="map-editorial-canvas absolute inset-0 z-0" />
+      </div>
+    );
+  }
 
   return (
     <div className="map-experience-root h-screen w-screen relative overflow-hidden">

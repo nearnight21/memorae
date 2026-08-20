@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { KeyRound, LoaderCircle, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
 import App from '../App';
+import MapView from '../components/MapView';
 import { createVault, decryptMemoryV2, destroyVaultSession, unlockVault, type VaultEnvelopeV1, type VaultSessionV1 } from '../crypto';
 import {
   clearStoredAccountSession,
@@ -19,6 +20,12 @@ import { cipherSyncStorage } from '../sync/cipherSyncStorage';
 import { MEMORY_RECALL_API_URL } from '../sync/config';
 import { downloadCiphertext, VaultMismatchError } from '../sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient, SyncRequestError } from '../sync/syncClient';
+import photoBacking from '../assets/login/photo-backing.svg';
+import timeNodeCurrent from '../assets/login/time-node-current.svg';
+import timeNodeSmall from '../assets/login/time-node-small.svg';
+import timePath from '../assets/login/time-path.svg';
+import travelPhoto from '../assets/login/travel-photo.png';
+import './product-gate.css';
 
 type GatePhase = 'booting' | 'account' | 'setup' | 'locked' | 'unlocked';
 
@@ -32,6 +39,7 @@ export default function ProductGate() {
   const [accountPassword, setAccountPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [localVaultMismatch, setLocalVaultMismatch] = useState(false);
@@ -242,6 +250,116 @@ export default function ProductGate() {
         onAccountSessionExpired={handleAccountSessionExpired}
         onLock={lock}
       />
+    );
+  }
+
+  if (phase === 'account') {
+    return (
+      <main className="account-login-page">
+        <div className="account-login-map" aria-hidden="true">
+          <MapView
+            memories={[]}
+            selectedMemory={null}
+            onSelectMemory={() => undefined}
+            onCloseMemory={() => undefined}
+            signedOutBackdrop
+          />
+        </div>
+        <div className="account-login-map-wash" aria-hidden="true" />
+
+        <figure className="account-login-photo" aria-label="2018 年 7 月 21 日的旅行照片">
+          <img className="account-login-photo-backing" src={photoBacking} alt="" />
+          <div className="account-login-photo-emulsion">
+            <img src={travelPhoto} alt="夕阳下的街道、行人与车辆" />
+          </div>
+          <time dateTime="2018-07-21">2018.07.21</time>
+          <span className="account-login-photo-curl" aria-hidden="true" />
+        </figure>
+
+        <div className="account-login-timeline" aria-hidden="true">
+          <img className="account-login-time-path" src={timePath} alt="" />
+          {[
+            { year: '2007', left: '17.8%', top: '73.4%', current: false },
+            { year: '2012', left: '40.7%', top: '57.2%', current: false },
+            { year: '2018', left: '63.8%', top: '44.4%', current: true },
+            { year: '2026', left: '93.4%', top: '11.1%', current: false },
+          ].map(({ year, left, top, current }) => (
+            <span key={year} className="account-login-time-node" style={{ left, top }}>
+              <img src={current ? timeNodeCurrent : timeNodeSmall} alt="" />
+              <b className={year === '2026' ? 'is-leading' : undefined}>{year}</b>
+            </span>
+          ))}
+        </div>
+
+        <div className="account-login-form-wash" aria-hidden="true" />
+        <section className="account-login-content" aria-labelledby="account-login-title">
+          <header className="account-login-brand">
+            <h1 id="account-login-title">所忆</h1>
+            <p>Memorae</p>
+          </header>
+
+          <form className="account-login-form" onSubmit={handleSubmit}>
+            <label className="account-login-field" htmlFor="account-login-name">
+              <span>账号</span>
+              <input
+                id="account-login-name"
+                value={loginName}
+                onChange={(event) => setLoginName(event.target.value)}
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="请输入所忆账号"
+                required
+              />
+            </label>
+
+            <label className="account-login-field" htmlFor="account-login-password">
+              <span>密码</span>
+              <span className="account-login-password-row">
+                <input
+                  id="account-login-password"
+                  type={showAccountPassword ? 'text' : 'password'}
+                  value={accountPassword}
+                  onChange={(event) => setAccountPassword(event.target.value)}
+                  autoComplete="current-password"
+                  placeholder="请输入密码"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAccountPassword((visible) => !visible)}
+                  aria-label={showAccountPassword ? '隐藏密码' : '显示密码'}
+                  aria-pressed={showAccountPassword}
+                >
+                  {showAccountPassword ? '隐藏' : '显示'}
+                </button>
+              </span>
+            </label>
+
+            {error && <p className="account-login-error" role="alert">{error}</p>}
+
+            <button className="account-login-submit" type="submit" disabled={busy}>
+              {busy && <LoaderCircle className="animate-spin" size={18} aria-hidden="true" />}
+              {busy ? '正在登录' : '登录'}
+            </button>
+            <p className="account-login-invite-note">内测版本 · 仅限受邀账号</p>
+          </form>
+
+          {localVaultMismatch && (
+            <section className="account-login-switch" aria-label="切换所忆账号">
+              <p>这台设备保存的是另一个账号的私密空间。切换只会清除本机数据，不会删除云端记忆。</p>
+              <div>
+                <button type="button" onClick={() => void clearLocalSpaceForAccountSwitch()} disabled={busy}>
+                  {clearLocalArmed ? '再次点击确认清除' : '清除本机数据并切换'}
+                </button>
+                {clearLocalArmed && (
+                  <button type="button" onClick={() => setClearLocalArmed(false)} disabled={busy}>取消</button>
+                )}
+              </div>
+            </section>
+          )}
+        </section>
+      </main>
     );
   }
 
