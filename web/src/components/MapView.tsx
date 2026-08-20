@@ -681,11 +681,13 @@ export default function MapView({
       const handleCountryClick = (coords: L.LatLngExpression, list: Memory[]) => {
         // The viewport idle handler owns currentRegion. Marker clicks only
         // move the map, so manual drill-down and hand panning share one path.
-        map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
         // A country bubble with one filtered result is already unambiguous.
-        // Open it just like a single-memory city bubble instead of forcing a
-        // second click after the country-level fly-to finishes.
-        if (list.length === 1) onSelectMemory(list[0]);
+        // Wait for the country-to-city fly-to to finish before opening it so
+        // the geographic drill-down remains visible as a distinct first step.
+        if (list.length === 1) {
+          map.once('moveend', () => onSelectMemory(list[0]));
+        }
+        map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
       };
 
       const addForeignCountryMarkers = async () => {

@@ -7,7 +7,7 @@ const mapViewSource = readFileSync(
   'utf8',
 );
 
-test('single-memory country bubbles open the memory after drilling down', () => {
+test('single-memory country bubbles finish drilling down before opening the memory', () => {
   const handlerStart = mapViewSource.indexOf('const handleCountryClick');
   const foreignMarkerStart = mapViewSource.indexOf('const addForeignCountryMarkers', handlerStart);
 
@@ -16,8 +16,9 @@ test('single-memory country bubbles open the memory after drilling down', () => 
 
   const handler = mapViewSource.slice(handlerStart, foreignMarkerStart);
   assert.match(handler, /list: Memory\[\]/);
+  assert.match(handler, /map\.once\('moveend', \(\) => onSelectMemory\(list\[0\]\)\)/);
   assert.match(handler, /map\.flyTo\(coords, CITY_ZOOM/);
-  assert.match(handler, /if \(list\.length === 1\) onSelectMemory\(list\[0\]\)/);
+  assert.ok(handler.indexOf("map.once('moveend'") < handler.indexOf('map.flyTo(coords, CITY_ZOOM'));
 
   const countryMarkers = mapViewSource.match(/handleCountryClick\(coords, list\)/g) ?? [];
   assert.equal(countryMarkers.length, 2);
