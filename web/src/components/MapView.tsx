@@ -678,16 +678,27 @@ export default function MapView({
 
     const build = async () => {
       const zoom = map.getZoom();
-      const handleCountryClick = (coords: L.LatLngExpression, list: Memory[]) => {
+      const handleCountryClick = async (coords: L.LatLngExpression, list: Memory[]) => {
         // The viewport idle handler owns currentRegion. Marker clicks only
         // move the map, so manual drill-down and hand panning share one path.
-        // A country bubble with one filtered result is already unambiguous.
-        // Wait for the country-to-city fly-to to finish before opening it so
-        // the geographic drill-down remains visible as a distinct first step.
-        if (list.length === 1) {
-          map.once('moveend', () => onSelectMemory(list[0]));
+        if (list.length !== 1) {
+          map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
+          return;
         }
-        map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
+
+        // A unique country result must actually reach its city/point view,
+        // not just the country threshold where overseas bubbles remain grouped.
+        const memory = list[0];
+        const memoryCoords = averageMemoryCoordinates(list)
+          || await resolvePlace(countryOf(memory), cityOf(memory))
+          || coords;
+        map.once('moveend', () => {
+          const country = countryOf(memory);
+          const city = cityOf(memory);
+          if (country && city) setFocusedRegion({ name: city, scope: 'city', country });
+          onSelectMemory(memory);
+        });
+        map.flyTo(memoryCoords, POINT_ZOOM, { duration: 0.8 });
       };
 
       const addForeignCountryMarkers = async () => {
@@ -699,7 +710,7 @@ export default function MapView({
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
-            .on('click', () => handleCountryClick(coords, list))
+            .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
       };
@@ -725,7 +736,7 @@ export default function MapView({
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
-            .on('click', () => handleCountryClick(coords, list))
+            .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
         if (routePoints.length > 1) {
