@@ -39,6 +39,12 @@ npm install
 npm run verify
 ```
 
+## 高德 Native Map 垂直切片
+
+地图架构测试使用 Expo Modules Native View 直接承载高德 Android `MapView`，并通过独立环境变量入口运行，不会替换现有加密/同步验证页。所需 Key、ARM 真机步骤、20/100 点测试矩阵和当前验证状态见
+[高德 Native Map 垂直切片](docs/AMAP-VERTICAL-SLICE.md)。坐标来源、境内 GCJ-02/海外 WGS-84 边界及未关闭风险见
+[地图坐标工程约定](docs/COORDINATE-CONTRACT.md)。
+
 由于 Argon2id 使用原生模块，不能用 Expo Go。Android 真机需要 development build 或 preview APK。
 本地模拟器同样需要 development build；使用 `adb reverse tcp:8788 tcp:8788` 后可访问只监听
 电脑本机的密文服务。
@@ -51,9 +57,11 @@ npx eas-cli build --platform android --profile preview
 ```
 
 `preview` 生成可直接安装的 APK；`production` 用于未来商店 AAB，不是当前目标。
-本机 `gradlew assembleRelease` 目前使用 Android Debug 证书，只适合受控测试；对外试运行前必须创建
-独立 release keystore 或配置 EAS Android Credentials，将密钥和密码放入受保护的凭据存储并单独备份，
-不得提交到 Git。
+本机 Release 构建通过 `MEMORY_RECALL_ANDROID_KEYSTORE_PATH`、
+`MEMORY_RECALL_ANDROID_STORE_PASSWORD`、`MEMORY_RECALL_ANDROID_KEY_ALIAS` 和
+`MEMORY_RECALL_ANDROID_KEY_PASSWORD` 显式接入仓库外保存的唯一正式证书；缺少任一变量会主动失败。
+不得生成第二套签名，不得把证书、密码或高德 Key 提交到 Git。正式高德 Android Key 必须同时绑定
+包名 `com.memorae.cn` 和实际构建证书 SHA-1；垂直切片的 debug/release 指纹见地图测试文档。
 
 完整真机步骤见 [docs/ANDROID-TESTING.md](docs/ANDROID-TESTING.md)。
 
