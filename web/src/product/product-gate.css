@@ -234,6 +234,29 @@
   margin-top: 34px;
 }
 
+.account-login-unlock-intro h2,
+.account-login-unlock-intro p {
+  margin: 0;
+  font-weight: 400;
+}
+
+.account-login-unlock-intro h2 {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.account-login-unlock-intro p {
+  margin-top: 8px;
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  line-height: 26px;
+}
+
+.account-login-unlock-form > .account-login-field {
+  margin-top: 26px;
+}
+
 .account-login-field {
   display: flex;
   flex-direction: column;
@@ -251,6 +274,12 @@
 
 .account-login-field:focus-within {
   border-bottom-color: var(--color-accent-fill);
+}
+
+/* 隔离旧密文验证工具的全局 label 焦点框，登录外壳以底线表达焦点。 */
+.account-login-field:has(input:focus-visible) {
+  outline: none;
+  outline-offset: 0;
 }
 
 .account-login-field input {
@@ -425,6 +454,7 @@
   }
 
   .account-login-brand,
+  .account-login-unlock-intro h2,
   .account-login-field,
   .account-login-field input,
   .account-login-invite-note {
@@ -438,6 +468,10 @@
 
   .account-login-brand p {
     color: #bdb3a1;
+  }
+
+  .account-login-unlock-intro p {
+    color: #817667;
   }
 
   .account-login-field {
