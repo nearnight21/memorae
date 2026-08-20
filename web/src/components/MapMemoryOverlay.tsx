@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Edit3, LoaderCircle, MoreHorizontal, Refresh
 import { CategoryType, Memory } from '../types';
 import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from '../lib/geo';
 import LocationPicker from './LocationPicker';
+import { getOrCreatePreviewRequest } from './previewRequests';
 
 interface ScreenPoint {
   x: number;
@@ -80,7 +81,7 @@ export default function MapMemoryOverlay({
     locationNeedsResolution(memory) ? 'idle' : 'resolved',
   );
   const locationRequestRef = useRef(0);
-  const previewRequestsRef = useRef(new Set<string>());
+  const previewRequestsRef = useRef(new Map<string, Promise<string>>());
 
   useEffect(() => {
     setPhotoIdx(0);
@@ -98,7 +99,6 @@ export default function MapMemoryOverlay({
     setLocationQuery('');
     setLocationResolution(locationNeedsResolution(memory) ? 'idle' : 'resolved');
     locationRequestRef.current += 1;
-    previewRequestsRef.current.clear();
   }, [memory.id]);
 
   const availablePhotos = photos.filter((photo) => !failedPhotos.includes(photo));
@@ -106,7 +106,8 @@ export default function MapMemoryOverlay({
   const currentPhotoId = memory.photoIds?.[
     [memory.image, ...memory.gallery].indexOf(currentPhoto)
   ];
-  const displayedPhoto = currentPhotoId ? previewUrls[currentPhotoId] ?? currentPhoto : currentPhoto;
+  const currentPreviewUrl = currentPhotoId ? previewUrls[currentPhotoId] : undefined;
+  const displayedPhoto = currentPreviewUrl ?? currentPhoto;
   const activeMemory = isEditing ? draftMemory : memory;
   const locationParts = [activeMemory.country, activeMemory.city, activeMemory.detailLocation]
     .map((part) => part?.trim())
@@ -123,12 +124,15 @@ export default function MapMemoryOverlay({
     if (
       !currentPhotoId
       || !onLoadPreviewPhoto
-      || previewUrls[currentPhotoId]
-      || previewRequestsRef.current.has(currentPhotoId)
+      || currentPreviewUrl
     ) return;
-    previewRequestsRef.current.add(currentPhotoId);
+    const previewRequest = getOrCreatePreviewRequest(
+      previewRequestsRef.current,
+      currentPhotoId,
+      onLoadPreviewPhoto,
+    );
     let cancelled = false;
-    void onLoadPreviewPhoto(currentPhotoId).then((source) => {
+    void previewRequest.then((source) => {
       if (!cancelled) {
         setPreviewUrls((current) => ({ ...current, [currentPhotoId]: source }));
       }
@@ -138,7 +142,7 @@ export default function MapMemoryOverlay({
     return () => {
       cancelled = true;
     };
-  }, [currentPhotoId, onLoadPreviewPhoto, previewUrls]);
+  }, [currentPhotoId, currentPreviewUrl, onLoadPreviewPhoto]);
 
   const photoCenter = {
     x: viewport.width * (viewport.width < 900 ? 0.39 : 0.34),
