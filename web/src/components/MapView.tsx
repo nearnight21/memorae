@@ -678,10 +678,14 @@ export default function MapView({
 
     const build = async () => {
       const zoom = map.getZoom();
-      const handleCountryClick = (country: string, coords: L.LatLngExpression) => {
+      const handleCountryClick = (coords: L.LatLngExpression, list: Memory[]) => {
         // The viewport idle handler owns currentRegion. Marker clicks only
         // move the map, so manual drill-down and hand panning share one path.
         map.flyTo(coords, CITY_ZOOM, { duration: 0.8 });
+        // A country bubble with one filtered result is already unambiguous.
+        // Open it just like a single-memory city bubble instead of forcing a
+        // second click after the country-level fly-to finishes.
+        if (list.length === 1) onSelectMemory(list[0]);
       };
 
       const addForeignCountryMarkers = async () => {
@@ -693,7 +697,7 @@ export default function MapView({
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
-            .on('click', () => handleCountryClick(country, coords))
+            .on('click', () => handleCountryClick(coords, list))
             .addTo(nextLayer);
         }
       };
@@ -719,7 +723,7 @@ export default function MapView({
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
           L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
-            .on('click', () => handleCountryClick(country, coords))
+            .on('click', () => handleCountryClick(coords, list))
             .addTo(nextLayer);
         }
         if (routePoints.length > 1) {
