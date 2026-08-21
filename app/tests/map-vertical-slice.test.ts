@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
 import {
+  CITY_LABEL_MIN_ZOOM,
   OVERSEAS_CITIES,
   OVERSEAS_CITY_SOURCE_COUNT,
   selectVisibleOverseasCities,
@@ -85,6 +86,15 @@ test('普通浏览及世界或国家层级不显示海外城市标签', () => {
     southWest: { latitude: -85, longitude: -179 },
   };
   assert.deepEqual(selectVisibleOverseasCities(10, worldBounds, null), []);
+  const parisContext = { kind: 'location-picker' as const, target: TEST_CITIES.巴黎 };
+  assert.deepEqual(selectVisibleOverseasCities(CITY_LABEL_MIN_ZOOM - 0.1, {
+    northEast: { latitude: 55, longitude: 10 },
+    southWest: { latitude: 40, longitude: -5 },
+  }, parisContext), []);
+  assert.deepEqual(selectVisibleOverseasCities(9.9, {
+    northEast: { latitude: 55, longitude: 10 },
+    southWest: { latitude: 40, longitude: -5 },
+  }, parisContext), []);
   const world = selectVisibleOverseasCities(3.5, {
     northEast: { latitude: 85, longitude: 179 },
     southWest: { latitude: -85, longitude: -179 },

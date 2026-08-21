@@ -15,7 +15,8 @@ export type OverseasCityLabelContext = {
   target: LatLng;
 };
 
-const MINIMUM_LABEL_ZOOM = 8;
+// Labels belong to the city layer. Country and region views stay uncluttered.
+export const CITY_LABEL_MIN_ZOOM = 10;
 
 export const OVERSEAS_CITY_DATASET_VERSION = 'geonames-cities15000-2026-04-13';
 export const OVERSEAS_CITY_SOURCE_COUNT = OVERSEAS_CITY_TUPLES.length;
@@ -66,7 +67,7 @@ export function selectVisibleOverseasCities(
   bounds: MapBounds,
   context: OverseasCityLabelContext | null,
 ): OverseasCity[] {
-  if (!context || zoom < MINIMUM_LABEL_ZOOM) return [];
+  if (!context || zoom < CITY_LABEL_MIN_ZOOM) return [];
   const minimumPopulation = populationThreshold(zoom, context);
   const maximumDistance = maximumDistanceKm(zoom);
   const maximumCandidates = context.kind === 'location-picker' ? 72 : 48;
