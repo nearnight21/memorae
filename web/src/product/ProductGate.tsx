@@ -40,6 +40,7 @@ export interface ProductGateUnlockedContext {
 interface ProductGateProps {
   unlockedRenderer?: (context: ProductGateUnlockedContext) => ReactNode;
   loadUnlockedMemories?: (session: VaultSessionV1) => Promise<Memory[]>;
+  syncPhotosOnUnlock?: boolean;
 }
 
 interface AuthShellProps {
@@ -102,6 +103,7 @@ function AuthShell({ titleId, children }: AuthShellProps) {
 export default function ProductGate({
   unlockedRenderer,
   loadUnlockedMemories = loadProductMemories,
+  syncPhotosOnUnlock = true,
 }: ProductGateProps = {}) {
   const [phase, setPhase] = useState<GatePhase>('booting');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
@@ -211,6 +213,7 @@ export default function ProductGate({
             token: accountSession.accessToken,
           }),
           storage: cipherSyncStorage,
+          downloadPhotos: syncPhotosOnUnlock,
           decryptMemory: async (memory) => (await decryptMemoryV2(activeSession, memory)).memory,
         });
       } catch (syncError) {

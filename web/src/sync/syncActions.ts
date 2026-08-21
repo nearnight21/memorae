@@ -25,6 +25,7 @@ export interface DownloadCiphertextOptions {
   client: MemoryRecallSyncClient;
   storage: CipherSyncStorage;
   decryptMemory?: (memory: EncryptedMemoryV1) => Promise<{ photos: Array<{ id: string }> }>;
+  downloadPhotos?: boolean;
 }
 
 export interface CipherSyncResult {
@@ -143,10 +144,12 @@ export async function downloadCiphertext(
     return true;
   });
   const photoIds = new Set<string>();
-  for (const encryptedMemory of acceptedMemories) {
-    if (encryptedMemory.deleted) continue;
-    const memory = await options.decryptMemory(encryptedMemory);
-    for (const photo of memory.photos) photoIds.add(photo.id);
+  if (options.decryptMemory && options.downloadPhotos !== false) {
+    for (const encryptedMemory of acceptedMemories) {
+      if (encryptedMemory.deleted) continue;
+      const memory = await options.decryptMemory(encryptedMemory);
+      for (const photo of memory.photos) photoIds.add(photo.id);
+    }
   }
 
   // Metadata is the durable restore result. Photo thumbnails are a best-effort

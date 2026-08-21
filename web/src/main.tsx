@@ -24,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
       <Suspense fallback={<div className="vault-loading">正在加载高德真实数据测试页</div>}>
         <ProductGate
           loadUnlockedMemories={loadProductLocations}
+          syncPhotosOnUnlock={false}
           unlockedRenderer={({ initialMemories, onLock }) => (
             <AmapJsDataPrototype memories={initialMemories} onLock={onLock} />
           )}

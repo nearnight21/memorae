@@ -43,6 +43,7 @@ test('高德 JS API Key 与安全密钥只从 Vite 环境变量读取', () => {
 test('真实数据模式只通过 ProductGate 解锁后读取地点，不读取照片', () => {
   assert.match(mainSource, /developerParams\.get\('data'\) === '1'/);
   assert.match(mainSource, /loadUnlockedMemories=\{loadProductLocations\}/);
+  assert.match(mainSource, /syncPhotosOnUnlock=\{false\}/);
   assert.match(dataPrototypeSource, /new AMap\.Marker/);
   assert.match(dataPrototypeSource, /memory\.lat/);
   assert.doesNotMatch(dataPrototypeSource, /loadProductPhoto|decryptPhoto|photoIds/);
