@@ -59,6 +59,19 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
   assert.match(source, /function openClusterContext/);
 });
 
+test('WebView 地图切片只通过消息发送地图数据，并接收低频事件', async () => {
+  const source = await readFile(
+    new URL('../src/map/AmapJsWebViewSliceApp.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /EXPO_PUBLIC_AMAP_WEB_RUNTIME_URL/);
+  assert.match(source, /type: 'setMarkers'/);
+  assert.match(source, /type: 'markerPressed'/);
+  assert.match(source, /type: 'cameraIdle'/);
+  assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
+  assert.match(source, /1000/);
+});
+
 test('海外城市标签只在语义上下文中显示中文名，中国大陆不注入自定义城市层', () => {
   const tokyoContext = {
     kind: 'memory' as const,

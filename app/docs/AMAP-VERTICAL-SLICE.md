@@ -61,6 +61,14 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 
 没有设置 `EXPO_PUBLIC_AMAP_VERTICAL_SLICE=1` 时仍进入现有加密/同步验证 App，不改变既有正式能力。
 
+### RN WebView + AMap JS API 2.0
+
+新的隔离入口使用 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1`。它加载 Web 端专用
+`?amap-runtime=1` 页面，而不是整个 `memorae.cn` 产品页。RN → WebView 仅发送 `setMarkers` / `setSelected`；
+WebView → RN 仅发送 `ready`、`markerPressed`、`mapPressed`、`cameraIdle` 和 `error`。没有 `move`/逐帧桥接。
+当前壳生成 100 或 1000 个跨北京、东京、巴黎、纽约的确定性测试点，使用高德 JS API 2.0 MarkerCluster 插件。
+它是 Prototype，尚未接入正式 MemoryV2 解密会话；高德 JS API 在原生 WebView 内的授权/商业条款仍需单独确认。
+
 ## 真机验收记录表
 
 每次测试填写设备型号、Android 版本、CPU ABI、构建类型、Key 对应 SHA-1 和提交号。不要把 Key、签名密码或用户照片写进文档。

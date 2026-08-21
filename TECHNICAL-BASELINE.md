@@ -188,6 +188,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | 渲染器 | `已实现` | Leaflet 1.9.4；不是 MapLibre。 | `memory-recall-web/package.json:15-28`；`memory-recall-web/src/components/MapView.tsx:1-25` |
 | 底图 | `已实现` | 正式足迹地图可在 OSM/CARTO 低缩放底图与高德 `webrd` 国内栅格瓦片之间工作；有 attribution。 | `memory-recall-web/src/components/MapView.tsx:445-476` |
 | 高德 JS API 2.0 对照 | `Prototype` | `?amap-js-test=1` 独立懒加载威海 2D 纯底图，只用于同机画质和手势基线；不经过 ProductGate、不读业务数据，也未替换正式 Leaflet `MapView`。追加 `&data=1` 后会在同一测试入口复用 ProductGate 解锁本地密文，并只将 MemoryV2 地点交给临时 Marker。需要独立 Web端（JS API）Key 和 `securityJsCode`，真实值只在构建环境配置。 | `memory-recall-web/src/main.tsx:7-38`；`memory-recall-web/src/prototype/AmapJsPrototype.tsx:1-102`；`memory-recall-web/src/prototype/AmapJsDataPrototype.tsx:1-157`；`memory-recall-web/.env.example:4-10` |
+| RN WebView AMap Runtime | `Prototype` | `?amap-runtime=1` 是给 Mobile WebView 的轻量地图页，不加载完整产品；接收 RN `setMarkers`/`setSelected`，回传 `ready`、点击和 `cameraIdle`，使用 AMap `MarkerCluster`。RN 壳由 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1` 进入，当前只注入确定性测试点，尚未接入正式 MemoryV2 会话。 | `memory-recall-web/src/prototype/AmapJsRuntime.tsx:1-178`；`memory-recall-mobile/src/map/AmapJsWebViewSliceApp.tsx:1-171` |
 | Marker/聚合 | `已实现` | JS 根据当前记忆和视口生成国家/城市/地点级照片气泡；这是 Web 自有逻辑，不复用 App Native cluster。 | `memory-recall-web/src/components/MapView.tsx:580-930` |
 | 地点选取 | `已实现` | 独立 Leaflet 选点页使用高德瓦片；搜索/反查走服务端代理。 | `memory-recall-web/src/components/LocationMapSelection.tsx:70-165` |
 

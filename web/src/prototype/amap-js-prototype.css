@@ -58,6 +58,22 @@
   box-shadow: 0 1px 6px rgb(42 32 20 / 40%);
 }
 
+.amap-runtime-marker {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #7b8f6c;
+  box-shadow: 0 1px 5px rgb(42 32 20 / 42%);
+}
+
+.amap-runtime-marker.is-selected {
+  width: 18px;
+  height: 18px;
+  background: #a47736;
+}
+
 .amap-js-prototype__data-toolbar {
   position: absolute;
   top: max(0.75rem, env(safe-area-inset-top));

@@ -49,6 +49,14 @@ npm run verify
 本地模拟器同样需要 development build；使用 `adb reverse tcp:8788 tcp:8788` 后可访问只监听
 电脑本机的密文服务。
 
+## AMap JS API 2.0 WebView 垂直切片
+
+设置 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1` 后，入口会使用独立的 RN + WebView 地图壳，加载
+`EXPO_PUBLIC_AMAP_WEB_RUNTIME_URL`（默认 `https://memorae.cn/?amap-runtime=1`）。WebView 只负责地图、
+Marker/Cluster、点击和 `cameraIdle`；RN 通过 JSON 消息发送地点数组，拖动期间不发送逐帧消息。
+当前验收壳提供 100/1000 点切换和 WebView 销毁重建，用于性能基线；正式 E2EE、SQLite 和同步接入仍需
+由上层业务把已解密的 `{id,lat,lng}` 数据注入该协议。该测试不依赖高德 Android Native MapView。
+
 ## Android 包
 
 ```powershell

@@ -11,6 +11,10 @@ const dataPrototypeSource = readFileSync(
   new URL('../src/prototype/AmapJsDataPrototype.tsx', import.meta.url),
   'utf8',
 );
+const runtimeSource = readFileSync(
+  new URL('../src/prototype/AmapJsRuntime.tsx', import.meta.url),
+  'utf8',
+);
 
 test('高德 JS API 试验入口在生产构建可用且独立于正式 ProductGate', () => {
   assert.match(mainSource, /developerParams\.get\('amap-js-test'\) === '1'/);
@@ -47,4 +51,14 @@ test('真实数据模式只通过 ProductGate 解锁后读取地点，不读取�
   assert.match(dataPrototypeSource, /new AMap\.Marker/);
   assert.match(dataPrototypeSource, /memory\.lat/);
   assert.doesNotMatch(dataPrototypeSource, /loadProductPhoto|decryptPhoto|photoIds/);
+});
+
+test('RN WebView Runtime 使用低频桥接事件和高德聚类插件', () => {
+  assert.match(mainSource, /developerParams\.get\('amap-runtime'\) === '1'/);
+  assert.match(runtimeSource, /plugins: \['AMap\.MarkerCluster'\]/);
+  assert.match(runtimeSource, /type: 'ready'/);
+  assert.match(runtimeSource, /type: 'markerPressed'/);
+  assert.match(runtimeSource, /type: 'mapPressed'/);
+  assert.match(runtimeSource, /type: 'cameraIdle'/);
+  assert.doesNotMatch(runtimeSource, /requestAnimationFrame|mousemove|touchmove/);
 });

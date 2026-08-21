@@ -2,8 +2,11 @@ import { registerRootComponent } from 'expo';
 
 import App from './App';
 import MapVerticalSliceApp from './src/map/MapVerticalSliceApp';
+import AmapJsWebViewSliceApp from './src/map/AmapJsWebViewSliceApp';
 
-const RootComponent = process.env.EXPO_PUBLIC_AMAP_VERTICAL_SLICE === '1'
+const RootComponent = process.env.EXPO_PUBLIC_AMAP_WEBVIEW_SLICE === '1'
+  ? AmapJsWebViewSliceApp
+  : process.env.EXPO_PUBLIC_AMAP_VERTICAL_SLICE === '1'
   ? MapVerticalSliceApp
   : App;
 
