@@ -100,6 +100,8 @@ private class UiFrameSampler : Choreographer.FrameCallback {
 
 class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
   ExpoView(context, expoAppContext) {
+  override val shouldUseAndroidLayout = true
+
   private val onMapReady by EventDispatcher<Map<String, Any>>()
   private val onMapPress by EventDispatcher<Map<String, Any>>()
   private val onMarkerPress by EventDispatcher<Map<String, Any>>()

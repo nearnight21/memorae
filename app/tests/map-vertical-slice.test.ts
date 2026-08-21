@@ -51,6 +51,17 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
   assert.doesNotMatch(source, /spec\.kind === 'original'/);
 });
 
+test('高德原生 View 使用 Android 布局测量动态加入的 MapView', async () => {
+  const source = await readFile(
+    new URL(
+      '../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  assert.match(source, /override val shouldUseAndroidLayout = true/);
+});
+
 test('Release 签名插件只替换 release build type，不污染 debug build type', () => {
   const fixture = `def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 

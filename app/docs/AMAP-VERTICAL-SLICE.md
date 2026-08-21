@@ -74,7 +74,7 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 
 ### 已通过
 
-- TypeScript 类型检查、Expo Doctor 与 18 项自动测试（含地图入口和 Release 签名插件回归）。
+- TypeScript 类型检查、Expo Doctor 与 19 项自动测试（含地图入口、Android 布局和 Release 签名插件回归）。
 - Expo Android clean prebuild、本地模块自动链接和 `expo-amap-map` Kotlin 编译。
 - Development APK 构建：`com.memorae.cn`，仅包含 `arm64-v8a`、`armeabi-v7a`，带 `debuggable`，证书 SHA-1 为
   `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`。
@@ -83,18 +83,21 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
   `4C:F4:E0:74:E4:BC:79:38:D8:E9:87:B7:01:D8:15:31:C7:1C:74:85`，已确认不是 debug 证书。
 - Release 签名配置 fail-closed：构建 Release 时缺少任一签名环境变量都会失败；debug build type 仍固定使用 debug 证书。
 - New Architecture 下 ARM64/ARMv7 的 Expo Modules Core C++、本地 Native View Kotlin、应用 Kotlin、Dex、Lint 与 APK 封装均通过。因此目前没有发现需要直接改写 Fabric + Codegen 的**构建层阻断**。
+- ARM64 Android 真机已配置正式高德 Android Key；同意隐私后，北京瓦片、Camera idle、经纬度/屏幕投影、原生 Marker/聚类和前后台恢复正常。
+- Fabric 下动态加入的 `MapView` 必须启用 `ExpoView.shouldUseAndroidLayout`；否则子 View 保持 `0×0`，表现为高德 SDK 已加载但地图空白、投影 `(0, 0)` 且没有 loaded/idle 回调。该缺陷已修复并由结构回归测试锁定。
+- 用户手动确认 20 点与 100 点两档渲染、聚类与切换结果一致。100 点在北京 zoom 约 9.7 时聚合为 19 个原生 Marker，Camera idle 采样约 120 fps、slow 0；这些数据是单台真机的当前测试值，不代表完整性能基准。
+- 东京、巴黎、纽约能够完成 Camera 移动、发送 idle 并渲染聚类 Marker，但普通高德海外矢量底图区域为空白，仅显示高德水印。海外 fallback 风险确认存在，尚未选定方案。
 
 本机生成的忽略产物为 `android/app/build/outputs/apk/release/app-release.apk`（99,718,868 字节）。它只用于本轮构建验收，未上传、未发布；Manifest 中仍是 `AMAP_KEY_NOT_CONFIGURED`，不能用于地图运行验收。
 
 ### 尚未验证，不能标记路线通过
 
-- 测试设备：无；当前 ADB 未连接 ARM Android 真机。
-- 高德正式 Key：本机环境未配置，Manifest 明确保留失败占位值。
-- 20/100 Marker 的 FPS、UI/JS thread、内存、Bitmap、聚类、Camera idle 数量。
-- RN Overlay 手势、详情开关保持 Camera、前后台/锁屏/销毁重建和资源释放。
-- 北京、东京、巴黎、纽约的普通高德 SDK 城市级实际效果。
+- 持续拖动/缩放下 20/100 Marker 的长时间 FPS、UI/JS thread、内存峰值和泄漏趋势。
+- 自选真实 thumbnail 的 Bitmap 解码/缓存上限与释放；当前未选择照片，因此 `bitmap decode` 仍为 0。
+- RN Overlay 手势、详情开关保持 Camera、锁屏、销毁重建和资源释放的完整矩阵；当前只验证了前后台恢复。
+- 东京、巴黎、纽约的海外矢量底图为空白，需要决定并验证海外地图 fallback。
 - 真实云端账号的海外 `/v1/location/reverse` 与 `/v1/location/convert-gps`。
-- 因此当前结论只能是“编译和正式构建链路可行”，不能据此决定是否需要 Fabric 或海外地图 fallback。
+- 因此当前可确认 Expo Modules Native View + Fabric 的地图布局、境内瓦片、Marker/聚类与基础生命周期链路可行；尚不能把完整路线标记通过，海外 fallback 仍需决策。
 
 ### Windows 构建环境记录
 
