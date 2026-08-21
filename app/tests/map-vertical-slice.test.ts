@@ -70,7 +70,7 @@ test('海外城市标签只在语义上下文中显示中文名，中国大陆�
   }, tokyoContext);
   assert.ok(tokyo.some((city) => city.name === '东京'));
   assert.ok(tokyo.some((city) => city.name === '横滨'));
-  assert.ok(tokyo.every((city) => city.name !== city.sourceName));
+  assert.equal(tokyo.find((city) => city.id === '1850147')?.name, '东京');
   assert.ok(tokyo.every((city) => city.countryCode !== 'CN'));
 
   const beijing = selectVisibleOverseasCities(10, {
@@ -91,10 +91,14 @@ test('普通浏览及世界或国家层级不显示海外城市标签', () => {
     northEast: { latitude: 55, longitude: 10 },
     southWest: { latitude: 40, longitude: -5 },
   }, parisContext), []);
-  assert.deepEqual(selectVisibleOverseasCities(9.9, {
+  assert.ok(selectVisibleOverseasCities(9.9, {
     northEast: { latitude: 55, longitude: 10 },
     southWest: { latitude: 40, longitude: -5 },
-  }, parisContext), []);
+  }, parisContext).length > 0);
+  assert.ok(selectVisibleOverseasCities(8, {
+    northEast: { latitude: 36.4, longitude: 140.5 },
+    southWest: { latitude: 34.7, longitude: 138.5 },
+  }, { kind: 'memory', target: TEST_CITIES.东京 }).length > 0);
   const world = selectVisibleOverseasCities(3.5, {
     northEast: { latitude: 85, longitude: 179 },
     southWest: { latitude: -85, longitude: -179 },
@@ -125,6 +129,7 @@ test('地点选取比记忆浏览逐级展示更多当前目标周边城市', ()
 
 test('海外标签保留完整 GeoNames 源，并为首轮验收城市提供受控中文名', () => {
   assert.equal(OVERSEAS_CITY_SOURCE_COUNT, 5_642);
+  assert.equal(OVERSEAS_CITIES.length, OVERSEAS_CITY_SOURCE_COUNT);
   const sourceNames = new Set(OVERSEAS_CITIES.map((city) => city.sourceName));
   for (const sourceName of [
     'Tokyo', 'Yokohama', 'Osaka', 'Kyoto', 'Paris', 'Lyon',

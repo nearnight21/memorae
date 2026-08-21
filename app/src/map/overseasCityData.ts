@@ -16,17 +16,16 @@ export type OverseasCityLabelContext = {
 };
 
 // Labels belong to the city layer. Country and region views stay uncluttered.
-export const CITY_LABEL_MIN_ZOOM = 10;
+export const CITY_LABEL_MIN_ZOOM = 8;
 
 export const OVERSEAS_CITY_DATASET_VERSION = 'geonames-cities15000-2026-04-13';
 export const OVERSEAS_CITY_SOURCE_COUNT = OVERSEAS_CITY_TUPLES.length;
 
 export const OVERSEAS_CITIES: readonly OverseasCity[] = OVERSEAS_CITY_TUPLES.flatMap((city) => {
-  const displayNameZh = OVERSEAS_CITY_NAMES_ZH[city[0]];
-  if (!displayNameZh) return [];
+  const displayName = OVERSEAS_CITY_NAMES_ZH[city[0]] ?? city[1];
   return [{
     id: city[0],
-    name: displayNameZh,
+    name: displayName,
     sourceName: city[1],
     latitude: city[2],
     longitude: city[3],
@@ -37,15 +36,15 @@ export const OVERSEAS_CITIES: readonly OverseasCity[] = OVERSEAS_CITY_TUPLES.fla
 });
 
 function populationThreshold(zoom: number, context: OverseasCityLabelContext): number {
-  if (zoom < 9.5) return 2_000_000;
-  if (zoom < 11) return context.kind === 'location-picker' ? 100_000 : 500_000;
+  if (zoom < 9.5) return context.kind === 'location-picker' ? 250_000 : 1_000_000;
+  if (zoom < 11) return context.kind === 'location-picker' ? 100_000 : 250_000;
   return 100_000;
 }
 
 function maximumDistanceKm(zoom: number): number {
-  if (zoom < 9.5) return 450;
-  if (zoom < 11) return 220;
-  return 100;
+  if (zoom < 9.5) return 650;
+  if (zoom < 11) return 350;
+  return 180;
 }
 
 function distanceKm(left: LatLng, right: LatLng): number {
@@ -70,7 +69,7 @@ export function selectVisibleOverseasCities(
   if (!context || zoom < CITY_LABEL_MIN_ZOOM) return [];
   const minimumPopulation = populationThreshold(zoom, context);
   const maximumDistance = maximumDistanceKm(zoom);
-  const maximumCandidates = context.kind === 'location-picker' ? 72 : 48;
+  const maximumCandidates = context.kind === 'location-picker' ? 120 : 96;
   return OVERSEAS_CITIES
     .map((city) => ({ city, distance: distanceKm(city, context.target) }))
     .filter(({ city, distance }) => {
