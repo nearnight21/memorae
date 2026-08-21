@@ -29,7 +29,10 @@ import {
   TEST_CITIES,
   type ThumbnailSource,
 } from './mapTestMarkers';
-import { selectVisibleOverseasCities } from './overseasCityData';
+import {
+  selectVisibleOverseasCities,
+  type OverseasCityLabelContext,
+} from './overseasCityData';
 
 const THUMBNAIL_SPEC = PHOTO_VARIANT_SPECS.find((spec) => spec.kind === 'thumbnail');
 
@@ -55,6 +58,8 @@ export default function MapVerticalSliceApp() {
   const [lastCamera, setLastCamera] = useState<CameraIdlePayload | null>(null);
   const [diagnostics, setDiagnostics] = useState<MapDiagnostics | null>(null);
   const [cameraEventCount, setCameraEventCount] = useState(0);
+  const [activeTestCity, setActiveTestCity] = useState<keyof typeof TEST_CITIES>('北京');
+  const [cityLabelContext, setCityLabelContext] = useState<OverseasCityLabelContext | null>(null);
   const cityLabelRequest = useRef(0);
 
   const markers = useMemo(
@@ -72,6 +77,25 @@ export default function MapVerticalSliceApp() {
       setStatus(error instanceof Error ? error.message : '设置地图照片点失败。');
     });
   }, [mapProvider, mapReady, markers]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const request = ++cityLabelRequest.current;
+    const labels = lastCamera
+      ? selectVisibleOverseasCities(lastCamera.camera.zoom, lastCamera.bounds, cityLabelContext)
+      : [];
+    void mapProvider
+      .setCityLabels(labels)
+      .then(() => mapProvider.getDiagnostics())
+      .then((nextDiagnostics) => {
+        if (request === cityLabelRequest.current) setDiagnostics(nextDiagnostics);
+      })
+      .catch((error: unknown) => {
+        if (request === cityLabelRequest.current) {
+          setStatus(error instanceof Error ? error.message : '设置城市标签失败。');
+        }
+      });
+  }, [cityLabelContext, lastCamera, mapProvider, mapReady]);
 
   const timelinePanResponder = useMemo(
     () => PanResponder.create({
@@ -134,18 +158,47 @@ export default function MapVerticalSliceApp() {
     setLastCamera(payload);
     setDiagnostics(payload.diagnostics);
     setCameraEventCount((count) => count + 1);
-    const request = ++cityLabelRequest.current;
-    void mapProvider
-      .setCityLabels(selectVisibleOverseasCities(payload.camera.zoom, payload.bounds))
-      .then(() => mapProvider.getDiagnostics())
-      .then((nextDiagnostics) => {
-        if (request === cityLabelRequest.current) setDiagnostics(nextDiagnostics);
-      })
-      .catch((error: unknown) => {
-        if (request === cityLabelRequest.current) {
-          setStatus(error instanceof Error ? error.message : '设置城市标签失败。');
-        }
-      });
+  }
+
+  function closeMemoryDetail(): void {
+    setSelectedMarkerId(null);
+    setCityLabelContext((context) => context?.kind === 'memory' ? null : context);
+  }
+
+  function openMemoryDetail(markerId: string): void {
+    const marker = markers.find((candidate) => candidate.id === markerId);
+    setSelectedMarkerId(markerId);
+    if (!marker || marker.title?.startsWith('北京')) {
+      setCityLabelContext(null);
+      return;
+    }
+    setCityLabelContext({
+      kind: 'memory',
+      target: { latitude: marker.latitude, longitude: marker.longitude },
+    });
+    runTask(() => mapProvider.animateCamera({
+      latitude: marker.latitude,
+      longitude: marker.longitude,
+      zoom: Math.max(lastCamera?.camera.zoom ?? 10, 10.5),
+    }));
+  }
+
+  function enterLocationPicker(): void {
+    if (activeTestCity === '北京') {
+      setCityLabelContext(null);
+      setStatus('北京使用高德底图原生地名，不注入自定义城市层。');
+      return;
+    }
+    setSelectedMarkerId(null);
+    setCityLabelContext({ kind: 'location-picker', target: TEST_CITIES[activeTestCity] });
+    setStatus(`${activeTestCity}地点选取：按当前视野分级显示中文城市名。`);
+  }
+
+  function moveToTestCity(city: keyof typeof TEST_CITIES): void {
+    setActiveTestCity(city);
+    setSelectedMarkerId(null);
+    setCityLabelContext(null);
+    runTask(() => mapProvider.animateCamera(TEST_CITIES[city]));
   }
 
   async function checkProjection(): Promise<void> {
@@ -175,10 +228,10 @@ export default function MapVerticalSliceApp() {
           setStatus(`地图已就绪：SDK ${nativeEvent.sdkVersion} · ${nativeEvent.architecture}`);
         }}
         onMapPress={({ nativeEvent }) => {
-          setSelectedMarkerId(null);
+          closeMemoryDetail();
           setStatus(`地图点击：${nativeEvent.latitude.toFixed(5)}, ${nativeEvent.longitude.toFixed(5)}`);
         }}
-        onMarkerPress={({ nativeEvent }) => setSelectedMarkerId(nativeEvent.id)}
+        onMarkerPress={({ nativeEvent }) => openMemoryDetail(nativeEvent.id)}
         onClusterPress={({ nativeEvent }) => {
           setStatus(`点击聚类：${nativeEvent.count} 个照片点；原生层正在放大。`);
         }}
@@ -218,13 +271,34 @@ export default function MapVerticalSliceApp() {
             </Pressable>
           </View>
           <View style={styles.cityRow}>
-            {Object.entries(TEST_CITIES).map(([city, camera]) => (
+            {Object.keys(TEST_CITIES).map((city) => (
               <Pressable
                 key={city}
-                style={styles.cityButton}
-                onPress={() => runTask(() => mapProvider.animateCamera(camera))}
+                style={[styles.cityButton, activeTestCity === city && styles.cityButtonActive]}
+                onPress={() => moveToTestCity(city as keyof typeof TEST_CITIES)}
               ><Text style={styles.cityText}>{city}</Text></Pressable>
             ))}
+          </View>
+          <View style={styles.contextRow}>
+            <Pressable
+              style={[styles.contextButton, !cityLabelContext && styles.contextButtonActive]}
+              onPress={() => {
+                setSelectedMarkerId(null);
+                setCityLabelContext(null);
+              }}
+            ><Text style={styles.contextText}>普通浏览</Text></Pressable>
+            <Pressable
+              style={[
+                styles.contextButton,
+                cityLabelContext?.kind === 'location-picker' && styles.contextButtonActive,
+              ]}
+              onPress={enterLocationPicker}
+            ><Text style={styles.contextText}>地点选取</Text></Pressable>
+            <Text style={styles.contextStatus}>
+              {cityLabelContext?.kind === 'memory'
+                ? '海外记忆'
+                : cityLabelContext?.kind === 'location-picker' ? '海外选点' : '标签关闭'}
+            </Text>
           </View>
           <Text style={styles.metrics}>
             idle→JS {cameraEventCount} · native markers {diagnostics?.renderedMarkerCount ?? 0}
@@ -257,7 +331,7 @@ export default function MapVerticalSliceApp() {
             <Text style={styles.detailText}>
               地图组件保持挂载；关闭后 Camera 不会重建。照片点只使用 thumbnail。
             </Text>
-            <Pressable style={styles.closeButton} onPress={() => setSelectedMarkerId(null)}>
+            <Pressable style={styles.closeButton} onPress={closeMemoryDetail}>
               <Text style={styles.closeButtonText}>关闭详情</Text>
             </Pressable>
           </View>
@@ -305,7 +379,13 @@ const styles = StyleSheet.create({
   smallButtonText: { color: '#342f28', fontSize: 11, fontWeight: '700' },
   cityRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 6 },
   cityButton: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9, backgroundColor: '#f4f0e8' },
+  cityButtonActive: { backgroundColor: '#d8dfd0' },
   cityText: { fontSize: 11, color: '#494136', fontWeight: '700' },
+  contextRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  contextButton: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: '#f4f0e8' },
+  contextButtonActive: { backgroundColor: '#d8dfd0' },
+  contextText: { fontSize: 10, color: '#494136', fontWeight: '700' },
+  contextStatus: { marginLeft: 'auto', fontSize: 10, color: '#756b5d' },
   metrics: { fontSize: 10, color: '#756b5d' },
   timelinePanel: {
     position: 'absolute', left: 18, right: 18, bottom: 24, height: 68, borderRadius: 34,

@@ -364,22 +364,22 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     for (input in sortedLabels) {
       if (renderedCityLabels.size >= 120) break
       val point = amap.projection.toScreenLocation(LatLng(input.latitude, input.longitude))
-      val labelWidth = cityLabelWidth(input.name).toFloat()
-      val labelHeight = dp(28).toFloat()
+      val labelWidth = cityLabelWidth(input).toFloat()
+      val labelHeight = cityLabelHeight(input).toFloat()
       val rect = RectF(
         point.x - labelWidth / 2f,
-        point.y - labelHeight,
+        point.y - labelHeight / 2f,
         point.x + labelWidth / 2f,
-        point.y.toFloat(),
+        point.y + labelHeight / 2f,
       )
       if (rect.right < 0f || rect.left > width || rect.bottom < 0f || rect.top > height) continue
       if (occupied.any { RectF.intersects(it, rect) }) continue
       val marker = amap.addMarker(
         MarkerOptions()
           .position(LatLng(input.latitude, input.longitude))
-          .anchor(0.5f, 1.0f)
+          .anchor(0.5f, 0.5f)
           .icon(descriptorForCity(input))
-          .zIndex(-1f),
+          .zIndex(-10f),
       )
       marker.`object` = RenderedMarkerTag.CityLabel(input.id)
       marker.setClickable(false)
@@ -440,7 +440,7 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
   private fun descriptorForCity(input: CityLabelInput): BitmapDescriptor {
     val cacheKey = "city:${input.id}"
     return bitmapDescriptors.getOrPut(cacheKey) {
-      val bitmap = createCityLabelBitmap(input.name)
+      val bitmap = createCityLabelBitmap(input)
       bitmapBytes += bitmap.allocationByteCount
       bitmapDescriptorBytes[cacheKey] = bitmap.allocationByteCount
       BitmapDescriptorFactory.fromBitmap(bitmap).also { bitmap.recycle() }
@@ -527,42 +527,33 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     return output
   }
 
-  private fun createCityLabelBitmap(name: String): Bitmap {
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+  private fun cityLabelTextPaint(input: CityLabelInput): Paint =
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
       color = Color.rgb(55, 50, 42)
-      textSize = dp(12).toFloat()
-      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      textSize = dp(if (input.capital) 13 else 12).toFloat()
+      typeface = Typeface.create(
+        Typeface.DEFAULT,
+        if (input.capital) Typeface.BOLD else Typeface.NORMAL,
+      )
+      textAlign = Paint.Align.CENTER
+      setShadowLayer(dp(1).toFloat(), 0f, dp(1).toFloat(), Color.argb(210, 255, 255, 255))
     }
-    val width = cityLabelWidth(name)
-    val height = dp(28)
+
+  private fun createCityLabelBitmap(input: CityLabelInput): Bitmap {
+    val textPaint = cityLabelTextPaint(input)
+    val width = cityLabelWidth(input)
+    val height = cityLabelHeight(input)
     val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(output)
-    val radius = dp(8).toFloat()
-    canvas.drawRoundRect(
-      RectF(0f, 0f, width.toFloat(), height.toFloat()),
-      radius,
-      radius,
-      Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(224, 250, 248, 241) },
-    )
-    canvas.drawRoundRect(
-      RectF(0.5f, 0.5f, width - 0.5f, height - 0.5f),
-      radius,
-      radius,
-      Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1).toFloat()
-        color = Color.argb(180, 112, 98, 79)
-      },
-    )
     val baseline = height / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
-    canvas.drawText(name, width / 2f, baseline, textPaint.apply { textAlign = Paint.Align.CENTER })
+    canvas.drawText(input.name, width / 2f, baseline, textPaint)
     return output
   }
 
-  private fun cityLabelWidth(name: String): Int {
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = dp(12).toFloat() }
-    return max(dp(36), ceil(textPaint.measureText(name).toDouble()).toInt() + dp(16))
-  }
+  private fun cityLabelWidth(input: CityLabelInput): Int =
+    max(dp(28), ceil(cityLabelTextPaint(input).measureText(input.name).toDouble()).toInt() + dp(8))
+
+  private fun cityLabelHeight(input: CityLabelInput): Int = dp(if (input.capital) 23 else 21)
 
   private fun pruneBitmapCache(
     activeThumbnailKeys: Set<String>,
