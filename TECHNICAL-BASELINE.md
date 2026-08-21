@@ -336,6 +336,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | 项目 | 状态 | 事实与边界 | 证据 |
 | --- | --- | --- | --- |
 | Web 生产地图 | `已实现` | 真实页面可正常打开和交互；未建立长期 FPS、内存和大数据量基准。 | 本次只读运行时观察；代码 `MapView.tsx:445-930` |
+| Web Retina 瓦片 A/B | `Prototype` | `?map-retina=1` 仅对正式 `MapView` 高德图层启用 Leaflet `detectRetina`；默认关闭，地点选择器不变。高 DPR 自动化已确认相同初始层级下瓦片请求从 `z=4` 提升到 `z=5`；清晰度、手势性能和流量增幅仍待真机对照。 | `memory-recall-web/src/lib/mapTileQuality.ts:1-5`；`memory-recall-web/src/components/MapView.tsx:424-491` |
 | App 地图 FPS | `部分实现` | 100 点 idle 样本约 120 fps/slow 0；用户持续拖动仍感觉卡。idle 指标不能替代 gesture frame timeline。 | `DEVELOPMENT.md:56` |
 | Marker/Cluster 排除 | `部分实现` | 已构建关闭全部照片 marker/cluster/海外名称的纯底图包，卡顿仍存在；说明叠加层不是唯一原因，但根因未定位。 | `DEVELOPMENT.md:46`；用户真机反馈 |
 | 高德原生裸图 | `Prototype` | C/D 建立了纯 Native Activity 基线；缺少同设备、同 camera path、同采样工具的量化 A/B/C/D 报告。 | `DEVELOPMENT.md:44-46` |

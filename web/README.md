@@ -30,6 +30,9 @@ npm.cmd run dev
 高德 Web 服务 Key 只配置在服务端的 `deploy/.env` 中，由 API 代理地点搜索、中国反向地理编码和照片 GPS
 转换。高德未返回城市的海外落点会在服务端回退到 BigDataCloud；浏览器和 Web `.env.local` 都不应保存任何地点服务凭据。
 
+高 DPR 真机可在正式足迹地图 URL 后添加 `?map-retina=1`，启用 Leaflet `detectRetina` 高德瓦片对照；
+不带参数仍使用当前标准瓦片。该开关只用于比较地图清晰度、拖动流畅度和瓦片请求量，真机验证前不应改成默认开启。
+
 ## 验证
 
 ```powershell
