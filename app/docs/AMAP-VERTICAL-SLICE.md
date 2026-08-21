@@ -12,7 +12,7 @@
 - 地图只向 JS 发送 `camera idle` 最终状态，不发送逐帧 Camera 事件。
 - Marker、选中态、屏幕网格聚类、聚类点击放大、经纬度/屏幕投影和 Bitmap 缓存均在原生层。
 - RN 只承载测试筛选、时间轴、详情卡和测试控制；详情开关不卸载地图。
-- 海外底图缺少城市细节时，独立城市标签层使用构建时裁剪的 GeoNames `cities15000` 数据：排除中国大陆，保留人口不少于 10 万的聚居地和首都；相机停稳后按视野、缩放阈值和屏幕碰撞过滤渲染。标签不是记忆 Marker，不可点击，不参与记忆聚类。
+- 海外底图缺少城市细节时，技术原型使用独立城市标签层和构建时裁剪的 GeoNames `cities15000` 数据：排除中国大陆，保留人口不少于 10 万的聚居地和首都；相机停稳后按视野、缩放阈值和屏幕碰撞过滤渲染。该链路已在真机证明可行，但当前英文气泡样式和世界级全局显示策略未通过产品验收，不能作为正式 fallback 交付。
 - 照片选择只生成 256px `thumbnail`。此入口不导入同步下载/解密代码，也不生成或读取 `preview`、`original`。
 - 只有用户在测试壳确认隐私提示后才调用高德隐私合规 API 并创建 `MapView`。
 
@@ -30,6 +30,17 @@ $env:EXPO_PUBLIC_AMAP_VERTICAL_SLICE = '1'
 npx expo prebuild --platform android --clean
 npx expo run:android --device
 ```
+
+无需 Metro 的真机验收包使用 `standalone` 构建类型。它内嵌地图入口 JS、沿用 debug 签名以便覆盖本机开发安装，不清除测试数据；正式 `release` 的签名约束不变：
+
+```powershell
+$env:ANDROID_HOME = '<Android SDK 绝对路径>'
+$env:EXPO_PUBLIC_AMAP_VERTICAL_SLICE = '1'
+cd .\android
+.\gradlew.bat app:assembleStandalone -PreactNativeArchitectures=arm64-v8a
+```
+
+输出为 `android/app/build/outputs/apk/standalone/app-standalone.apk`。安装后直接打开应用即可，不需要 Metro、8082 或 `adb reverse`。
 
 如需更新海外城市数据，在联网环境执行：
 
@@ -79,11 +90,23 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 - 打开/关闭详情时 MapView 实例保持不变。
 - 页面销毁时 Marker、BitmapDescriptor 和 MapView 全部释放。
 
+## 海外城市标签产品约束（待实现）
+
+当前 GeoNames 标签层只验证“高德底图上可以叠加离线城市标签”，下一版必须遵守以下产品语义：
+
+1. 面向中文界面的海外城市统一显示中文译名；GeoNames 原始英文名只作为数据匹配和缺失回退字段，不直接作为默认展示名。
+2. 城市名是底图语义，不是业务对象；使用无边框、无底色、不可点击的纯文字标签，不使用 Marker 气泡外观，也不参与记忆聚类或抢占记忆 Marker 点击。
+3. 世界/国家层级不铺开普通城市。标签随 zoom 分级出现：低 zoom 至多保留必要的国家级锚点或完全隐藏，进入区域/城市层级后再按首都、人口与上下文逐级增加。
+4. 普通浏览时不持续开启全局海外城市层。主要触发场景是点击海外记忆后 Camera 下钻到其所在城市，以及新建/编辑海外地点时进入地点选择上下文；离开上下文或回到国家层级后清除普通城市标签。
+5. 标签候选必须以当前目标城市或当前视野为中心做密度控制和屏幕避让；不为证明数据存在而填满屏幕。切换境内/海外和开关标签时不得重建 `MapView`。
+
+中文译名建议在构建时生成稳定的 `displayNameZh` 字段，优先使用项目认可的中文地名数据或受控映射，不能在运行时调用在线翻译。首轮实现可先覆盖真实记忆涉及城市和验收城市，再扩展完整离线数据；缺少可靠中文名时应隐藏该普通城市，或仅在地点选择结果中显示原名，避免地图主视图中中英文混杂。
+
 ## 当前验证状态（2026-08-21）
 
 ### 已通过
 
-- TypeScript 类型检查、Expo Doctor 与 19 项自动测试（含地图入口、Android 布局和 Release 签名插件回归）。
+- TypeScript 类型检查、Expo Doctor 21/21 与 23 项自动测试（含地图入口、Android 布局、海外城市数据、网络策略和 Release 签名插件回归）。
 - Expo Android clean prebuild、本地模块自动链接和 `expo-amap-map` Kotlin 编译。
 - Development APK 构建：`com.memorae.cn`，仅包含 `arm64-v8a`、`armeabi-v7a`，带 `debuggable`，证书 SHA-1 为
   `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`。
@@ -95,7 +118,8 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 - ARM64 Android 真机已配置正式高德 Android Key；同意隐私后，北京瓦片、Camera idle、经纬度/屏幕投影、原生 Marker/聚类和前后台恢复正常。
 - Fabric 下动态加入的 `MapView` 必须启用 `ExpoView.shouldUseAndroidLayout`；否则子 View 保持 `0×0`，表现为高德 SDK 已加载但地图空白、投影 `(0, 0)` 且没有 loaded/idle 回调。该缺陷已修复并由结构回归测试锁定。
 - 用户手动确认 20 点与 100 点两档渲染、聚类与切换结果一致。100 点在北京 zoom 约 9.7 时聚合为 19 个原生 Marker，Camera idle 采样约 120 fps、slow 0；这些数据是单台真机的当前测试值，不代表完整性能基准。
-- 东京、巴黎、纽约能够完成 Camera 移动、发送 idle 并渲染聚类 Marker，但普通高德海外矢量底图区域为空白，仅显示高德水印。现已加入 GeoNames 海外城市标签增强层作为 V1 fallback；仍需 ARM64 真机确认城市标签密度、避让与记忆 Marker 点击穿透。
+- 无需 Metro 的 standalone APK 已构建并覆盖安装，关闭 Metro/8082 后可独立启动地图测试入口，不再依赖开发服务器。
+- GeoNames 标签层已在 ARM64 真机实际渲染：世界级 `zoom 3.5` 时显示 35 个城市标签、4 个原生 Marker，Camera idle 与约 116 fps 均正常。该结果证明渲染链路可用，同时暴露英文气泡、国家级标签过密和底图遮挡问题，因此产品验收未通过，后续按本页“海外城市标签产品约束”重做。
 
 本机生成的忽略产物为 `android/app/build/outputs/apk/release/app-release.apk`（99,718,868 字节）。它只用于本轮构建验收，未上传、未发布；Manifest 中仍是 `AMAP_KEY_NOT_CONFIGURED`，不能用于地图运行验收。
 
@@ -104,9 +128,9 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 - 持续拖动/缩放下 20/100 Marker 的长时间 FPS、UI/JS thread、内存峰值和泄漏趋势。
 - 自选真实 thumbnail 的 Bitmap 解码/缓存上限与释放；当前未选择照片，因此 `bitmap decode` 仍为 0。
 - RN Overlay 手势、详情开关保持 Camera、锁屏、销毁重建和资源释放的完整矩阵；当前只验证了前后台恢复。
-- 东京、巴黎、纽约的海外矢量底图为空白，需要在 ARM64 真机验证城市标签增强层的标签密度、避让与点击穿透。
+- 海外城市标签需要实现中文译名、纯文字样式、语义场景开关和 zoom 分级密度，并重新验证东京、巴黎、纽约及真实海外记忆的点击穿透和视觉密度。
 - 真实云端账号的海外 `/v1/location/reverse` 与 `/v1/location/convert-gps`。
-- 因此当前可确认 Expo Modules Native View + Fabric 的地图布局、境内瓦片、Marker/聚类与基础生命周期链路可行；尚不能把完整路线标记通过，海外城市标签增强层仍需实机验收。
+- 因此当前可确认 Expo Modules Native View + Fabric 的地图布局、境内瓦片、Marker/聚类、基础生命周期和离线城市标签渲染链路可行；尚不能把完整路线标记通过，海外城市标签仍需按已确认的产品规则重做并实机验收。
 
 ### Windows 构建环境记录
 
