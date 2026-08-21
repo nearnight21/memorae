@@ -127,3 +127,13 @@ android {
   );
   assert.equal(patchReleaseSigning(patched), patched);
 });
+
+test('Release 默认拒绝明文网络，Debug Development Build 允许本地开发服务器', async () => {
+  const source = await readFile(
+    new URL('../plugins/with-local-network-security.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /<base-config cleartextTrafficPermitted="false" \/>/);
+  assert.match(source, /<base-config cleartextTrafficPermitted="true" \/>/);
+  assert.match(source, /'app',\s*'src',\s*'debug',\s*'res',\s*'xml'/);
+});

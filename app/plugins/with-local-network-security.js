@@ -13,6 +13,12 @@ const NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
 </network-security-config>
 `;
 
+const DEBUG_NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
+`;
+
 module.exports = function withLocalNetworkSecurity(config) {
   config = withAndroidManifest(config, (manifestConfig) => {
     const application = manifestConfig.modResults.manifest.application?.[0];
@@ -39,6 +45,20 @@ module.exports = function withLocalNetworkSecurity(config) {
       await fs.writeFile(
         path.join(xmlDirectory, 'network_security_config.xml'),
         NETWORK_SECURITY_CONFIG,
+        'utf8',
+      );
+      const debugXmlDirectory = path.join(
+        dangerousConfig.modRequest.platformProjectRoot,
+        'app',
+        'src',
+        'debug',
+        'res',
+        'xml',
+      );
+      await fs.mkdir(debugXmlDirectory, { recursive: true });
+      await fs.writeFile(
+        path.join(debugXmlDirectory, 'network_security_config.xml'),
+        DEBUG_NETWORK_SECURITY_CONFIG,
         'utf8',
       );
       return dangerousConfig;
