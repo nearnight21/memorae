@@ -30,6 +30,18 @@ import './product-gate.css';
 
 type GatePhase = 'booting' | 'account' | 'setup' | 'locked' | 'unlocked';
 
+export interface ProductGateUnlockedContext {
+  session: VaultSessionV1;
+  accountSession: StoredAccountSession | null;
+  initialMemories: Memory[];
+  onLock: () => void;
+}
+
+interface ProductGateProps {
+  unlockedRenderer?: (context: ProductGateUnlockedContext) => ReactNode;
+  loadUnlockedMemories?: (session: VaultSessionV1) => Promise<Memory[]>;
+}
+
 interface AuthShellProps {
   titleId: string;
   children: ReactNode;
@@ -87,7 +99,10 @@ function AuthShell({ titleId, children }: AuthShellProps) {
   );
 }
 
-export default function ProductGate() {
+export default function ProductGate({
+  unlockedRenderer,
+  loadUnlockedMemories = loadProductMemories,
+}: ProductGateProps = {}) {
   const [phase, setPhase] = useState<GatePhase>('booting');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
@@ -211,7 +226,7 @@ export default function ProductGate() {
       }
     }
     setSession(activeSession);
-    setMemories(await loadProductMemories(activeSession));
+    setMemories(await loadUnlockedMemories(activeSession));
     setPassword('');
     setConfirmation('');
     setShowPrivateSpacePassword(false);
@@ -338,6 +353,14 @@ export default function ProductGate() {
   };
 
   if (phase === 'unlocked' && session) {
+    if (unlockedRenderer) {
+      return unlockedRenderer({
+        session,
+        accountSession,
+        initialMemories: memories,
+        onLock: lock,
+      });
+    }
     return (
       <App
         session={session}

@@ -187,6 +187,18 @@ export async function loadProductMemories(session: VaultSessionV1): Promise<Memo
   return visible.sort((left, right) => right.date.localeCompare(left.date));
 }
 
+/** Loads only decrypted location metadata for renderer experiments. Photos are never read. */
+export async function loadProductLocations(session: VaultSessionV1): Promise<Memory[]> {
+  const encryptedMemories = await listEncryptedMemories();
+  const visible: Memory[] = [];
+  for (const encrypted of encryptedMemories) {
+    if (encrypted.deleted) continue;
+    const result = await decryptMemoryV2(session, encrypted);
+    visible.push(toDisplayMemory(result.memory, []));
+  }
+  return visible.sort((left, right) => right.date.localeCompare(left.date));
+}
+
 async function encryptNewPhoto(session: VaultSessionV1, file: File): Promise<MemoryPhotoV1> {
   if (file.size > MAX_PHOTO_BYTES) throw new Error('单张照片不能超过 30 MiB。');
   const id = crypto.randomUUID();

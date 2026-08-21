@@ -51,6 +51,11 @@ VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE=你的_securityJsCode
 `memorae.cn` 等实际来源域名；本地测试域名也应按高德控制台规则配置。Vite 的 `VITE_*` 值会进入浏览器
 产物，不能把真实值提交 Git；它们也不能替代服务端保存的 `MEMORY_RECALL_AMAP_WEB_SERVICE_KEY`。
 
+在纯底图入口后追加 `&data=1` 可进入真实数据测试模式：
+`https://memorae.cn/?amap-js-test=1&data=1`。该模式仍先走现有账号登录和私密空间解锁，随后从服务器下载
+密文、在浏览器本地解密 MemoryV2，并只把地点坐标与名称用于高德 Marker；不读取照片、不直连 PostgreSQL、
+不修改 Memory 数据。测试完成可点击“锁定并退出”。纯底图模式不受影响。
+
 ## 验证
 
 ```powershell
