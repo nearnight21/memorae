@@ -194,10 +194,42 @@ export default function MapVerticalSliceApp() {
     setStatus(`${activeTestCity}地点选取：按当前视野分级显示中文城市名。`);
   }
 
+  function nearestTestCity(coordinate: { latitude: number; longitude: number }): keyof typeof TEST_CITIES {
+    return (Object.entries(TEST_CITIES) as Array<[
+      keyof typeof TEST_CITIES,
+      { latitude: number; longitude: number; zoom: number },
+    ]>)
+      .map(([city, center]) => ({
+        city,
+        distance: Math.hypot(
+          coordinate.latitude - center.latitude,
+          (coordinate.longitude - center.longitude)
+            * Math.cos(center.latitude * Math.PI / 180),
+        ),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.city ?? '北京';
+  }
+
+  function openClusterContext(coordinate: { latitude: number; longitude: number }): void {
+    const city = nearestTestCity(coordinate);
+    setActiveTestCity(city);
+    if (city === '北京') {
+      setCityLabelContext(null);
+      setStatus('北京使用高德底图原生地名，不注入自定义城市层。');
+      return;
+    }
+    setCityLabelContext({ kind: 'memory', target: coordinate });
+    setStatus(`${city}海外记忆：已下钻，显示中文城市标签。`);
+  }
+
   function moveToTestCity(city: keyof typeof TEST_CITIES): void {
     setActiveTestCity(city);
     setSelectedMarkerId(null);
-    setCityLabelContext(null);
+    setCityLabelContext(
+      city === '北京'
+        ? null
+        : { kind: 'location-picker', target: TEST_CITIES[city] },
+    );
     runTask(() => mapProvider.animateCamera(TEST_CITIES[city]));
   }
 
@@ -233,6 +265,7 @@ export default function MapVerticalSliceApp() {
         }}
         onMarkerPress={({ nativeEvent }) => openMemoryDetail(nativeEvent.id)}
         onClusterPress={({ nativeEvent }) => {
+          openClusterContext(nativeEvent);
           setStatus(`点击聚类：${nativeEvent.count} 个照片点；原生层正在放大。`);
         }}
         onCameraIdle={({ nativeEvent }) => onCameraIdle(nativeEvent)}

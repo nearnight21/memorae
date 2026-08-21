@@ -54,6 +54,8 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
   assert.doesNotMatch(source, /getEncryptedPhoto|downloadPhoto|decryptPhoto/);
   assert.doesNotMatch(source, /spec\.kind === 'preview'/);
   assert.doesNotMatch(source, /spec\.kind === 'original'/);
+  assert.match(source, /kind: 'location-picker'/);
+  assert.match(source, /function openClusterContext/);
 });
 
 test('海外城市标签只在语义上下文中显示中文名，中国大陆不注入自定义城市层', () => {
