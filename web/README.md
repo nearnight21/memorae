@@ -33,6 +33,24 @@ npm.cmd run dev
 高 DPR 真机可在正式足迹地图 URL 后添加 `?map-retina=1`，启用 Leaflet `detectRetina` 高德瓦片对照；
 不带参数仍使用当前标准瓦片。该开关只用于比较地图清晰度、拖动流畅度和瓦片请求量，真机验证前不应改成默认开启。
 
+### 高德 JS API 2.0 纯底图对照
+
+访问 `http://127.0.0.1:3000/?amap-js-test=1` 可打开独立的高德 JS API 2.0 测试页。它只加载以威海为
+初始位置的 2D 纯底图，不加载 Memory、Marker、聚合、照片、时间轴、同步或私密空间；正式
+`MapView.tsx` 和默认页面不受影响。该入口也保留在生产构建中，便于使用同一台手机对照正式 Leaflet 地图。
+
+测试页需要另行申请服务平台为“Web端（JS API）”的高德 Key 及其安全密钥，不能复用服务端地点
+搜索、反查和坐标转换所使用的“Web服务”Key。本地只在未提交的 `.env.local` 中配置：
+
+```dotenv
+VITE_MEMORY_RECALL_AMAP_JS_API_KEY=你的_Web_JS_API_Key
+VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE=你的_securityJsCode
+```
+
+修改后必须重启 Vite。生产部署必须在构建时注入这两个变量，并在高德控制台为该 Key 配置
+`memorae.cn` 等实际来源域名；本地测试域名也应按高德控制台规则配置。Vite 的 `VITE_*` 值会进入浏览器
+产物，不能把真实值提交 Git；它们也不能替代服务端保存的 `MEMORY_RECALL_AMAP_WEB_SERVICE_KEY`。
+
 ## 验证
 
 ```powershell

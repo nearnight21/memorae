@@ -187,6 +187,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | --- | --- | --- | --- |
 | 渲染器 | `已实现` | Leaflet 1.9.4；不是 MapLibre。 | `memory-recall-web/package.json:15-28`；`memory-recall-web/src/components/MapView.tsx:1-25` |
 | 底图 | `已实现` | 正式足迹地图可在 OSM/CARTO 低缩放底图与高德 `webrd` 国内栅格瓦片之间工作；有 attribution。 | `memory-recall-web/src/components/MapView.tsx:445-476` |
+| 高德 JS API 2.0 对照 | `Prototype` | `?amap-js-test=1` 独立懒加载威海 2D 纯底图，只用于同机画质和手势基线；不经过 ProductGate、不读业务数据，也未替换正式 Leaflet `MapView`。需要独立 Web端（JS API）Key 和 `securityJsCode`，真实值只在构建环境配置。 | `memory-recall-web/src/main.tsx:7-23`；`memory-recall-web/src/prototype/AmapJsPrototype.tsx:1-102`；`memory-recall-web/.env.example:4-10` |
 | Marker/聚合 | `已实现` | JS 根据当前记忆和视口生成国家/城市/地点级照片气泡；这是 Web 自有逻辑，不复用 App Native cluster。 | `memory-recall-web/src/components/MapView.tsx:580-930` |
 | 地点选取 | `已实现` | 独立 Leaflet 选点页使用高德瓦片；搜索/反查走服务端代理。 | `memory-recall-web/src/components/LocationMapSelection.tsx:70-165` |
 
@@ -323,6 +324,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | --- | --- | --- | --- |
 | Expo / RN | `已实现` | Expo `~57.0.15`、RN `0.86.2`。 | 依赖许可证随上游；正式分发清单是否自动汇总无法确认。`memory-recall-mobile/package.json:5-21` |
 | Leaflet | `已实现` | `^1.9.4`，Web 地图渲染。 | BSD-2-Clause；代码已保留底图 attribution。`memory-recall-web/package.json:15-28`；`MapView.tsx:445-476` |
+| AMap JS API Loader | `Prototype` | `@amap/amap-jsapi-loader ^1.0.1`，只用于独立 Web 纯底图对照页，未成为正式渲染器。 | Loader 为 MIT；高德 JS API 本身的商业条款、配额、域名白名单和 attribution 仍需按账号配置核验。`memory-recall-web/package.json:15-29`；`memory-recall-web/src/prototype/AmapJsPrototype.tsx:1-63` |
 | 高德 | `部分实现` | Web 瓦片、服务端 Web Service、Android Native SDK。 | 商业使用条款、配额、隐私合规和 attribution 需按实际高德账号/合同持续核验；合同状态无法从仓库确认。 |
 | BigDataCloud | `已实现` | 海外 reverse fallback，无 Key 路径。 | 实际服务条款、限额和生产 attribution 要求无法从仓库确认。`memory-recall-server/src/location.ts:235-276` |
 | 腾讯云 COS | `已实现` | `cos-nodejs-sdk-v5 ^3.0.0`，私有加密照片对象。 | 桶策略/费用告警属于运维；实时配置无法从 Git 单独确认。`memory-recall-server/package.json:19-24` |
@@ -337,6 +339,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | --- | --- | --- | --- |
 | Web 生产地图 | `已实现` | 真实页面可正常打开和交互；未建立长期 FPS、内存和大数据量基准。 | 本次只读运行时观察；代码 `MapView.tsx:445-930` |
 | Web Retina 瓦片 A/B | `Prototype` | `?map-retina=1` 仅对正式 `MapView` 高德图层启用 Leaflet `detectRetina`；默认关闭，地点选择器不变。高 DPR 自动化已确认相同初始层级下瓦片请求从 `z=4` 提升到 `z=5`；清晰度、手势性能和流量增幅仍待真机对照。 | `memory-recall-web/src/lib/mapTileQuality.ts:1-5`；`memory-recall-web/src/components/MapView.tsx:424-491` |
+| Web 高德 JS API 2.0 纯底图 | `Prototype` | 独立生产可构建入口和 lazy chunk 已完成，初始位置为威海，不含任何业务叠加；真实 Key 尚未配置，手机清晰度、字号、拖动、pinch zoom 和连续 30 秒掉帧结果均待验证。 | `memory-recall-web/src/main.tsx:7-23`；`memory-recall-web/src/prototype/AmapJsPrototype.tsx:23-102`；`memory-recall-web/tests/amap-js-prototype.test.ts:1-37` |
 | App 地图 FPS | `部分实现` | 100 点 idle 样本约 120 fps/slow 0；用户持续拖动仍感觉卡。idle 指标不能替代 gesture frame timeline。 | `DEVELOPMENT.md:56` |
 | Marker/Cluster 排除 | `部分实现` | 已构建关闭全部照片 marker/cluster/海外名称的纯底图包，卡顿仍存在；说明叠加层不是唯一原因，但根因未定位。 | `DEVELOPMENT.md:46`；用户真机反馈 |
 | 高德原生裸图 | `Prototype` | C/D 建立了纯 Native Activity 基线；缺少同设备、同 camera path、同采样工具的量化 A/B/C/D 报告。 | `DEVELOPMENT.md:44-46` |
