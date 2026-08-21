@@ -2,6 +2,7 @@ import type { MutableRefObject } from 'react';
 
 import type {
   ClusterConfig,
+  CityMapLabel,
   ExpoAmapMapViewRef,
   LatLng,
   MapCamera,
@@ -14,6 +15,7 @@ export interface MapProvider {
   moveCamera(camera: MapCamera): Promise<void>;
   animateCamera(camera: MapCamera): Promise<void>;
   setMarkers(markers: PhotoMapMarker[]): Promise<void>;
+  setCityLabels(labels: CityMapLabel[]): Promise<void>;
   setClusters(config: ClusterConfig): Promise<void>;
   latLngToScreen(coordinate: LatLng): Promise<ScreenPoint>;
   screenToLatLng(point: ScreenPoint): Promise<LatLng>;
@@ -32,6 +34,7 @@ export function createNativeMapProvider(
     moveCamera: (camera) => current().moveCamera(camera),
     animateCamera: (camera) => current().animateCamera(camera),
     setMarkers: (markers) => current().setMarkers(markers),
+    setCityLabels: (labels) => current().setCityLabels(labels),
     setClusters: (config) => current().setClusters(config),
     latLngToScreen: (coordinate) => current().latLngToScreen(coordinate),
     screenToLatLng: (point) => current().screenToLatLng(point),

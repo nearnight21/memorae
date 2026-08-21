@@ -71,6 +71,11 @@ class ExpoAmapMapModule : Module() {
         view.setMarkers(markers)
       }
 
+      AsyncFunction("setCityLabels") {
+        view: ExpoAmapMapView, labels: List<Map<String, Any?>> ->
+        view.setCityLabels(labels)
+      }
+
       AsyncFunction("setClusters") {
         view: ExpoAmapMapView, config: Map<String, Any?> ->
         view.setClusterConfig(config)

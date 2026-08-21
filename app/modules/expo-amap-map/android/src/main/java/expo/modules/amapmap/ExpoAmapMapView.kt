@@ -10,7 +10,9 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Point
+import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.os.Debug
 import android.util.Base64
 import android.view.Choreographer
@@ -29,6 +31,7 @@ import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import kotlin.math.max
+import kotlin.math.ceil
 
 private const val MISSING_KEY_SENTINEL = "AMAP_KEY_NOT_CONFIGURED"
 
@@ -42,6 +45,16 @@ private data class PhotoMarkerInput(
   val selected: Boolean,
 )
 
+private data class CityLabelInput(
+  val id: String,
+  val name: String,
+  val latitude: Double,
+  val longitude: Double,
+  val countryCode: String,
+  val population: Int,
+  val capital: Boolean,
+)
+
 private sealed interface RenderedMarkerTag {
   data class Photo(val id: String) : RenderedMarkerTag
   data class Cluster(
@@ -49,6 +62,8 @@ private sealed interface RenderedMarkerTag {
     val latitude: Double,
     val longitude: Double,
   ) : RenderedMarkerTag
+
+  data class CityLabel(val id: String) : RenderedMarkerTag
 }
 
 private data class ClusterConfig(
@@ -117,8 +132,10 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
   private var cameraIsMoving = false
   private var cameraIdleCount = 0
   private var markers: List<PhotoMarkerInput> = emptyList()
+  private var cityLabels: List<CityLabelInput> = emptyList()
   private var clusterConfig = ClusterConfig()
   private val renderedMarkers = mutableListOf<Marker>()
+  private val renderedCityLabels = mutableListOf<Marker>()
   private val bitmapDescriptors = mutableMapOf<String, BitmapDescriptor>()
   private val bitmapDescriptorBytes = mutableMapOf<String, Int>()
   private var bitmapBytes = 0L
@@ -193,7 +210,10 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     amap.setOnMapClickListener { coordinate -> onMapPress(latLngPayload(coordinate)) }
     amap.setOnMarkerClickListener { marker ->
       when (val tag = marker.`object`) {
-        is RenderedMarkerTag.Photo -> onMarkerPress(mapOf("id" to tag.id))
+        is RenderedMarkerTag.Photo -> {
+          onMarkerPress(mapOf("id" to tag.id))
+          true
+        }
         is RenderedMarkerTag.Cluster -> {
           onClusterPress(
             mapOf(
@@ -207,9 +227,11 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
           amap.animateCamera(
             CameraUpdateFactory.newLatLngZoom(LatLng(tag.latitude, tag.longitude), targetZoom),
           )
+          true
         }
+        is RenderedMarkerTag.CityLabel -> false
+        else -> false
       }
-      true
     }
     amap.setOnCameraChangeListener(object : AMap.OnCameraChangeListener {
       override fun onCameraChange(position: CameraPosition?) {
@@ -249,7 +271,29 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
         selected = raw["selected"] as? Boolean ?: false,
       )
     }
-    pruneBitmapCache(markers.mapNotNull { it.thumbnailKey }.toSet())
+    pruneBitmapCache(
+      markers.mapNotNull { it.thumbnailKey }.toSet(),
+      cityLabels.map { it.id }.toSet(),
+    )
+    refreshRenderedMarkers()
+  }
+
+  fun setCityLabels(rawLabels: List<Map<String, Any?>>) {
+    cityLabels = rawLabels.map { raw ->
+      CityLabelInput(
+        id = raw.string("id"),
+        name = raw.string("name"),
+        latitude = raw.double("latitude"),
+        longitude = raw.double("longitude"),
+        countryCode = raw.string("countryCode"),
+        population = raw.numberInt("population"),
+        capital = raw["capital"] as? Boolean ?: false,
+      )
+    }
+    pruneBitmapCache(
+      markers.mapNotNull { it.thumbnailKey }.toSet(),
+      cityLabels.map { it.id }.toSet(),
+    )
     refreshRenderedMarkers()
   }
 
@@ -282,7 +326,12 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     val amap = map ?: return
     renderedMarkers.forEach { it.remove() }
     renderedMarkers.clear()
-    if (markers.isEmpty() || width <= 0 || height <= 0) return
+    renderedCityLabels.forEach { it.remove() }
+    renderedCityLabels.clear()
+    if (width <= 0 || height <= 0) return
+
+    renderCityLabels()
+    if (markers.isEmpty()) return
 
     val zoom = amap.cameraPosition?.zoom?.toDouble() ?: 3.0
     if (!clusterConfig.enabled || zoom > clusterConfig.maxZoom) {
@@ -300,6 +349,43 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
 
     groups.values.forEach { group ->
       if (group.size == 1) renderPhotoMarker(group.first()) else renderCluster(group)
+    }
+  }
+
+  private fun renderCityLabels() {
+    val amap = map ?: return
+    if (cityLabels.isEmpty()) return
+    val occupied = mutableListOf<RectF>()
+    val sortedLabels = cityLabels.sortedWith(
+      compareByDescending<CityLabelInput> { it.capital }
+        .thenByDescending { it.population }
+        .thenBy { it.id },
+    )
+    for (input in sortedLabels) {
+      if (renderedCityLabels.size >= 120) break
+      val point = amap.projection.toScreenLocation(LatLng(input.latitude, input.longitude))
+      val labelWidth = cityLabelWidth(input.name).toFloat()
+      val labelHeight = dp(28).toFloat()
+      val rect = RectF(
+        point.x - labelWidth / 2f,
+        point.y - labelHeight,
+        point.x + labelWidth / 2f,
+        point.y.toFloat(),
+      )
+      if (rect.right < 0f || rect.left > width || rect.bottom < 0f || rect.top > height) continue
+      if (occupied.any { RectF.intersects(it, rect) }) continue
+      val marker = amap.addMarker(
+        MarkerOptions()
+          .position(LatLng(input.latitude, input.longitude))
+          .anchor(0.5f, 1.0f)
+          .icon(descriptorForCity(input))
+          .zIndex(-1f),
+      )
+      marker.`object` = RenderedMarkerTag.CityLabel(input.id)
+      marker.setClickable(false)
+      marker.setInfoWindowEnable(false)
+      renderedCityLabels.add(marker)
+      occupied.add(rect)
     }
   }
 
@@ -348,6 +434,16 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
       bitmapBytes += markerBitmap.allocationByteCount
       bitmapDescriptorBytes[cacheKey] = markerBitmap.allocationByteCount
       BitmapDescriptorFactory.fromBitmap(markerBitmap).also { markerBitmap.recycle() }
+    }
+  }
+
+  private fun descriptorForCity(input: CityLabelInput): BitmapDescriptor {
+    val cacheKey = "city:${input.id}"
+    return bitmapDescriptors.getOrPut(cacheKey) {
+      val bitmap = createCityLabelBitmap(input.name)
+      bitmapBytes += bitmap.allocationByteCount
+      bitmapDescriptorBytes[cacheKey] = bitmap.allocationByteCount
+      BitmapDescriptorFactory.fromBitmap(bitmap).also { bitmap.recycle() }
     }
   }
 
@@ -431,7 +527,47 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     return output
   }
 
-  private fun pruneBitmapCache(activeThumbnailKeys: Set<String>) {
+  private fun createCityLabelBitmap(name: String): Bitmap {
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+      color = Color.rgb(55, 50, 42)
+      textSize = dp(12).toFloat()
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    val width = cityLabelWidth(name)
+    val height = dp(28)
+    val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+    val radius = dp(8).toFloat()
+    canvas.drawRoundRect(
+      RectF(0f, 0f, width.toFloat(), height.toFloat()),
+      radius,
+      radius,
+      Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(224, 250, 248, 241) },
+    )
+    canvas.drawRoundRect(
+      RectF(0.5f, 0.5f, width - 0.5f, height - 0.5f),
+      radius,
+      radius,
+      Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1).toFloat()
+        color = Color.argb(180, 112, 98, 79)
+      },
+    )
+    val baseline = height / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
+    canvas.drawText(name, width / 2f, baseline, textPaint.apply { textAlign = Paint.Align.CENTER })
+    return output
+  }
+
+  private fun cityLabelWidth(name: String): Int {
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = dp(12).toFloat() }
+    return max(dp(36), ceil(textPaint.measureText(name).toDouble()).toInt() + dp(16))
+  }
+
+  private fun pruneBitmapCache(
+    activeThumbnailKeys: Set<String>,
+    activeCityIds: Set<String> = emptySet(),
+  ) {
     val iterator = bitmapDescriptors.iterator()
     while (iterator.hasNext()) {
       val entry = iterator.next()
@@ -441,6 +577,11 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
         sourceKey != "placeholder" &&
         sourceKey !in activeThumbnailKeys
       ) {
+        entry.value.recycle()
+        bitmapBytes -= bitmapDescriptorBytes.remove(entry.key)?.toLong() ?: 0L
+        iterator.remove()
+      }
+      if (entry.key.startsWith("city:") && entry.key.removePrefix("city:") !in activeCityIds) {
         entry.value.recycle()
         bitmapBytes -= bitmapDescriptorBytes.remove(entry.key)?.toLong() ?: 0L
         iterator.remove()
@@ -480,6 +621,7 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
       Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
     ),
     "cameraIdleCount" to cameraIdleCount,
+    "renderedCityLabelCount" to renderedCityLabels.size,
   )
 
   private fun latLngPayload(coordinate: LatLng): Map<String, Any> = mapOf(
@@ -526,6 +668,8 @@ class ExpoAmapMapView(context: Context, expoAppContext: AppContext) :
     cameraIsMoving = false
     renderedMarkers.forEach { it.remove() }
     renderedMarkers.clear()
+    renderedCityLabels.forEach { it.remove() }
+    renderedCityLabels.clear()
     bitmapDescriptors.values.forEach { it.recycle() }
     bitmapDescriptors.clear()
     bitmapDescriptorBytes.clear()
@@ -544,6 +688,9 @@ private fun Map<String, Any?>.string(key: String): String =
 
 private fun Map<String, Any?>.double(key: String): Double =
   (this[key] as? Number)?.toDouble() ?: error("缺少数字字段：$key")
+
+private fun Map<String, Any?>.numberInt(key: String): Int =
+  (this[key] as? Number)?.toInt() ?: error("缺少整数字段：$key")
 
 private fun Map<String, Any?>.optionalDouble(key: String): Double? =
   (this[key] as? Number)?.toDouble()

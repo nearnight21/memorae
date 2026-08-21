@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
+import { OVERSEAS_CITIES, selectVisibleOverseasCities } from '../src/map/overseasCityData';
 
 const require = createRequire(import.meta.url);
 const { patchReleaseSigning } = require('../plugins/with-android-release-signing.js') as {
@@ -51,6 +52,41 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
   assert.doesNotMatch(source, /spec\.kind === 'original'/);
 });
 
+test('海外城市标签按视野和缩放筛选，中国大陆不注入自定义城市层', () => {
+  const tokyo = selectVisibleOverseasCities(10, {
+    northEast: { latitude: 36.4, longitude: 140.5 },
+    southWest: { latitude: 34.7, longitude: 138.5 },
+  });
+  assert.ok(tokyo.some((city) => city.name === 'Tokyo'));
+  assert.ok(tokyo.some((city) => city.name === 'Yokohama'));
+  assert.ok(tokyo.every((city) => city.countryCode !== 'CN'));
+
+  const beijing = selectVisibleOverseasCities(10, {
+    northEast: { latitude: 40.8, longitude: 116.9 },
+    southWest: { latitude: 39.1, longitude: 115.9 },
+  });
+  assert.deepEqual(beijing, []);
+});
+
+test('低缩放只保留主要城市或首都，并限制候选数量', () => {
+  const world = selectVisibleOverseasCities(3.5, {
+    northEast: { latitude: 85, longitude: 179 },
+    southWest: { latitude: -85, longitude: -179 },
+  });
+  assert.ok(world.length <= 240);
+  assert.ok(world.every((city) => city.capital || city.population >= 1_000_000));
+});
+
+test('海外标签数据保留首轮验收的主要城市', () => {
+  const names = new Set(OVERSEAS_CITIES.map((city) => city.name));
+  for (const city of [
+    'Tokyo', 'Yokohama', 'Osaka', 'Kyoto', 'Paris', 'Lyon',
+    'New York City', 'Boston', 'London', 'Manchester',
+  ]) {
+    assert.ok(names.has(city), `缺少海外验收城市：${city}`);
+  }
+});
+
 test('高德原生 View 使用 Android 布局测量动态加入的 MapView', async () => {
   const source = await readFile(
     new URL(
@@ -60,6 +96,8 @@ test('高德原生 View 使用 Android 布局测量动态加入的 MapView', asy
     'utf8',
   );
   assert.match(source, /override val shouldUseAndroidLayout = true/);
+  assert.match(source, /fun setCityLabels\(/);
+  assert.match(source, /RenderedMarkerTag\.CityLabel/);
 });
 
 test('Release 签名插件只替换 release build type，不污染 debug build type', () => {

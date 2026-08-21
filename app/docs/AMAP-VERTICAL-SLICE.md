@@ -12,6 +12,7 @@
 - 地图只向 JS 发送 `camera idle` 最终状态，不发送逐帧 Camera 事件。
 - Marker、选中态、屏幕网格聚类、聚类点击放大、经纬度/屏幕投影和 Bitmap 缓存均在原生层。
 - RN 只承载测试筛选、时间轴、详情卡和测试控制；详情开关不卸载地图。
+- 海外底图缺少城市细节时，独立城市标签层使用构建时裁剪的 GeoNames `cities15000` 数据：排除中国大陆，保留人口不少于 10 万的聚居地和首都；相机停稳后按视野、缩放阈值和屏幕碰撞过滤渲染。标签不是记忆 Marker，不可点击，不参与记忆聚类。
 - 照片选择只生成 256px `thumbnail`。此入口不导入同步下载/解密代码，也不生成或读取 `preview`、`original`。
 - 只有用户在测试壳确认隐私提示后才调用高德隐私合规 API 并创建 `MapView`。
 
@@ -29,6 +30,14 @@ $env:EXPO_PUBLIC_AMAP_VERTICAL_SLICE = '1'
 npx expo prebuild --platform android --clean
 npx expo run:android --device
 ```
+
+如需更新海外城市数据，在联网环境执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-overseas-city-data.ps1
+```
+
+脚本下载 GeoNames 官方 `cities15000.zip`，运行时不会联网；生成数据须保留文件顶部的 GeoNames CC BY 4.0 attribution。当前筛选结果约 5,642 个海外城市，生成 TypeScript 文件约 330 KB。
 
 本机 Release 构建必须从仓库外或 Git 忽略目录注入唯一正式签名，缺少任意变量时构建会主动失败：
 
@@ -86,7 +95,7 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 - ARM64 Android 真机已配置正式高德 Android Key；同意隐私后，北京瓦片、Camera idle、经纬度/屏幕投影、原生 Marker/聚类和前后台恢复正常。
 - Fabric 下动态加入的 `MapView` 必须启用 `ExpoView.shouldUseAndroidLayout`；否则子 View 保持 `0×0`，表现为高德 SDK 已加载但地图空白、投影 `(0, 0)` 且没有 loaded/idle 回调。该缺陷已修复并由结构回归测试锁定。
 - 用户手动确认 20 点与 100 点两档渲染、聚类与切换结果一致。100 点在北京 zoom 约 9.7 时聚合为 19 个原生 Marker，Camera idle 采样约 120 fps、slow 0；这些数据是单台真机的当前测试值，不代表完整性能基准。
-- 东京、巴黎、纽约能够完成 Camera 移动、发送 idle 并渲染聚类 Marker，但普通高德海外矢量底图区域为空白，仅显示高德水印。海外 fallback 风险确认存在，尚未选定方案。
+- 东京、巴黎、纽约能够完成 Camera 移动、发送 idle 并渲染聚类 Marker，但普通高德海外矢量底图区域为空白，仅显示高德水印。现已加入 GeoNames 海外城市标签增强层作为 V1 fallback；仍需 ARM64 真机确认城市标签密度、避让与记忆 Marker 点击穿透。
 
 本机生成的忽略产物为 `android/app/build/outputs/apk/release/app-release.apk`（99,718,868 字节）。它只用于本轮构建验收，未上传、未发布；Manifest 中仍是 `AMAP_KEY_NOT_CONFIGURED`，不能用于地图运行验收。
 
@@ -95,9 +104,9 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 - 持续拖动/缩放下 20/100 Marker 的长时间 FPS、UI/JS thread、内存峰值和泄漏趋势。
 - 自选真实 thumbnail 的 Bitmap 解码/缓存上限与释放；当前未选择照片，因此 `bitmap decode` 仍为 0。
 - RN Overlay 手势、详情开关保持 Camera、锁屏、销毁重建和资源释放的完整矩阵；当前只验证了前后台恢复。
-- 东京、巴黎、纽约的海外矢量底图为空白，需要决定并验证海外地图 fallback。
+- 东京、巴黎、纽约的海外矢量底图为空白，需要在 ARM64 真机验证城市标签增强层的标签密度、避让与点击穿透。
 - 真实云端账号的海外 `/v1/location/reverse` 与 `/v1/location/convert-gps`。
-- 因此当前可确认 Expo Modules Native View + Fabric 的地图布局、境内瓦片、Marker/聚类与基础生命周期链路可行；尚不能把完整路线标记通过，海外 fallback 仍需决策。
+- 因此当前可确认 Expo Modules Native View + Fabric 的地图布局、境内瓦片、Marker/聚类与基础生命周期链路可行；尚不能把完整路线标记通过，海外城市标签增强层仍需实机验收。
 
 ### Windows 构建环境记录
 

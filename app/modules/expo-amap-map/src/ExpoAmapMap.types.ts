@@ -27,6 +27,14 @@ export interface PhotoMapMarker extends LatLng {
   selected?: boolean;
 }
 
+export interface CityMapLabel extends LatLng {
+  id: string;
+  name: string;
+  countryCode: string;
+  population: number;
+  capital: boolean;
+}
+
 export interface ClusterConfig {
   enabled: boolean;
   gridSizeDp: number;
@@ -41,6 +49,7 @@ export interface MapDiagnostics {
   nativeHeapBytes: number;
   runtimeUsedMemoryBytes: number;
   cameraIdleCount: number;
+  renderedCityLabelCount: number;
 }
 
 export interface FrameMetrics {
@@ -80,6 +89,7 @@ export interface ExpoAmapMapViewRef {
   moveCamera(camera: MapCamera): Promise<void>;
   animateCamera(camera: MapCamera): Promise<void>;
   setMarkers(markers: PhotoMapMarker[]): Promise<void>;
+  setCityLabels(labels: CityMapLabel[]): Promise<void>;
   setClusters(config: ClusterConfig): Promise<void>;
   latLngToScreen(coordinate: LatLng): Promise<ScreenPoint>;
   screenToLatLng(point: ScreenPoint): Promise<LatLng>;

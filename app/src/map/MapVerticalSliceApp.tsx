@@ -29,6 +29,7 @@ import {
   TEST_CITIES,
   type ThumbnailSource,
 } from './mapTestMarkers';
+import { selectVisibleOverseasCities } from './overseasCityData';
 
 const THUMBNAIL_SPEC = PHOTO_VARIANT_SPECS.find((spec) => spec.kind === 'thumbnail');
 
@@ -54,6 +55,7 @@ export default function MapVerticalSliceApp() {
   const [lastCamera, setLastCamera] = useState<CameraIdlePayload | null>(null);
   const [diagnostics, setDiagnostics] = useState<MapDiagnostics | null>(null);
   const [cameraEventCount, setCameraEventCount] = useState(0);
+  const cityLabelRequest = useRef(0);
 
   const markers = useMemo(
     () => buildMapTestMarkers(markerCount, thumbnailSources, selectedMarkerId),
@@ -132,6 +134,18 @@ export default function MapVerticalSliceApp() {
     setLastCamera(payload);
     setDiagnostics(payload.diagnostics);
     setCameraEventCount((count) => count + 1);
+    const request = ++cityLabelRequest.current;
+    void mapProvider
+      .setCityLabels(selectVisibleOverseasCities(payload.camera.zoom, payload.bounds))
+      .then(() => mapProvider.getDiagnostics())
+      .then((nextDiagnostics) => {
+        if (request === cityLabelRequest.current) setDiagnostics(nextDiagnostics);
+      })
+      .catch((error: unknown) => {
+        if (request === cityLabelRequest.current) {
+          setStatus(error instanceof Error ? error.message : '设置城市标签失败。');
+        }
+      });
   }
 
   async function checkProjection(): Promise<void> {
@@ -214,6 +228,7 @@ export default function MapVerticalSliceApp() {
           </View>
           <Text style={styles.metrics}>
             idle→JS {cameraEventCount} · native markers {diagnostics?.renderedMarkerCount ?? 0}
+            {' · '}city labels {diagnostics?.renderedCityLabelCount ?? 0}
             {' · '}bitmap decode {diagnostics?.bitmapDecodeCount ?? 0}
             {' · '}bitmap {formatMiB(diagnostics?.bitmapBytes ?? 0)}
           </Text>
