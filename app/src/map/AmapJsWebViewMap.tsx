@@ -143,7 +143,10 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, showStatus 
 }
 
 const styles = StyleSheet.create({
-  root: { minHeight: 360, overflow: 'hidden', borderRadius: 14, backgroundColor: '#e7e3d9' },
+  root: {
+    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+    minHeight: 360, overflow: 'hidden', borderRadius: 14, backgroundColor: '#e7e3d9',
+  },
   status: { position: 'absolute', left: 10, right: 10, bottom: 10, padding: 8, borderRadius: 10, backgroundColor: 'rgba(250,248,241,0.9)' },
   statusText: { color: '#5a5145', fontSize: 11 },
 });

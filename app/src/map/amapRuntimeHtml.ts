@@ -10,7 +10,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://webapi.amap.com https://*.amap.com; style-src 'unsafe-inline'; img-src https://*.amap.com https://*.autonavi.com data:; connect-src https://*.amap.com https://*.autonavi.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://webapi.amap.com https://*.amap.com; style-src 'unsafe-inline' https://*.amap.com; img-src https://*.amap.com https://*.autonavi.com https://*.amapauto.com data: blob:; connect-src https://*.amap.com https://*.autonavi.com https://*.amapauto.com; worker-src blob:; font-src https://*.amap.com data:;">
   <style>
     html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #e7e3d9; }
     .notice { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 2; padding: 10px 12px; border: 1px solid rgba(92,78,61,.22); border-radius: 12px; background: rgba(250,248,241,.94); color: #423b32; font: 13px/1.4 sans-serif; }
@@ -30,6 +30,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       let map = null;
       let cluster = null;
       let selectedId = null;
+      let tileTimeout = null;
       const notice = document.getElementById('notice');
       const post = (message) => window.ReactNativeWebView?.postMessage(JSON.stringify(message));
       const setNotice = (message, visible = true) => {
@@ -82,13 +83,25 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         post({ type: 'error', message: '缺少高德 JS API Key 或 securityJsCode。' });
         return;
       }
+      window.addEventListener('error', (event) => {
+        const message = event?.message;
+        if (message) post({ type: 'error', message: '地图脚本错误：' + message });
+      });
       const script = document.createElement('script');
       script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(apiKey) + '&plugin=AMap.MarkerCluster';
       script.onload = () => {
         try {
-          map = new AMap.Map('map', { center: [116.397428, 39.90923], zoom: 5, viewMode: '2D', mapStyle: 'amap://styles/whitesmoke', features: ['bg', 'road', 'point'] });
+          map = new AMap.Map('map', { center: [116.397428, 39.90923], zoom: 5, viewMode: '2D', features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('moveend', () => post({ type: 'cameraIdle' }));
+          map.on('complete', () => {
+            if (tileTimeout) window.clearTimeout(tileTimeout);
+            setNotice('', false);
+          });
+          tileTimeout = window.setTimeout(() => {
+            setNotice('底图瓦片加载超时，请检查高德 Key、安全密钥和网络。');
+            post({ type: 'error', message: '底图瓦片加载超时，请检查高德 Key、安全密钥和网络。' });
+          }, 12000);
           setNotice('', false);
           render();
           post({ type: 'ready' });
