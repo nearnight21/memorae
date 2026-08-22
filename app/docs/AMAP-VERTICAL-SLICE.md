@@ -63,11 +63,14 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 
 ### RN WebView + AMap JS API 2.0
 
-新的隔离入口使用 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1`。它加载 Web 端专用
-`?amap-runtime=1` 页面，而不是整个 `memorae.cn` 产品页。RN → WebView 仅发送 `setMarkers` / `setSelected`；
-WebView → RN 仅发送 `ready`、`markerPressed`、`mapPressed`、`cameraIdle` 和 `error`。没有 `move`/逐帧桥接。
-当前壳生成 100 或 1000 个跨北京、东京、巴黎、纽约的确定性测试点，使用高德 JS API 2.0 MarkerCluster 插件。
-它是 Prototype，尚未接入正式 MemoryV2 解密会话；高德 JS API 在原生 WebView 内的授权/商业条款仍需单独确认。
+新的隔离入口使用 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1`。Map Runtime 的 HTML/JS 随 Mobile bundle 打包进
+APK，不加载 `memorae.cn` 远程页面；只有高德 JS API 2.0 和地图服务从高德域名联网加载。高德 JS Key 与
+`securityJsCode` 分别从 `EXPO_PUBLIC_AMAP_WEB_KEY`、`EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE` 注入，不能
+提交真实值。RN → WebView 仅发送 `setMarkers` / `setSelected` / `clearSensitiveData`；WebView → RN
+仅发送 `ready`、`markerPressed`、`mapPressed`、`cameraIdle` 和 `error`，没有 `move`/逐帧桥接。
+正式 App 解锁后只把有效 `MemoryV2.location` 的 `{id,lat,lng}` 发送到 Runtime，不传正文、密文、VMK、
+Token 或照片；锁定和销毁时清空地图数据。当前壳生成 100 或 1000 个跨北京、东京、巴黎、纽约的确定性
+测试点，使用高德 JS API 2.0 MarkerCluster 插件；真实 Marker → RN 详情和 thumbnail 链路仍待下一阶段。
 
 ## 真机验收记录表
 

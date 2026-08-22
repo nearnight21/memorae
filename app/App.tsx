@@ -44,6 +44,7 @@ import {
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient } from './src/sync/syncClient';
+import AmapJsWebViewMap, { type AmapWebViewMarker } from './src/map/AmapJsWebViewMap';
 import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
@@ -118,6 +119,12 @@ export default function App() {
     locked: '已锁定',
     unlocked: '已解锁',
   })[mode], [mode]);
+
+  const mapMarkers = useMemo<AmapWebViewMarker[]>(() => memories.flatMap((memory) => {
+    const location = memory.location;
+    if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return [];
+    return [{ id: memory.id, lat: location.lat!, lng: location.lng! }];
+  }), [memories]);
 
   useEffect(() => {
     void (async () => {
@@ -658,6 +665,14 @@ export default function App() {
 
         {mode === 'unlocked' && session && (
           <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>足迹地图</Text>
+              <Text style={styles.hint}>地图只接收已解密记忆的地点坐标；正文、密文、会话密钥和照片不会进入地图 Runtime。</Text>
+              <AmapJsWebViewMap
+                markers={mapMarkers}
+                onMarkerPressed={(id) => setStatus(`地图地点已选中：${id}`)}
+              />
+            </View>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>新建测试记忆</Text>
               <TextInput style={styles.input} placeholder="标题" value={title} onChangeText={setTitle} />

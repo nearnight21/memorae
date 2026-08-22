@@ -51,11 +51,15 @@ npm run verify
 
 ## AMap JS API 2.0 WebView 垂直切片
 
-设置 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1` 后，入口会使用独立的 RN + WebView 地图壳，加载
-`EXPO_PUBLIC_AMAP_WEB_RUNTIME_URL`（默认 `https://memorae.cn/?amap-runtime=1`）。WebView 只负责地图、
-Marker/Cluster、点击和 `cameraIdle`；RN 通过 JSON 消息发送地点数组，拖动期间不发送逐帧消息。
-当前验收壳提供 100/1000 点切换和 WebView 销毁重建，用于性能基线；正式 E2EE、SQLite 和同步接入仍需
-由上层业务把已解密的 `{id,lat,lng}` 数据注入该协议。该测试不依赖高德 Android Native MapView。
+设置 `EXPO_PUBLIC_AMAP_WEBVIEW_SLICE=1` 后，入口会使用独立的 RN + WebView 地图壳。地图 Runtime 的
+HTML/JS 随 Mobile bundle 编译进 APK，不再从 `memorae.cn` 动态加载；Runtime 只从高德域名加载 JS API
+和地图服务。通过 `EXPO_PUBLIC_AMAP_WEB_KEY`、`EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE` 注入高德 JS API
+凭据，凭据不得写入 Git。WebView 只负责地图、Marker/Cluster、点击和 `cameraIdle`；RN 通过 JSON 消息
+发送地点数组，拖动期间不发送逐帧消息。
+
+正式 App 解锁后把有效 `MemoryV2.location.lat/lng` 映射为 `{id,lat,lng}`，不把正文、密文、VMK、Token
+或照片传入 Runtime；锁定/销毁时发送 `clearSensitiveData`。当前测试壳仍提供 100/1000 点切换，用于
+性能基线；真实 Marker → RN 详情和 thumbnail 链路尚未接入。该测试不依赖高德 Android Native MapView。
 
 ## Android 包
 

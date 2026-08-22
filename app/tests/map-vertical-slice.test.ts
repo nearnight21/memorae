@@ -61,15 +61,33 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
 
 test('WebView 地图切片只通过消息发送地图数据，并接收低频事件', async () => {
   const source = await readFile(
-    new URL('../src/map/AmapJsWebViewSliceApp.tsx', import.meta.url),
+    new URL('../src/map/AmapJsWebViewMap.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(source, /EXPO_PUBLIC_AMAP_WEB_RUNTIME_URL/);
+  assert.match(source, /buildAmapRuntimeHtml/);
+  assert.match(source, /AMAP_RUNTIME_LOCAL_ORIGIN/);
   assert.match(source, /type: 'setMarkers'/);
   assert.match(source, /type: 'markerPressed'/);
   assert.match(source, /type: 'cameraIdle'/);
+  assert.match(source, /function parseRuntimeEvent/);
   assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
-  assert.match(source, /1000/);
+  assert.match(source, /clearSensitiveData/);
+});
+
+test('正式 App 只把有效地点坐标送入本地地图，不把正文或照片传入 Marker', async () => {
+  const source = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
+  assert.match(source, /memory\.location/);
+  assert.match(source, /AmapJsWebViewMap/);
+  assert.match(source, /id: memory\.id, lat: location\.lat!?, lng: location\.lng!?/);
+  assert.doesNotMatch(source, /pastSelf.*AmapJsWebViewMap|photos.*AmapJsWebViewMap/);
+});
+
+test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {
+  const source = await readFile(new URL('../src/map/amapRuntimeHtml.ts', import.meta.url), 'utf8');
+  assert.match(source, /https:\/\/webapi\.amap\.com\/maps/);
+  assert.match(source, /https:\/\/\*\.autonavi\.com/);
+  assert.doesNotMatch(source, /memorae\.cn\/\?amap-runtime/);
+  assert.match(source, /clearSensitiveData/);
 });
 
 test('海外城市标签只在语义上下文中显示中文名，中国大陆不注入自定义城市层', () => {
