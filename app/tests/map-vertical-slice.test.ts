@@ -70,6 +70,8 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(source, /type: 'markerPressed'/);
   assert.match(source, /type: 'cameraIdle'/);
   assert.match(source, /function parseRuntimeEvent/);
+  assert.match(source, /process\.env\.EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG === '1'/);
+  assert.match(source, /webviewDebuggingEnabled=\{WEBVIEW_DEBUGGING_ENABLED\}/);
   assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
   assert.match(source, /clearSensitiveData/);
 });

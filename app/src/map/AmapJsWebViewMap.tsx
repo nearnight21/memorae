@@ -51,6 +51,8 @@ interface WebViewHandle {
   reload(): void;
 }
 
+const WEBVIEW_DEBUGGING_ENABLED = process.env.EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG === '1';
+
 function post(webView: WebViewHandle | null, message: Record<string, unknown>): void {
   webView?.postMessage(JSON.stringify(message));
 }
@@ -128,6 +130,7 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, showStatus 
         source={{ html, baseUrl: AMAP_RUNTIME_LOCAL_ORIGIN }}
         originWhitelist={['https://memorae.cn']}
         javaScriptEnabled
+        webviewDebuggingEnabled={WEBVIEW_DEBUGGING_ENABLED}
         domStorageEnabled={false}
         cacheEnabled={false}
         setSupportMultipleWindows={false}
