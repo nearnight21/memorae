@@ -14,7 +14,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
   <style>
     html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #e7e3d9; }
     .notice { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 2; padding: 10px 12px; border: 1px solid rgba(92,78,61,.22); border-radius: 12px; background: rgba(250,248,241,.94); color: #423b32; font: 13px/1.4 sans-serif; }
-    .marker { width: 18px; height: 18px; border-radius: 50%; background: #536f5b; border: 3px solid #f8f4e9; box-shadow: 0 2px 8px rgba(25,35,28,.3); }
+    .marker { display: block; width: 18px; height: 18px; border-radius: 50%; background: #536f5b; border: 3px solid #f8f4e9; box-shadow: 0 2px 8px rgba(25,35,28,.3); }
     .marker.selected { background: #ad5f42; transform: scale(1.25); }
   </style>
 </head>
@@ -62,7 +62,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           list.forEach((marker) => marker.setMap(map));
         }
       };
-      window.addEventListener('message', (event) => {
+      const handleMessage = (event) => {
         let message;
         try { message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
         if (!message || typeof message !== 'object') return;
@@ -77,7 +77,10 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           selectedId = null;
           render();
         }
-      });
+      };
+      // Android dispatches WebView postMessage events on document; iOS uses window.
+      window.addEventListener('message', handleMessage);
+      document.addEventListener('message', handleMessage);
       if (!apiKey || !securityJsCode) {
         setNotice('缺少高德 JS API 配置。');
         post({ type: 'error', message: '缺少高德 JS API Key 或 securityJsCode。' });

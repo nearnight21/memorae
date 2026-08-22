@@ -64,6 +64,10 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
     new URL('../src/map/AmapJsWebViewMap.tsx', import.meta.url),
     'utf8',
   );
+  const runtimeSource = await readFile(
+    new URL('../src/map/amapRuntimeHtml.ts', import.meta.url),
+    'utf8',
+  );
   assert.match(source, /buildAmapRuntimeHtml/);
   assert.match(source, /AMAP_RUNTIME_LOCAL_ORIGIN/);
   assert.match(source, /type: 'setMarkers'/);
@@ -74,6 +78,9 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(source, /function parseRuntimeEvent/);
   assert.match(source, /process\.env\.EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG === '1'/);
   assert.match(source, /webviewDebuggingEnabled=\{WEBVIEW_DEBUGGING_ENABLED\}/);
+  assert.match(runtimeSource, /window\.addEventListener\('message', handleMessage\)/);
+  assert.match(runtimeSource, /document\.addEventListener\('message', handleMessage\)/);
+  assert.match(runtimeSource, /\.marker \{ display: block;/);
   assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
   assert.match(source, /clearSensitiveData/);
 });
