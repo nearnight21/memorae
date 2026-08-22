@@ -17,7 +17,6 @@ import {
   type ViewportRegion,
   type ViewportRegionCandidate,
 } from '../lib/mapViewportRegion';
-import { isRetinaMapExperimentEnabled } from '../lib/mapTileQuality';
 import MapMemoryOverlay from './MapMemoryOverlay';
 import CrystalTimeline from './CrystalTimeline';
 
@@ -424,7 +423,6 @@ export default function MapView({
   // --- 地图生命周期 ---
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const retinaTilesRequested = isRetinaMapExperimentEnabled(window.location.search);
     const mapEventHandlers: Array<{ event: string; handler: () => void }> = [];
     const markBaseMapReady = () => setBaseMapReady(true);
     const readyFallbackTimer = window.setTimeout(markBaseMapReady, 2600);
@@ -478,7 +476,6 @@ export default function MapView({
           attribution: '&copy; 高德地图',
           minZoom: 3,
           maxZoom: 18,
-          detectRetina: retinaTilesRequested,
           keepBuffer: 4,
           updateWhenZooming: false,
           updateWhenIdle: true,
@@ -486,9 +483,6 @@ export default function MapView({
           zIndex: 1,
         }
       );
-      map.getContainer().dataset.mapTileQuality = retinaTilesRequested && L.Browser.retina
-        ? 'retina'
-        : 'standard';
       amapTiles.once('load', markBaseMapReady).addTo(map);
     }
     if (!signedOutBackdrop) L.control.zoom({ position: 'bottomright' }).addTo(map);

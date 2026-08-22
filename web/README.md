@@ -30,14 +30,7 @@ npm.cmd run dev
 高德 Web 服务 Key 只配置在服务端的 `deploy/.env` 中，由 API 代理地点搜索、中国反向地理编码和照片 GPS
 转换。高德未返回城市的海外落点会在服务端回退到 BigDataCloud；浏览器和 Web `.env.local` 都不应保存任何地点服务凭据。
 
-高 DPR 真机可在正式足迹地图 URL 后添加 `?map-retina=1`，启用 Leaflet `detectRetina` 高德瓦片对照；
-不带参数仍使用当前标准瓦片。该开关只用于比较地图清晰度、拖动流畅度和瓦片请求量，真机验证前不应改成默认开启。
-
-### 高德 JS API 2.0 纯底图对照
-
-访问 `http://127.0.0.1:3000/?amap-js-test=1` 可打开独立的高德 JS API 2.0 测试页。它只加载以威海为
-初始位置的 2D 纯底图，不加载 Memory、Marker、聚合、照片、时间轴、同步或私密空间；正式
-`MapView.tsx` 和默认页面不受影响。该入口也保留在生产构建中，便于使用同一台手机对照正式 Leaflet 地图。
+### 高德 JS API 2.0 真实数据测试
 
 测试页需要另行申请服务平台为“Web端（JS API）”的高德 Key 及其安全密钥，不能复用服务端地点
 搜索、反查和坐标转换所使用的“Web服务”Key。本地只在未提交的 `.env.local` 中配置：
@@ -51,10 +44,9 @@ VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE=你的_securityJsCode
 `memorae.cn` 等实际来源域名；本地测试域名也应按高德控制台规则配置。Vite 的 `VITE_*` 值会进入浏览器
 产物，不能把真实值提交 Git；它们也不能替代服务端保存的 `MEMORY_RECALL_AMAP_WEB_SERVICE_KEY`。
 
-在纯底图入口后追加 `&data=1` 可进入真实数据测试模式：
-`https://memorae.cn/?amap-js-test=1&data=1`。该模式仍先走现有账号登录和私密空间解锁，随后从服务器下载
+访问 `https://memorae.cn/?amap-js-test=1&data=1` 可进入真实数据测试模式。该模式仍先走现有账号登录和私密空间解锁，随后从服务器下载
 密文、在浏览器本地解密 MemoryV2，并只把地点坐标与名称用于高德 Marker；不读取照片、不直连 PostgreSQL、
-不修改 Memory 数据。测试完成可点击“锁定并退出”。纯底图模式不受影响。
+不修改 Memory 数据。测试完成可点击“锁定并退出”。单独使用 `?amap-js-test=1` 不再进入测试页。
 
 ## 验证
 
