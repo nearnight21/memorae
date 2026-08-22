@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
+import { findMemoryForMarker, memoriesToMapMarkers } from '../src/map/memoryMapAdapter';
+import type { MemoryV2 } from '../src/memory/memoryV2';
 import {
   CITY_LABEL_MIN_ZOOM,
   OVERSEAS_CITIES,
@@ -89,11 +91,49 @@ test('正式 App 只把有效地点坐标送入本地地图，不把正文或照
   const source = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
   assert.match(source, /memory\.location/);
   assert.match(source, /AmapJsWebViewMap/);
-  assert.match(source, /id: memory\.id, lat: location\.lat!?, lng: location\.lng!?/);
+  assert.match(source, /memoriesToMapMarkers/);
   assert.match(source, /locationCoordinates/);
   assert.match(source, /provider: 'amap'/);
   assert.match(source, /handleMarkerPressed/);
   assert.doesNotMatch(source, /pastSelf.*AmapJsWebViewMap|photos.*AmapJsWebViewMap/);
+});
+
+test('真实 MemoryV2 到地图 Marker 的适配只暴露坐标，并能反查详情', () => {
+  const memory = (id: string, location: MemoryV2['location']): MemoryV2 => ({
+    schemaVersion: 2,
+    id,
+    title: id,
+    pastSelf: 'private body',
+    presentSelf: '',
+    date: '2026-08-23',
+    category: 'travel',
+    tag: '',
+    pinnedBy: 'pin',
+    board: { px: 20, py: 20, rotation: 0 },
+    location,
+    photos: [],
+    createdAt: '2026-08-23T00:00:00.000Z',
+    updatedAt: '2026-08-23T00:00:00.000Z',
+  });
+  const withCoordinates = memory('with-coordinates', {
+    name: '真实地点',
+    mx: 50,
+    my: 50,
+    lat: 44.1412,
+    lng: 115.71314,
+    provider: 'amap',
+  });
+  const withoutCoordinates = memory('without-coordinates', {
+    name: '旧地点',
+    mx: 50,
+    my: 50,
+  });
+
+  assert.deepEqual(memoriesToMapMarkers([withCoordinates, withoutCoordinates]), [
+    { id: 'with-coordinates', lat: 44.1412, lng: 115.71314 },
+  ]);
+  assert.equal(findMemoryForMarker([withCoordinates], 'with-coordinates'), withCoordinates);
+  assert.equal(findMemoryForMarker([withCoordinates], 'missing'), null);
 });
 
 test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {

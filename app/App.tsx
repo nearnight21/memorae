@@ -44,7 +44,9 @@ import {
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient } from './src/sync/syncClient';
-import AmapJsWebViewMap, { type AmapWebViewMarker } from './src/map/AmapJsWebViewMap';
+import AmapJsWebViewMap from './src/map/AmapJsWebViewMap';
+import { findMemoryForMarker, memoriesToMapMarkers } from './src/map/memoryMapAdapter';
+import { loadDecryptedMemories } from './src/memory/memoryStore';
 import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
@@ -121,11 +123,7 @@ export default function App() {
     unlocked: '已解锁',
   })[mode], [mode]);
 
-  const mapMarkers = useMemo<AmapWebViewMarker[]>(() => memories.flatMap((memory) => {
-    const location = memory.location;
-    if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return [];
-    return [{ id: memory.id, lat: location.lat!, lng: location.lng! }];
-  }), [memories]);
+  const mapMarkers = useMemo(() => memoriesToMapMarkers(memories), [memories]);
 
   useEffect(() => {
     void (async () => {
@@ -156,26 +154,13 @@ export default function App() {
   }
 
   async function refreshMemories(activeSession: VaultSessionV1): Promise<number> {
-    const encrypted = await listEncryptedMemories();
-    let migratedCount = 0;
-    const decrypted: MemoryV2[] = [];
-    for (const item of encrypted) {
-      if (item.deleted) continue;
-      const result = await decryptMemoryV2(nativeCryptoPrimitives, activeSession, item);
-      decrypted.push(result.memory);
-      if (result.migrated) {
-        await saveEncryptedMemory(await encryptMemoryV2(
-          nativeCryptoPrimitives,
-          activeSession,
-          result.memory,
-          item.version + 1,
-        ));
-        migratedCount += 1;
-      }
-    }
-    decrypted.sort((left, right) => right.date.localeCompare(left.date));
-    setMemories(decrypted);
-    return migratedCount;
+    const snapshot = await loadDecryptedMemories(
+      nativeCryptoPrimitives,
+      activeSession,
+      cipherSyncStorage,
+    );
+    setMemories(snapshot.memories);
+    return snapshot.migratedCount;
   }
 
   async function finishUnlock(activeSession: VaultSessionV1, message: string): Promise<void> {
@@ -401,7 +386,7 @@ export default function App() {
   }
 
   function handleMarkerPressed(id: string): void {
-    const memory = memories.find((item) => item.id === id);
+    const memory = findMemoryForMarker(memories, id);
     if (!memory) {
       setStatus(`地图返回了未知地点：${id}`);
       return;
