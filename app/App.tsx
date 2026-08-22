@@ -100,6 +100,7 @@ export default function App() {
   const [body, setBody] = useState('');
   const [date, setDate] = useState(todayValue());
   const [location, setLocation] = useState('');
+  const [locationCoordinates, setLocationCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [tags, setTags] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -192,6 +193,7 @@ export default function App() {
     setSelectedMemory(null);
     setPreviewUri(null);
     setPendingPhoto(null);
+    setLocationCoordinates(null);
     setMode(vault ? 'locked' : 'setup');
     setStatus('私密空间已经锁定，内存钥匙已清零。');
   }
@@ -271,6 +273,7 @@ export default function App() {
     if (!session) throw new Error('请先解锁。');
     if (!title.trim() && !body.trim()) throw new Error('标题和正文不能同时为空。');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
+    if (location.trim() && !locationCoordinates) throw new Error('请先在地图上点击地点，保存真实坐标。');
     setStatus('正在加密并保存……');
 
     let photoId: string | undefined;
@@ -337,7 +340,13 @@ export default function App() {
       tag: tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean).join(' · '),
       pinnedBy: 'pin',
       board: { px: 20, py: 20, rotation: 0 },
-      location: location.trim() ? { name: location.trim(), mx: 50, my: 50 } : null,
+      location: location.trim() || locationCoordinates ? {
+        name: location.trim() || '地图选点',
+        mx: 50,
+        my: 50,
+        ...(locationCoordinates ?? {}),
+        ...(locationCoordinates ? { provider: 'amap' } : {}),
+      } : null,
       photos: photoId && pendingPhoto
         ? [{ id: photoId, mimeType: pendingPhoto.mimeType }]
         : [],
@@ -365,6 +374,7 @@ export default function App() {
     setBody('');
     setDate(todayValue());
     setLocation('');
+    setLocationCoordinates(null);
     setTags('');
     setPendingPhoto(null);
     await refreshMemories(session);
@@ -388,6 +398,15 @@ export default function App() {
     setSelectedMemory(memory);
     setPreviewUri(null);
     if (memory.photos.length > 0) await showPhoto(memory);
+  }
+
+  function handleMarkerPressed(id: string): void {
+    const memory = memories.find((item) => item.id === id);
+    if (!memory) {
+      setStatus(`地图返回了未知地点：${id}`);
+      return;
+    }
+    void runTask(() => openMemory(memory));
   }
 
   async function exportBundle(): Promise<void> {
@@ -670,7 +689,8 @@ export default function App() {
               <Text style={styles.hint}>地图只接收已解密记忆的地点坐标；正文、密文、会话密钥和照片不会进入地图 Runtime。</Text>
               <AmapJsWebViewMap
                 markers={mapMarkers}
-                onMarkerPressed={(id) => setStatus(`地图地点已选中：${id}`)}
+                onMarkerPressed={handleMarkerPressed}
+                onMapPressed={setLocationCoordinates}
               />
             </View>
             <View style={styles.section}>
@@ -685,6 +705,11 @@ export default function App() {
               />
               <TextInput style={styles.input} placeholder="日期（YYYY-MM-DD）" value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
               <TextInput style={styles.input} placeholder="地点（例如：杭州西湖）" value={location} onChangeText={setLocation} />
+              <Text style={styles.hint}>
+                {locationCoordinates
+                  ? `已选坐标：${locationCoordinates.lat.toFixed(5)}, ${locationCoordinates.lng.toFixed(5)}`
+                  : '请先在上方地图点击真实地点，再保存记忆。'}
+              </Text>
               <TextInput style={styles.input} placeholder="标签（用逗号分隔）" value={tags} onChangeText={setTags} />
               <Button title={pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择一张真实照片'} disabled={busy} onPress={() => void runTask(choosePhoto)} />
               <View style={styles.spacer} />

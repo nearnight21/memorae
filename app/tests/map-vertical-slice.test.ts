@@ -68,6 +68,8 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(source, /AMAP_RUNTIME_LOCAL_ORIGIN/);
   assert.match(source, /type: 'setMarkers'/);
   assert.match(source, /type: 'markerPressed'/);
+  assert.match(source, /type: 'mapPressed'/);
+  assert.match(source, /onMapPressed/);
   assert.match(source, /type: 'cameraIdle'/);
   assert.match(source, /function parseRuntimeEvent/);
   assert.match(source, /process\.env\.EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG === '1'/);
@@ -81,12 +83,16 @@ test('正式 App 只把有效地点坐标送入本地地图，不把正文或照
   assert.match(source, /memory\.location/);
   assert.match(source, /AmapJsWebViewMap/);
   assert.match(source, /id: memory\.id, lat: location\.lat!?, lng: location\.lng!?/);
+  assert.match(source, /locationCoordinates/);
+  assert.match(source, /provider: 'amap'/);
+  assert.match(source, /handleMarkerPressed/);
   assert.doesNotMatch(source, /pastSelf.*AmapJsWebViewMap|photos.*AmapJsWebViewMap/);
 });
 
 test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {
   const source = await readFile(new URL('../src/map/amapRuntimeHtml.ts', import.meta.url), 'utf8');
   assert.match(source, /https:\/\/webapi\.amap\.com\/maps/);
+  assert.match(source, /script-src 'unsafe-inline' 'unsafe-eval'/);
   assert.match(source, /https:\/\/\*\.autonavi\.com/);
   assert.doesNotMatch(source, /memorae\.cn\/\?amap-runtime/);
   assert.match(source, /clearSensitiveData/);

@@ -43,6 +43,7 @@ function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
 interface Props {
   markers: AmapWebViewMarker[];
   onMarkerPressed?: (id: string) => void;
+  onMapPressed?: (coordinates: { lat: number; lng: number }) => void;
   showStatus?: boolean;
 }
 
@@ -65,7 +66,7 @@ function validMarkers(markers: AmapWebViewMarker[]): AmapWebViewMarker[] {
   ));
 }
 
-export default function AmapJsWebViewMap({ markers, onMarkerPressed, showStatus = true }: Props) {
+export default function AmapJsWebViewMap({ markers, onMarkerPressed, onMapPressed, showStatus = true }: Props) {
   const webViewRef = useRef<WebViewHandle | null>(null);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState('正在加载本地地图 Runtime…');
@@ -115,6 +116,9 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, showStatus 
       setSelectedId(message.id);
       post(webViewRef.current, { type: 'setSelected', id: message.id });
       onMarkerPressed?.(message.id);
+    } else if (message.type === 'mapPressed') {
+      setStatus(`已选择地图坐标：${message.lat.toFixed(5)}, ${message.lng.toFixed(5)}。`);
+      onMapPressed?.({ lat: message.lat, lng: message.lng });
     } else if (message.type === 'cameraIdle') {
       setStatus(`地图已停稳：${safeMarkers.length} 个地点。`);
     } else if (message.type === 'error') {
