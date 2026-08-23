@@ -962,7 +962,7 @@ export default function App() {
     );
   }
 
-  async function readDetailPhotoVariant(photoId: string, kind: 'thumbnail' | 'preview') {
+  async function readDetailPhotoVariant(photoId: string, kind: 'thumbnail') {
     const local = await getEncryptedPhoto(photoId, kind);
     if (local || !accountSession) return local;
     try {
@@ -982,11 +982,16 @@ export default function App() {
     const photoId = memory.photos[index]?.id;
     if (!session || !photoId) return;
     try {
-      // Detail browsing uses preview and falls back to the bounded thumbnail.
-      const encrypted = await readDetailPhotoVariant(photoId, 'preview')
-        ?? await readDetailPhotoVariant(photoId, 'thumbnail');
+      // Keep the initial detail render bounded. A preview can be large enough
+      // to monopolize the JS thread while the user is trying to close detail.
+      const encrypted = await readDetailPhotoVariant(photoId, 'thumbnail');
       if (!encrypted) throw new Error('找不到照片密文。');
+      if (requestId !== detailLoadId.current) return;
       const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);
+      if (requestId !== detailLoadId.current) {
+        photo.bytes.fill(0);
+        return;
+      }
       const uri = `data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`;
       photo.bytes.fill(0);
       if (requestId !== detailLoadId.current) return;

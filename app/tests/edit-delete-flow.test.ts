@@ -105,11 +105,11 @@ test('新增照片的缩略图和预览图并行生成并写入', () => {
   assert.match(encryptPendingPhoto, /Promise\.all\(encryptedVariants\.map\(saveEncryptedPhoto\)\)/);
 });
 
-test('详情浏览不会自动读取大体积 original，避免阻塞关闭按钮', () => {
+test('详情浏览只自动读取受限 thumbnail，避免阻塞关闭按钮', () => {
   const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
   const loadDetailPhoto = appSource.match(/async function loadDetailPhoto\([\s\S]*?\n  \}\n\n  function openMemory/)?.[0];
   assert.ok(loadDetailPhoto, '找不到 loadDetailPhoto 实现');
-  assert.match(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'preview'\)/);
   assert.match(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'thumbnail'\)/);
+  assert.doesNotMatch(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'preview'\)/);
   assert.doesNotMatch(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'original'\)/);
 });
