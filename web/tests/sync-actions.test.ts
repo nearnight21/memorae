@@ -9,6 +9,7 @@ import type {
 import {
   downloadCiphertext,
   downloadPhotoVariant,
+  uploadCiphertext,
   type CipherSyncStorage,
 } from '../src/sync/syncActions';
 import { SyncRequestError, type MemoryRecallSyncClient } from '../src/sync/syncClient';
@@ -142,6 +143,30 @@ test('上传时 HTTP 409 只记录冲突，不阻断其他记录', async () => {
   const result = await (await import('../src/sync/syncActions')).uploadCiphertext(client, storage);
   assert.deepEqual(uploaded, ['memory-ok']);
   assert.deepEqual(result.conflictIds, ['memory-conflict']);
+});
+
+test('照片上传失败时仍先上传记忆密文', async () => {
+  const uploaded: string[] = [];
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    putVault: async () => undefined,
+    putPhotoVariant: async () => { throw new SyncRequestError(500, 'photo failed'); },
+    putMemory: async (item: EncryptedMemoryV1) => { uploaded.push(item.id); },
+  } as unknown as MemoryRecallSyncClient;
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [{ ...memory, id: 'memory-before-photo' }],
+    listPhotos: async () => [photo('thumbnail', 'photo-1')],
+    saveMemory: async () => undefined,
+    savePhoto: async () => undefined,
+  };
+
+  await assert.rejects(
+    uploadCiphertext(client, storage),
+    /photo failed/,
+  );
+  assert.deepEqual(uploaded, ['memory-before-photo']);
 });
 
 test('首次恢复只下载缩略图，不预取预览和原图', async () => {

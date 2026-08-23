@@ -113,7 +113,7 @@ test('上传本机密文时先校验同一私密空间，再上传照片和记�
 
   const result = await uploadCiphertext(client as never, storage as never);
 
-  assert.deepEqual(calls, ['getVault', 'putVault', 'putPhotoVariant', 'putMemory']);
+  assert.deepEqual(calls, ['getVault', 'putVault', 'putMemory', 'putPhotoVariant']);
   assert.deepEqual(result, {
     memories: 1,
     photos: 1,
@@ -147,4 +147,25 @@ test('上传时跳过服务器拒绝的冲突记录，但继续上传其他记�
 
   assert.deepEqual(uploaded, ['memory-ok']);
   assert.deepEqual(result.conflictIds, ['memory-conflict']);
+});
+
+test('照片上传失败时仍先上传记忆密文', async () => {
+  const uploaded: string[] = [];
+  const client = {
+    getVault: async () => vault,
+    putVault: async () => undefined,
+    putPhotoVariant: async () => { throw new SyncRequestError(500, 'photo failed'); },
+    putMemory: async (item: { id: string }) => { uploaded.push(item.id); },
+  };
+  const storage = {
+    getVault: async () => vault,
+    listMemories: async () => [{ ...memory, id: 'memory-before-photo' }],
+    listPhotos: async () => [{ id: 'photo-1', kind: 'thumbnail' }],
+  };
+
+  await assert.rejects(
+    uploadCiphertext(client as never, storage as never),
+    /photo failed/,
+  );
+  assert.deepEqual(uploaded, ['memory-before-photo']);
 });

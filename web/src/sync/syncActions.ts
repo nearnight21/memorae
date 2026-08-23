@@ -75,6 +75,18 @@ export async function uploadCiphertext(
     storage.listPhotos(),
   ]);
   await client.putVault(localVault);
+  const conflictIds: string[] = [];
+  for (const memory of memories) {
+    try {
+      await client.putMemory(memory);
+    } catch (error) {
+      if (error instanceof SyncRequestError && error.status === 409) {
+        conflictIds.push(memory.id);
+        continue;
+      }
+      throw error;
+    }
+  }
   let uploadedPhotos = 0;
   for (const photo of photos) {
     try {
@@ -88,19 +100,6 @@ export async function uploadCiphertext(
       }
     }
   }
-  const conflictIds: string[] = [];
-  for (const memory of memories) {
-    try {
-      await client.putMemory(memory);
-    } catch (error) {
-      if (error instanceof SyncRequestError && error.status === 409) {
-        conflictIds.push(memory.id);
-        continue;
-      }
-      throw error;
-    }
-  }
-
   return {
     memories: memories.length,
     photos: uploadedPhotos,
