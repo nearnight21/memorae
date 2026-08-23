@@ -54,6 +54,15 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const safeMarker = (value) => value && typeof value.id === 'string'
         && Number.isFinite(value.lat) && value.lat >= -90 && value.lat <= 90
         && Number.isFinite(value.lng) && value.lng >= -180 && value.lng <= 180;
+      const postCameraIdle = () => {
+        if (!map) return;
+        const center = map.getCenter?.();
+        if (!center) return;
+        const lat = typeof center.getLat === 'function' ? center.getLat() : center[1];
+        const lng = typeof center.getLng === 'function' ? center.getLng() : center[0];
+        const zoom = map.getZoom?.();
+        if (Number.isFinite(lat) && Number.isFinite(lng)) post({ type: 'cameraIdle', lat, lng, zoom });
+      };
       const markerHtml = (value) => {
         const refs = Array.isArray(value.thumbnailRefs) ? value.thumbnailRefs.filter(safeDataUri).slice(0, 3) : [];
         const photoCount = Number.isFinite(value.photoCount) ? Math.max(0, value.photoCount) : refs.length;
@@ -121,6 +130,23 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         } else if (message.type === 'setSelected' && (message.id === null || typeof message.id === 'string')) {
           selectedId = message.id;
           render();
+        } else if (
+          message.type === 'setCamera'
+          && Number.isFinite(message.lat) && message.lat >= -90 && message.lat <= 90
+          && Number.isFinite(message.lng) && message.lng >= -180 && message.lng <= 180
+        ) {
+          const zoom = Number.isFinite(message.zoom) ? Math.max(2, Math.min(19, message.zoom)) : map.getZoom();
+          const center = map.getCenter?.();
+          const currentLat = center && (typeof center.getLat === 'function' ? center.getLat() : center[1]);
+          const currentLng = center && (typeof center.getLng === 'function' ? center.getLng() : center[0]);
+          const currentZoom = map.getZoom?.();
+          if (
+            Number.isFinite(currentLat) && Number.isFinite(currentLng)
+            && Math.abs(currentLat - message.lat) < 0.000001
+            && Math.abs(currentLng - message.lng) < 0.000001
+            && Number.isFinite(currentZoom) && Math.abs(currentZoom - zoom) < 0.001
+          ) return;
+          map.setZoomAndCenter(zoom, [message.lng, message.lat], false, 300);
         } else if (message.type === 'clearSensitiveData') {
           window.__MEMORY_MARKERS__ = [];
           selectedId = null;
@@ -151,7 +177,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         try {
           map = new AMap.Map('map', { center: [116.397428, 39.90923], zoom: 5, viewMode: '2D', features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
-          map.on('moveend', () => post({ type: 'cameraIdle' }));
+          map.on('moveend', postCameraIdle);
           map.on('complete', () => {
             if (tileTimeout) window.clearTimeout(tileTimeout);
             setNotice('', false);
@@ -163,6 +189,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           setNotice('', false);
           render();
           post({ type: 'ready' });
+          postCameraIdle();
         } catch (error) {
           setNotice('高德地图无法启动。');
           post({ type: 'error', message: error instanceof Error ? error.message : '高德地图无法启动。' });

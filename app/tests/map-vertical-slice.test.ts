@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
 import { findMemoryForMarker, memoriesToMapMarkers } from '../src/map/memoryMapAdapter';
+import { normalizeLocationResult } from '../src/location/locationClient';
 import type { MemoryV2 } from '../src/memory/memoryV2';
 import {
   CITY_LABEL_MIN_ZOOM,
@@ -77,14 +78,84 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(source, /type: 'mapPressed'/);
   assert.match(source, /onMapPressed/);
   assert.match(source, /type: 'cameraIdle'/);
+  assert.match(source, /onCameraIdle/);
+  assert.match(source, /type: 'setCamera'/);
+  assert.match(source, /markerUpdatesPaused/);
+  assert.match(source, /initialCameraApplied/);
+  assert.match(source, /if \(!initialCamera \|\| initialCameraApplied\.current\) return/);
   assert.match(source, /function parseRuntimeEvent/);
   assert.match(source, /process\.env\.EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG === '1'/);
   assert.match(source, /webviewDebuggingEnabled=\{WEBVIEW_DEBUGGING_ENABLED\}/);
   assert.match(runtimeSource, /window\.addEventListener\('message', handleMessage\)/);
   assert.match(runtimeSource, /document\.addEventListener\('message', handleMessage\)/);
+  assert.match(runtimeSource, /postCameraIdle/);
+  assert.match(runtimeSource, /message\.type === 'setCamera'/);
+  assert.match(runtimeSource, /Math\.abs\(currentLat - message\.lat\)/);
   assert.match(runtimeSource, /\.marker \{ display: block;/);
   assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
   assert.match(source, /clearSensitiveData/);
+});
+
+test('地点服务结果转换为 MemoryV2.location 时保留版面坐标，不把经纬度写入 mx/my', () => {
+  const normalized = normalizeLocationResult({
+    lat: 30.246,
+    lng: 120.15,
+    shortName: '西湖边',
+    displayName: '西湖边 · 苏堤南口',
+    provider: 'amap',
+    province: '浙江省',
+    city: '杭州市',
+    district: '西湖区',
+  }, { mx: 23, my: 71 });
+  assert.equal(normalized.name, '西湖边');
+  assert.equal(normalized.mx, 23);
+  assert.equal(normalized.my, 71);
+  assert.equal(normalized.lat, 30.246);
+  assert.equal(normalized.lng, 120.15);
+  assert.equal(normalized.city, '杭州市');
+});
+
+test('正式详情和地点选择器保留本轮冻结的运行状态边界', async () => {
+  const detailSource = await readFile(
+    new URL('../src/detail/MemoryDetailOverlay.tsx', import.meta.url),
+    'utf8',
+  );
+  const pickerSource = await readFile(
+    new URL('../src/location/LocationPicker.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(detailSource, /pastSelf/);
+  assert.match(detailSource, /presentSelf/);
+  assert.match(detailSource, /photoCount > 0/);
+  assert.match(detailSource, /photoCount > 1/);
+  assert.match(detailSource, /loading/);
+  assert.match(detailSource, /unavailable/);
+  assert.doesNotMatch(detailSource, /updatedAt/);
+  assert.match(pickerSource, /requestId\.current/);
+  assert.match(pickerSource, /locationClient\.reverse/);
+  assert.match(pickerSource, /locationClient\.suggest/);
+  assert.match(pickerSource, /initialCamera/);
+  assert.match(pickerSource, /onConfirm/);
+});
+
+test('地点选择模式复用 Home 的唯一地图实例', async () => {
+  const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
+  const homeSource = await readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8');
+  assert.match(appSource, /locationMode=\{locationPickerVisible\}/);
+  assert.match(appSource, /mapAlreadyMounted/);
+  assert.doesNotMatch(appSource, /!locationPickerVisible && <HomeScreen/);
+  assert.match(appSource, /locationPickerOriginCamera/);
+  assert.match(appSource, /setHomeCamera\(origin\)/);
+  assert.match(homeSource, /locationOverlay/);
+  assert.match(homeSource, /showStatus=\{!locationMode\}/);
+});
+
+test('远端照片同步完成后批量刷新缩略图，不逐张重建地图 Marker', async () => {
+  const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(appSource, /onPhotoStored/);
+  assert.doesNotMatch(appSource, /Promise\.race\(\[download/);
+  assert.match(appSource, /refreshMemories\(activeSession, \{ loadThumbnails: false \}\)/);
+  assert.match(appSource, /return refreshMemories\(activeSession\)/);
 });
 
 test('正式 App 只把有效地点坐标送入本地地图，不把正文或照片传入 Marker', async () => {

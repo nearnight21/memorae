@@ -48,7 +48,7 @@ test('记忆密文落盘后先通知读取方，再等待照片缓存', async ()
   const callbackReached = new Promise<void>((resolve) => { callbackResolve = resolve; });
   const sync = downloadCiphertext({
     client: client as never,
-    storage,
+    storage: storage as never,
     decryptMemory: async () => ({ photos: [{ id: 'photo-1' }] }),
     onMemoriesStored: (count) => {
       storedCount = count;
@@ -60,6 +60,43 @@ test('记忆密文落盘后先通知读取方，再等待照片缓存', async ()
   assert.equal(savedMemory, true);
   assert.equal(storedCount, 1);
   releasePhoto?.();
+  await sync;
+});
+
+test('每档照片密文落盘后通知读取方，缩略图无需等待原图完成', async () => {
+  let releaseOriginal: (() => void) | undefined;
+  const originalGate = new Promise<void>((resolve) => { releaseOriginal = resolve; });
+  const storedKinds: string[] = [];
+  const client = {
+    getVault: async () => vault,
+    listMemories: async () => [memory],
+    getPhotoVariant: async (_id: string, kind: string) => {
+      if (kind === 'original') await originalGate;
+      return { id: 'photo-1', kind, cryptoVersion: 1, metadata: {}, content: {} };
+    },
+  };
+  const storage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [],
+    listPhotos: async () => [],
+    saveMemory: async () => undefined,
+    savePhoto: async (photo: { kind: string }) => { storedKinds.push(photo.kind); },
+  };
+  let thumbnailStored = false;
+  const sync = downloadCiphertext({
+    client: client as never,
+    storage: storage as never,
+    decryptMemory: async () => ({ photos: [{ id: 'photo-1' }] }),
+    onPhotoStored: (photo) => {
+      if (photo.kind === 'thumbnail') thumbnailStored = true;
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(thumbnailStored, true);
+  assert.deepEqual(storedKinds, ['thumbnail', 'preview']);
+  releaseOriginal?.();
   await sync;
 });
 
@@ -80,13 +117,68 @@ test('下载时跳过同版本分叉，但继续落盘其他远端记忆', async
 
   const result = await downloadCiphertext({
     client: client as never,
-    storage,
+    storage: storage as never,
     decryptMemory: async () => ({ photos: [] }),
   });
 
   assert.deepEqual(saved, ['memory-ok']);
   assert.equal(result.memories, 2);
   assert.deepEqual(result.conflictIds, ['memory-conflict']);
+});
+
+test('下载更高版本 tombstone 会隐藏记忆并清理不再引用的本地照片', async () => {
+  const tombstone = { ...memory, version: 2, deleted: true };
+  const saved: typeof tombstone[] = [];
+  const deletedPhotos: string[] = [];
+  const client = {
+    getVault: async () => vault,
+    listMemories: async () => [tombstone],
+  };
+  const storage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [memory],
+    listPhotos: async () => [],
+    saveMemory: async (item: typeof tombstone) => { saved.push(item); },
+    savePhoto: async () => undefined,
+    deletePhotoVariants: async (id: string) => { deletedPhotos.push(id); },
+  };
+
+  await downloadCiphertext({
+    client: client as never,
+    storage: storage as never,
+    decryptMemory: async () => ({ photos: [{ id: 'photo-deleted' }] }),
+  });
+
+  assert.equal(saved[0]?.deleted, true);
+  assert.equal(saved[0]?.version, 2);
+  assert.deepEqual(deletedPhotos, ['photo-deleted']);
+});
+
+test('本地更高版本 tombstone 不会被旧的远端活动记录复活', async () => {
+  const localTombstone = { ...memory, version: 3, deleted: true };
+  const saved: unknown[] = [];
+  const client = {
+    getVault: async () => vault,
+    listMemories: async () => [memory],
+  };
+  const storage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [localTombstone],
+    listPhotos: async () => [],
+    saveMemory: async (item: unknown) => { saved.push(item); },
+    savePhoto: async () => undefined,
+  };
+
+  const result = await downloadCiphertext({
+    client: client as never,
+    storage: storage as never,
+    decryptMemory: async () => ({ photos: [] }),
+  });
+
+  assert.deepEqual(saved, []);
+  assert.equal(result.memories, 1);
 });
 
 test('上传本机密文时先校验同一私密空间，再上传照片和记忆并返回数量', async () => {

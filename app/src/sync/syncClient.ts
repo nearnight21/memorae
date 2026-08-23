@@ -7,6 +7,35 @@ import type {
 } from '../crypto';
 import { utf8 } from '../crypto';
 
+export interface LocationSuggestionResponse {
+  lat: number;
+  lng: number;
+  shortName: string;
+  displayName: string;
+  provider: 'amap';
+  providerId?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  adcode?: string;
+  poiId?: string;
+}
+
+export interface LocationReverseResponse {
+  lat: number;
+  lng: number;
+  label?: string;
+  placeName?: string;
+  formattedAddress?: string;
+  provider: 'amap' | 'bigdatacloud';
+  country?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  adcode?: string;
+}
+
 export interface SyncClientOptions {
   baseUrl: string;
   token: string;
@@ -161,6 +190,20 @@ export class MemoryRecallSyncClient {
   async listMemories(): Promise<EncryptedMemoryV1[]> {
     const response = await this.request<{ items: EncryptedMemoryV1[] }>('/v1/memories');
     return response.items;
+  }
+
+  async suggestLocations(query: string, adcode?: string): Promise<LocationSuggestionResponse[]> {
+    const params = new URLSearchParams({ q: query.trim() });
+    if (adcode?.trim()) params.set('adcode', adcode.trim());
+    return this.request(`/v1/location/suggest?${params.toString()}`);
+  }
+
+  reverseLocation(coordinates: { lat: number; lng: number }): Promise<LocationReverseResponse | null> {
+    const params = new URLSearchParams({
+      lat: String(coordinates.lat),
+      lng: String(coordinates.lng),
+    });
+    return this.request(`/v1/location/reverse?${params.toString()}`);
   }
 
   putPhoto(photo: EncryptedPhotoV1): Promise<void> {

@@ -23,14 +23,26 @@ type RuntimeEvent =
   | { type: 'markerPressed'; id: string }
   | { type: 'clusterPressed'; id?: string; lat: number; lng: number }
   | { type: 'mapPressed'; lat: number; lng: number }
-  | { type: 'cameraIdle' }
+  | { type: 'cameraIdle'; lat: number; lng: number; zoom?: number }
   | { type: 'error'; message: string };
 
 function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
   if (!value || typeof value !== 'object' || !('type' in value)) return null;
   const message = value as Record<string, unknown>;
-  if (message.type === 'runtimeStarted' || message.type === 'ready' || message.type === 'cameraIdle') {
+  if (message.type === 'runtimeStarted' || message.type === 'ready') {
     return { type: message.type };
+  }
+  if (
+    message.type === 'cameraIdle'
+    && typeof message.lat === 'number' && Number.isFinite(message.lat)
+    && typeof message.lng === 'number' && Number.isFinite(message.lng)
+  ) {
+    return {
+      type: 'cameraIdle',
+      lat: message.lat,
+      lng: message.lng,
+      ...(typeof message.zoom === 'number' && Number.isFinite(message.zoom) ? { zoom: message.zoom } : {}),
+    };
   }
   if (message.type === 'markersApplied' && typeof message.count === 'number' && Number.isFinite(message.count)) {
     return { type: message.type, count: Math.max(0, Math.floor(message.count)) };
@@ -68,7 +80,17 @@ interface Props {
   onMarkerPressed?: (id: string) => void;
   onClusterPressed?: (coordinates: { lat: number; lng: number; id?: string }) => void;
   onMapPressed?: (coordinates: { lat: number; lng: number }) => void;
+  onCameraIdle?: (coordinates: AmapMapCamera) => void;
+  initialCamera?: AmapMapCamera;
+  cameraTarget?: AmapMapCamera | null;
+  markerUpdatesPaused?: boolean;
   showStatus?: boolean;
+}
+
+export interface AmapMapCamera {
+  lat: number;
+  lng: number;
+  zoom?: number;
 }
 
 interface WebViewHandle {
@@ -105,7 +127,17 @@ function validMarkers(markers: AmapWebViewMarker[]): AmapWebViewMarker[] {
   }));
 }
 
-export default function AmapJsWebViewMap({ markers, onMarkerPressed, onClusterPressed, onMapPressed, showStatus = true }: Props) {
+export default function AmapJsWebViewMap({
+  markers,
+  onMarkerPressed,
+  onClusterPressed,
+  onMapPressed,
+  onCameraIdle,
+  initialCamera,
+  cameraTarget,
+  markerUpdatesPaused = false,
+  showStatus = true,
+}: Props) {
   const webViewRef = useRef<WebViewHandle | null>(null);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState('正在加载本地地图 Runtime…');
@@ -117,14 +149,32 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, onClusterPr
   );
   const injectedRuntimeScript = useMemo(() => extractRuntimeScript(html), [html]);
   const safeMarkers = useMemo(() => validMarkers(markers), [markers]);
+  const initialCameraKey = useMemo(() => JSON.stringify(initialCamera ?? null), [initialCamera]);
+  const cameraTargetKey = useMemo(() => JSON.stringify(cameraTarget ?? null), [cameraTarget]);
+  const initialCameraApplied = useRef(false);
 
   const sendMarkers = useCallback(() => {
     post(webViewRef.current, { type: 'setMarkers', markers: safeMarkers });
   }, [safeMarkers]);
 
   useEffect(() => {
-    if (ready) sendMarkers();
-  }, [ready, sendMarkers]);
+    if (ready && !markerUpdatesPaused) sendMarkers();
+  }, [ready, markerUpdatesPaused, sendMarkers]);
+
+  useEffect(() => {
+    if (!ready) {
+      initialCameraApplied.current = false;
+      return;
+    }
+    if (!initialCamera || initialCameraApplied.current) return;
+    initialCameraApplied.current = true;
+    post(webViewRef.current, { type: 'setCamera', ...initialCamera });
+  }, [ready, initialCameraKey, initialCamera]);
+
+  useEffect(() => {
+    if (!ready || !cameraTarget) return;
+    post(webViewRef.current, { type: 'setCamera', ...cameraTarget });
+  }, [ready, cameraTargetKey]);
 
   useEffect(() => () => {
     post(webViewRef.current, { type: 'clearSensitiveData' });
@@ -173,7 +223,8 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, onClusterPr
       setStatus(`已选择地图坐标：${message.lat.toFixed(5)}, ${message.lng.toFixed(5)}。`);
       onMapPressed?.({ lat: message.lat, lng: message.lng });
     } else if (message.type === 'cameraIdle') {
-      setStatus(`地图已停稳：${safeMarkers.length} 个地点。`);
+      setStatus(`地图已停稳：${message.lat.toFixed(5)}, ${message.lng.toFixed(5)}。`);
+      onCameraIdle?.({ lat: message.lat, lng: message.lng, zoom: message.zoom });
     } else if (message.type === 'error') {
       setReady(false);
       setStatus(`地图错误：${message.message}`);

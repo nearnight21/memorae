@@ -1,4 +1,5 @@
-import { useWindowDimensions, Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useWindowDimensions, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { androidTopInset } from '../ui/layout';
 
 export type AuthEntryPhase = 'booting' | 'account' | 'locked' | 'setup';
 
@@ -106,7 +107,7 @@ export default function AuthEntryScreen({
   const { height } = useWindowDimensions();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           contentContainerStyle={[styles.page, { minHeight: Math.max(844, height) }]}
@@ -194,7 +195,7 @@ export default function AuthEntryScreen({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -217,7 +218,7 @@ function PrimaryButton({ label, busy, onPress }: { label: string; busy: boolean;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f2f0e8' },
+  safeArea: { flex: 1, paddingTop: androidTopInset(), backgroundColor: '#f2f0e8' },
   root: { flex: 1 },
   page: { width: '100%', alignItems: 'center', position: 'relative', paddingTop: 34, paddingBottom: 34, overflow: 'hidden' },
   mapCanvas: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },

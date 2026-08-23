@@ -18,6 +18,7 @@ export interface CipherSyncStorage {
   saveMemory(memory: EncryptedMemoryV1): Promise<void>;
   savePhoto(photo: EncryptedPhotoV1): Promise<void>;
   saveCachedPhoto?(photo: EncryptedPhotoV1): Promise<void>;
+  deletePhotoVariants?(id: string): Promise<void>;
 }
 
 export interface DownloadCiphertextOptions {
@@ -26,6 +27,7 @@ export interface DownloadCiphertextOptions {
   decryptMemory?: (memory: EncryptedMemoryV1) => Promise<{ photos: Array<{ id: string }> }>;
   onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void;
   onMemoriesStored?: (count: number) => void | Promise<void>;
+  onPhotoStored?: (photo: EncryptedPhotoV1) => void | Promise<void>;
 }
 
 export interface CipherSyncDiagnostics {
@@ -166,6 +168,22 @@ export async function downloadCiphertext(
   });
   diagnostics.acceptedEncryptedCount = acceptedMemories.length;
   const photoIds = new Set<string>();
+  const localPhotoIdsByMemory = new Map<string, string[]>();
+  const retainedPhotoIds = new Set<string>();
+  const acceptedIds = new Set(acceptedMemories.map((memory) => memory.id));
+  for (const localMemory of localMemories.values()) {
+    if (localMemory.deleted) continue;
+    try {
+      const localValue = await options.decryptMemory(localMemory);
+      localPhotoIdsByMemory.set(localMemory.id, localValue.photos.map((photo) => photo.id));
+      if (!acceptedIds.has(localMemory.id)) {
+        for (const photo of localValue.photos) retainedPhotoIds.add(photo.id);
+      }
+    } catch {
+      // Unknown local references are retained conservatively below.
+    }
+  }
+  const acceptedPhotoIdsByMemory = new Map<string, string[]>();
   for (const encryptedMemory of acceptedMemories) {
     if (encryptedMemory.deleted) continue;
     let memory: { photos: Array<{ id: string }>; location?: { lat?: number; lng?: number } | null };
@@ -177,6 +195,8 @@ export async function downloadCiphertext(
       if (!diagnostics.decryptErrorTypes.includes(errorType)) diagnostics.decryptErrorTypes.push(errorType);
       continue;
     }
+    acceptedPhotoIdsByMemory.set(encryptedMemory.id, memory.photos.map((photo) => photo.id));
+    for (const photo of memory.photos) retainedPhotoIds.add(photo.id);
     diagnostics.decryptSuccessCount += 1;
     if (memory.location) {
       diagnostics.withLocationCount += 1;
@@ -185,6 +205,20 @@ export async function downloadCiphertext(
       }
     }
     for (const photo of memory.photos) photoIds.add(photo.id);
+  }
+
+  // Remove local photo ciphertext only after an accepted edit/delete no longer
+  // references it. Unknown/decryption-failed records are retained safely.
+  if (options.storage.deletePhotoVariants) {
+    for (const encryptedMemory of acceptedMemories) {
+      const oldPhotoIds = localPhotoIdsByMemory.get(encryptedMemory.id) ?? [];
+      if (!acceptedPhotoIdsByMemory.has(encryptedMemory.id) && !encryptedMemory.deleted) continue;
+      const nextPhotoIds = acceptedPhotoIdsByMemory.get(encryptedMemory.id) ?? [];
+      for (const photoId of oldPhotoIds) {
+        if (nextPhotoIds.includes(photoId) || retainedPhotoIds.has(photoId)) continue;
+        await options.storage.deletePhotoVariants(photoId);
+      }
+    }
   }
 
   // Persist memory ciphertext before fetching optional photo objects. A slow or
@@ -200,16 +234,21 @@ export async function downloadCiphertext(
       try {
         const photo = await options.client.getPhotoVariant(photoId, kind);
         await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(photo);
+        await options.onPhotoStored?.(photo);
         downloadedPhotos += 1;
       } catch (error) {
         if (!(error instanceof PhotoVariantNotFoundError)) throw error;
       }
     }
     try {
-      await options.storage.savePhoto(await options.client.getPhotoVariant(photoId, 'original'));
+      const original = await options.client.getPhotoVariant(photoId, 'original');
+      await options.storage.savePhoto(original);
+      await options.onPhotoStored?.(original);
     } catch (error) {
       if (!(error instanceof PhotoVariantNotFoundError)) throw error;
-      await options.storage.savePhoto(await options.client.getPhoto(photoId));
+      const original = await options.client.getPhoto(photoId);
+      await options.storage.savePhoto(original);
+      await options.onPhotoStored?.(original);
     }
     downloadedPhotos += 1;
   }
