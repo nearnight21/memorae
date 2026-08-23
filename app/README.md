@@ -5,6 +5,9 @@
 > 开始开发或评估前，请先阅读
 > [根目录开发交接文档](../DEVELOPMENT.md)。该文档是跨设备、跨 Agent 交接时的唯一事实来源。
 
+如果不清楚当前 App 做到了哪一步，先看
+[功能状态与验收](docs/APP-STATUS-AND-ACCEPTANCE.md)。它把“代码已实现”和“真机已验收”分开记录。
+
 ## 当前验证范围
 
 - Android 原生 Argon2id（64 MiB、3 次迭代、并行度 1）。
