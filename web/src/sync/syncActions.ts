@@ -161,8 +161,12 @@ export async function downloadCiphertext(
   if (options.decryptMemory && options.downloadPhotos !== false) {
     for (const encryptedMemory of acceptedMemories) {
       if (encryptedMemory.deleted) continue;
-      const memory = await options.decryptMemory(encryptedMemory);
-      for (const photo of memory.photos) photoIds.add(photo.id);
+      try {
+        const memory = await options.decryptMemory(encryptedMemory);
+        for (const photo of memory.photos) photoIds.add(photo.id);
+      } catch {
+        // A single incompatible record must not hide other valid records.
+      }
     }
   }
 

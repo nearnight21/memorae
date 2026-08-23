@@ -117,6 +117,36 @@ test('同版本分叉只跳过冲突记录，其他远端记忆仍可恢复', as
   assert.deepEqual(result.conflictIds, ['memory-conflict']);
 });
 
+test('单条记忆解密失败时仍保存其他远端记忆', async () => {
+  const saved: string[] = [];
+  const broken = { ...memory, id: 'memory-broken' };
+  const valid = { ...memory, id: 'memory-valid' };
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [],
+    listPhotos: async () => [],
+    saveMemory: async (item) => { saved.push(item.id); },
+    savePhoto: async () => undefined,
+  };
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    listMemories: async (): Promise<EncryptedMemoryV1[]> => [broken, valid],
+  } as MemoryRecallSyncClient;
+
+  const result = await downloadCiphertext({
+    client,
+    storage,
+    decryptMemory: async (item) => {
+      if (item.id === broken.id) throw new Error('incompatible memory');
+      return { photos: [] };
+    },
+  });
+
+  assert.deepEqual(saved, ['memory-broken', 'memory-valid']);
+  assert.equal(result.memories, 2);
+});
+
 test('上传时 HTTP 409 只记录冲突，不阻断其他记录', async () => {
   const uploaded: string[] = [];
   const client = {

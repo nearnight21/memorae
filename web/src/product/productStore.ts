@@ -177,7 +177,13 @@ export async function loadProductMemories(session: VaultSessionV1): Promise<Memo
   const visible: Memory[] = [];
   for (const encrypted of encryptedMemories) {
     if (encrypted.deleted) continue;
-    const result = await decryptMemoryV2(session, encrypted);
+    let result: Awaited<ReturnType<typeof decryptMemoryV2>>;
+    try {
+      result = await decryptMemoryV2(session, encrypted);
+    } catch {
+      // Keep one incompatible record from hiding all other local memories.
+      continue;
+    }
     if (result.migrated) {
       await saveEncryptedMemory(await encryptMemoryV2(session, result.memory, encrypted.version + 1));
     }
@@ -193,7 +199,13 @@ export async function loadProductLocations(session: VaultSessionV1): Promise<Mem
   const visible: Memory[] = [];
   for (const encrypted of encryptedMemories) {
     if (encrypted.deleted) continue;
-    const result = await decryptMemoryV2(session, encrypted);
+    let result: Awaited<ReturnType<typeof decryptMemoryV2>>;
+    try {
+      result = await decryptMemoryV2(session, encrypted);
+    } catch {
+      // Location-only rendering follows the same per-record recovery rule.
+      continue;
+    }
     visible.push(toDisplayMemory(result.memory, []));
   }
   return visible.sort((left, right) => right.date.localeCompare(left.date));
