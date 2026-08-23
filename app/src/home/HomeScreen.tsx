@@ -55,7 +55,9 @@ export default function HomeScreen({
         {(loading || status || (memories.length === 0 && !loading)) && (
           <View pointerEvents="none" style={styles.messageSlot}>
             {loading && <ActivityIndicator size="small" color="#b5814b" />}
-            <Text style={styles.message}>{loading ? '正在整理加密记忆…' : memories.length === 0 ? '还没有带地点的记忆' : status}</Text>
+            <Text style={styles.message}>
+              {loading ? '正在整理加密记忆…' : status ?? (memories.length === 0 ? '还没有带地点的记忆' : '')}
+            </Text>
           </View>
         )}
         <View pointerEvents="box-none" style={styles.bottomArea}>

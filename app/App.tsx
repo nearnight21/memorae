@@ -43,7 +43,11 @@ import {
   unlockWithDevice,
 } from './src/services/deviceUnlock';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
-import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
+import {
+  downloadCiphertext,
+  uploadCiphertext,
+  type CipherSyncDiagnostics,
+} from './src/sync/syncActions';
 import { loginSyncSession, MemoryRecallSyncClient, SyncRequestError } from './src/sync/syncClient';
 import AuthEntryScreen, { type AuthEntryPhase } from './src/auth/AuthEntryScreen';
 import {
@@ -101,6 +105,17 @@ const cipherSyncStorage = {
   savePhoto: saveEncryptedPhoto,
 };
 
+function memoryDiagnosticErrorType(error: unknown): string {
+  return error instanceof Error && error.constructor.name ? error.constructor.name : 'UnknownError';
+}
+
+function logMemoryDiagnostics(
+  stage: string,
+  values: object,
+): void {
+  console.warn('[memory-diagnostics]', JSON.stringify({ stage, ...values }));
+}
+
 export default function App() {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
@@ -135,6 +150,7 @@ export default function App() {
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [showPrivatePassword, setShowPrivatePassword] = useState(false);
   const [authError, setAuthError] = useState('');
+  let latestLocalDiagnostics = '';
 
   const stateLabel = useMemo(() => ({
     loading: '启动中',
@@ -254,7 +270,54 @@ export default function App() {
     );
     setMemories(snapshot.memories);
     setThumbnailRefs(await loadThumbnailRefs(snapshot.memories, activeSession));
+    const withLocationCount = snapshot.memories.filter((memory) => memory.location !== null).length;
+    const withValidCoordsCount = snapshot.memories.filter((memory) => (
+      memory.location !== null
+      && Number.isFinite(memory.location.lat)
+      && Number.isFinite(memory.location.lng)
+    )).length;
+    const mapDtoCount = memoriesToMapMarkers(snapshot.memories).length;
+    logMemoryDiagnostics('local-decrypt', {
+      localDecryptedCount: snapshot.memories.length,
+      decryptFailedCount: snapshot.decryptFailedCount,
+      decryptErrorTypes: snapshot.decryptErrorTypes,
+      withLocationCount,
+      withValidCoordsCount,
+      mapDtoCount,
+      migratedCount: snapshot.migratedCount,
+    });
+    latestLocalDiagnostics = `本机解密 ${snapshot.memories.length}，解密失败 ${snapshot.decryptFailedCount}，地点 ${withLocationCount}，有效坐标 ${withValidCoordsCount}，地图 DTO ${mapDtoCount}`;
     return snapshot.migratedCount;
+  }
+
+  async function downloadAccountMemories(
+    activeSession: VaultSessionV1,
+    onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void,
+    onMemoriesStored?: (count: number) => void | Promise<void>,
+  ): Promise<number> {
+    if (!accountSession) return 0;
+    const download = downloadCiphertext({
+      client: new MemoryRecallSyncClient({
+        baseUrl: AUTH_API_URL,
+        token: accountSession.accessToken,
+      }),
+      storage: cipherSyncStorage,
+      onDiagnostics: (diagnostics: CipherSyncDiagnostics) => {
+        logMemoryDiagnostics('remote-sync', diagnostics);
+        onDiagnostics?.(diagnostics);
+      },
+      onMemoriesStored,
+      decryptMemory: async (memory) => (await decryptMemoryV2(
+        nativeCryptoPrimitives,
+        activeSession,
+        memory,
+      )).memory,
+    });
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('远端记忆同步超时，已先显示本机已有记忆。')), 20_000);
+    });
+    const result = await Promise.race([download, timeout]);
+    return result.requiresUnlock || result.importedVault ? 0 : result.memories;
   }
 
   async function loadThumbnailRefs(
@@ -283,8 +346,31 @@ export default function App() {
     setSession(activeSession);
     setMode('unlocked');
     setPassword('');
-    const migratedCount = await refreshMemories(activeSession);
-    setStatus(migratedCount > 0 ? `${message} 已将 ${migratedCount} 条旧记忆升级为 MemoryV2。` : message);
+    let downloadedCount = 0;
+    const remoteDiagnosticsRef = { current: null as CipherSyncDiagnostics | null };
+    let syncWarning = '';
+    let refreshedAfterRemoteStore = false;
+    let migratedCount = 0;
+    try {
+      downloadedCount = await downloadAccountMemories(activeSession, (diagnostics) => {
+        remoteDiagnosticsRef.current = diagnostics;
+      }, async () => {
+        refreshedAfterRemoteStore = true;
+        migratedCount = await refreshMemories(activeSession);
+      });
+    } catch (error) {
+      logMemoryDiagnostics('remote-sync-error', { errorType: memoryDiagnosticErrorType(error) });
+      syncWarning = ` 远端记忆暂时未同步：${errorMessage(error)}`;
+    }
+    if (!refreshedAfterRemoteStore) migratedCount = await refreshMemories(activeSession);
+    const details = [
+      downloadedCount > 0 ? `已同步 ${downloadedCount} 条远端记忆` : '',
+      migratedCount > 0 ? `已将 ${migratedCount} 条旧记忆升级为 MemoryV2` : '',
+    ].filter(Boolean).join('，');
+    const diagnosticSummary = remoteDiagnosticsRef.current
+      ? `诊断：远端 ${remoteDiagnosticsRef.current.remoteEncryptedCount}，下载 ${remoteDiagnosticsRef.current.storedEncryptedCount}，解密成功 ${remoteDiagnosticsRef.current.decryptSuccessCount}，解密失败 ${remoteDiagnosticsRef.current.decryptFailedCount}，远端地点 ${remoteDiagnosticsRef.current.withLocationCount}，远端有效坐标 ${remoteDiagnosticsRef.current.withValidCoordsCount}；${latestLocalDiagnostics}`
+      : `诊断：远端同步未返回数量；${latestLocalDiagnostics}`;
+    setStatus(`${message}${details ? ` ${details}。` : ''}${syncWarning} ${diagnosticSummary}`);
   }
 
   function lock(): void {
@@ -714,7 +800,7 @@ export default function App() {
         memories={memories}
         selectedYear={selectedYear}
         loading={busy && memories.length === 0}
-        status={busy ? status : undefined}
+        status={status}
         onYearChange={setSelectedYear}
         onRegionPress={() => setStatus('地区选择入口已保留，当前地区：浙江 · 宁波。')}
         onMarkerPressed={handleMarkerPressed}

@@ -117,6 +117,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             scale: Number.isFinite(value.scale) ? value.scale : undefined,
           }));
           render();
+          post({ type: 'markersApplied', count: window.__MEMORY_MARKERS__.length });
         } else if (message.type === 'setSelected' && (message.id === null || typeof message.id === 'string')) {
           selectedId = message.id;
           render();

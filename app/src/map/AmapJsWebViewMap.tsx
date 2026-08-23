@@ -19,6 +19,7 @@ export interface AmapWebViewMarker {
 type RuntimeEvent =
   | { type: 'runtimeStarted' }
   | { type: 'ready' }
+  | { type: 'markersApplied'; count: number }
   | { type: 'markerPressed'; id: string }
   | { type: 'clusterPressed'; id?: string; lat: number; lng: number }
   | { type: 'mapPressed'; lat: number; lng: number }
@@ -30,6 +31,9 @@ function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
   const message = value as Record<string, unknown>;
   if (message.type === 'runtimeStarted' || message.type === 'ready' || message.type === 'cameraIdle') {
     return { type: message.type };
+  }
+  if (message.type === 'markersApplied' && typeof message.count === 'number' && Number.isFinite(message.count)) {
+    return { type: message.type, count: Math.max(0, Math.floor(message.count)) };
   }
   if (message.type === 'markerPressed' && typeof message.id === 'string') {
     return { type: message.type, id: message.id };
@@ -150,6 +154,15 @@ export default function AmapJsWebViewMap({ markers, onMarkerPressed, onClusterPr
     } else if (message.type === 'ready') {
       setReady(true);
       setStatus(`地图已就绪：${safeMarkers.length} 个地点。`);
+      console.warn('[memory-diagnostics]', JSON.stringify({
+        stage: 'webview-ready',
+        mapDtoCount: safeMarkers.length,
+      }));
+    } else if (message.type === 'markersApplied') {
+      console.warn('[memory-diagnostics]', JSON.stringify({
+        stage: 'webview-marker-bridge',
+        webViewMarkerCount: message.count,
+      }));
     } else if (message.type === 'markerPressed') {
       setSelectedId(message.id);
       post(webViewRef.current, { type: 'setSelected', id: message.id });

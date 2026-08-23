@@ -24,6 +24,19 @@ export interface DownloadCiphertextOptions {
   client: MemoryRecallSyncClient;
   storage: CipherSyncStorage;
   decryptMemory?: (memory: EncryptedMemoryV1) => Promise<{ photos: Array<{ id: string }> }>;
+  onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void;
+  onMemoriesStored?: (count: number) => void | Promise<void>;
+}
+
+export interface CipherSyncDiagnostics {
+  remoteEncryptedCount: number;
+  acceptedEncryptedCount: number;
+  storedEncryptedCount: number;
+  decryptSuccessCount: number;
+  decryptFailedCount: number;
+  decryptErrorTypes: string[];
+  withLocationCount: number;
+  withValidCoordsCount: number;
 }
 
 export interface CipherSyncResult {
@@ -91,6 +104,20 @@ export async function uploadCiphertext(
 export async function downloadCiphertext(
   options: DownloadCiphertextOptions,
 ): Promise<CipherSyncResult> {
+  const diagnostics: CipherSyncDiagnostics = {
+    remoteEncryptedCount: 0,
+    acceptedEncryptedCount: 0,
+    storedEncryptedCount: 0,
+    decryptSuccessCount: 0,
+    decryptFailedCount: 0,
+    decryptErrorTypes: [],
+    withLocationCount: 0,
+    withValidCoordsCount: 0,
+  };
+  const reportDiagnostics = () => options.onDiagnostics?.({
+    ...diagnostics,
+    decryptErrorTypes: [...diagnostics.decryptErrorTypes],
+  });
   const remoteVault = await options.client.getVault();
   const localVault = await options.storage.getVault();
 
@@ -106,6 +133,7 @@ export async function downloadCiphertext(
   }
 
   const memories = await options.client.listMemories();
+  diagnostics.remoteEncryptedCount = memories.length;
   const localMemories = new Map(
     (await options.storage.listMemories()).map((memory) => [memory.id, memory]),
   );
@@ -121,12 +149,35 @@ export async function downloadCiphertext(
     }
     return true;
   });
+  diagnostics.acceptedEncryptedCount = acceptedMemories.length;
   const photoIds = new Set<string>();
   for (const encryptedMemory of acceptedMemories) {
     if (encryptedMemory.deleted) continue;
-    const memory = await options.decryptMemory(encryptedMemory);
+    let memory: { photos: Array<{ id: string }>; location?: { lat?: number; lng?: number } | null };
+    try {
+      memory = await options.decryptMemory(encryptedMemory);
+    } catch (error) {
+      diagnostics.decryptFailedCount += 1;
+      const errorType = error instanceof Error && error.constructor.name ? error.constructor.name : 'UnknownError';
+      if (!diagnostics.decryptErrorTypes.includes(errorType)) diagnostics.decryptErrorTypes.push(errorType);
+      continue;
+    }
+    diagnostics.decryptSuccessCount += 1;
+    if (memory.location) {
+      diagnostics.withLocationCount += 1;
+      if (Number.isFinite(memory.location.lat) && Number.isFinite(memory.location.lng)) {
+        diagnostics.withValidCoordsCount += 1;
+      }
+    }
     for (const photo of memory.photos) photoIds.add(photo.id);
   }
+
+  // Persist memory ciphertext before fetching optional photo objects. A slow or
+  // missing photo must not hide an otherwise valid memory from the Home map.
+  for (const memory of acceptedMemories) await options.storage.saveMemory(memory);
+  diagnostics.storedEncryptedCount = acceptedMemories.length;
+  reportDiagnostics();
+  await options.onMemoriesStored?.(acceptedMemories.length);
 
   let downloadedPhotos = 0;
   for (const photoId of photoIds) {
@@ -147,8 +198,6 @@ export async function downloadCiphertext(
     }
     downloadedPhotos += 1;
   }
-  for (const memory of acceptedMemories) await options.storage.saveMemory(memory);
-
   return {
     memories: memories.length,
     photos: downloadedPhotos,
