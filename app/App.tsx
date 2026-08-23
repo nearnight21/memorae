@@ -7,6 +7,7 @@ import {
   Button,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -43,10 +44,19 @@ import {
 } from './src/services/deviceUnlock';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import { downloadCiphertext, uploadCiphertext } from './src/sync/syncActions';
-import { loginSyncSession, MemoryRecallSyncClient } from './src/sync/syncClient';
+import { loginSyncSession, MemoryRecallSyncClient, SyncRequestError } from './src/sync/syncClient';
+import AuthEntryScreen, { type AuthEntryPhase } from './src/auth/AuthEntryScreen';
+import {
+  clearStoredAccountSession,
+  getStoredAccountSession,
+  isAccountSessionActive,
+  saveStoredAccountSession,
+  type MobileAccountSession,
+} from './src/auth/accountSession';
 import AmapJsWebViewMap from './src/map/AmapJsWebViewMap';
-import { findMemoryForMarker, memoriesToMapMarkers } from './src/map/memoryMapAdapter';
+import { findMemoryForMarker, memoriesToMapMarkers, type MemoryThumbnailRefs } from './src/map/memoryMapAdapter';
 import { loadDecryptedMemories } from './src/memory/memoryStore';
+import HomeScreen from './src/home/HomeScreen';
 import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
@@ -68,10 +78,11 @@ interface PendingPhoto {
   height: number;
 }
 
-type Mode = 'loading' | 'setup' | 'locked' | 'unlocked';
+type Mode = 'loading' | 'account' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
+const AUTH_API_URL = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
 
 function todayValue(): string {
   return new Date().toISOString().slice(0, 10);
@@ -95,6 +106,9 @@ export default function App() {
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
   const [memories, setMemories] = useState<MemoryV2[]>([]);
+  const [thumbnailRefs, setThumbnailRefs] = useState<MemoryThumbnailRefs>({});
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
+  const [composerVisible, setComposerVisible] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
@@ -115,31 +129,110 @@ export default function App() {
   const [syncSessionExpiresAt, setSyncSessionExpiresAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('正在检查本地密文库……');
+  const [accountSession, setAccountSession] = useState<MobileAccountSession | null>(null);
+  const [accountLoginName, setAccountLoginName] = useState('');
+  const [accountLoginPassword, setAccountLoginPassword] = useState('');
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [showPrivatePassword, setShowPrivatePassword] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   const stateLabel = useMemo(() => ({
     loading: '启动中',
+    account: '账号登录',
     setup: '未创建',
     locked: '已锁定',
     unlocked: '已解锁',
   })[mode], [mode]);
 
-  const mapMarkers = useMemo(() => memoriesToMapMarkers(memories), [memories]);
+  const visibleMemories = useMemo(
+    () => selectedYear ? memories.filter((memory) => memory.date.startsWith(`${selectedYear}-`)) : memories,
+    [memories, selectedYear],
+  );
+  const mapMarkers = useMemo(
+    () => memoriesToMapMarkers(visibleMemories, thumbnailRefs),
+    [thumbnailRefs, visibleMemories],
+  );
 
   useEffect(() => {
     void (async () => {
       try {
         await initializeStorage();
-        const storedVault = await getVaultEnvelope();
+        const [storedVault, storedAccount] = await Promise.all([
+          getVaultEnvelope(),
+          getStoredAccountSession(),
+        ]);
         setVault(storedVault);
         setDeviceUnlockEnabled(await hasDeviceUnlock());
-        setMode(storedVault ? 'locked' : 'setup');
-        setStatus(storedVault ? '找到本机密文，等待解锁。' : '本机还没有私密空间。');
+        if (!storedAccount || !isAccountSessionActive(storedAccount)) {
+          if (storedAccount) await clearStoredAccountSession();
+          setMode('account');
+          setStatus('等待账号登录。');
+          return;
+        }
+        setAccountSession(storedAccount);
+        let remoteVault: VaultEnvelopeV1 | null = null;
+        try {
+          remoteVault = await readRemoteVault(storedAccount);
+        } catch (remoteError) {
+          if (remoteError instanceof SyncRequestError && remoteError.status === 401) {
+            await clearStoredAccountSession();
+            setAccountSession(null);
+            setMode('account');
+            setStatus('账号会话已过期，请重新登录。');
+            return;
+          }
+          // 网络暂时不可用时保留本机 Envelope，允许离线解锁。
+        }
+        if (remoteVault) {
+          setVault(remoteVault);
+          await saveVaultEnvelope(remoteVault);
+          setMode('locked');
+          setStatus('账号已登录，等待解锁私密空间。');
+        } else if (storedVault) {
+          setMode('locked');
+          setStatus('账号已登录，等待解锁私密空间。');
+        } else {
+          setMode('setup');
+          setStatus('账号已登录，请建立私密空间。');
+        }
       } catch (error) {
         setStatus(`启动失败：${errorMessage(error)}`);
-        setMode('setup');
+        setMode('account');
       }
     })();
   }, []);
+
+  async function readRemoteVault(activeAccount: MobileAccountSession): Promise<VaultEnvelopeV1 | null> {
+    try {
+      return await new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: activeAccount.accessToken }).getVault();
+    } catch (error) {
+      if (error instanceof SyncRequestError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async function submitAccountLogin(): Promise<void> {
+    if (accountLoginName.trim().length < 3) throw new Error('请输入账号。');
+    if (accountLoginPassword.length < 8) throw new Error('账号密码至少需要 8 个字符。');
+    const login = await loginSyncSession(AUTH_API_URL, {
+      loginName: accountLoginName.trim(),
+      password: accountLoginPassword,
+      deviceId: 'android-mobile',
+    });
+    const remoteVault = await readRemoteVault(login);
+    await saveStoredAccountSession(login);
+    setAccountSession(login);
+    setAccountLoginPassword('');
+    setAuthError('');
+    if (remoteVault) {
+      await saveVaultEnvelope(remoteVault);
+      setVault(remoteVault);
+      setMode('locked');
+    } else {
+      setVault(null);
+      setMode('setup');
+    }
+  }
 
   async function runTask(task: () => Promise<void>): Promise<void> {
     if (busy) return;
@@ -160,7 +253,30 @@ export default function App() {
       cipherSyncStorage,
     );
     setMemories(snapshot.memories);
+    setThumbnailRefs(await loadThumbnailRefs(snapshot.memories, activeSession));
     return snapshot.migratedCount;
+  }
+
+  async function loadThumbnailRefs(
+    values: readonly MemoryV2[],
+    activeSession: VaultSessionV1,
+  ): Promise<MemoryThumbnailRefs> {
+    const entries = await Promise.all(values.map(async (memory) => {
+      const refs: string[] = [];
+      for (const photoRef of memory.photos.slice(0, 3)) {
+        try {
+          const encrypted = await getEncryptedPhoto(photoRef.id, 'thumbnail');
+          if (!encrypted) continue;
+          const photo = await decryptPhoto(nativeCryptoPrimitives, activeSession, encrypted);
+          refs.push(`data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`);
+          photo.bytes.fill(0);
+        } catch {
+          // A missing thumbnail is rendered as a location anchor; the memory remains usable.
+        }
+      }
+      return [memory.id, refs] as const;
+    }));
+    return Object.fromEntries(entries);
   }
 
   async function finishUnlock(activeSession: VaultSessionV1, message: string): Promise<void> {
@@ -175,6 +291,8 @@ export default function App() {
     if (session) destroyVaultSession(session);
     setSession(null);
     setMemories([]);
+    setThumbnailRefs({});
+    setSelectedYear(null);
     setSelectedMemory(null);
     setPreviewUri(null);
     setPendingPhoto(null);
@@ -185,7 +303,7 @@ export default function App() {
 
   async function createPrivateSpace(): Promise<void> {
     if (password.length < 8) {
-      throw new Error('测试密码至少输入 8 个字符。');
+      throw new Error('私密空间密码至少需要 8 个字符。');
     }
     if (password !== passwordConfirmation) {
       throw new Error('两次输入的密码不一致。');
@@ -194,6 +312,9 @@ export default function App() {
     const startedAt = performance.now();
     const created = await createVault(nativeCryptoPrimitives, password);
     await saveVaultEnvelope(created.envelope);
+    if (accountSession) {
+      await new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }).putVault(created.envelope);
+    }
     setVault(created.envelope);
     setPasswordConfirmation('');
     await finishUnlock(
@@ -385,10 +506,27 @@ export default function App() {
     if (memory.photos.length > 0) await showPhoto(memory);
   }
 
+  async function submitAuthEntry(): Promise<void> {
+    setAuthError('');
+    try {
+      if (mode === 'account') await submitAccountLogin();
+      else if (mode === 'setup') await createPrivateSpace();
+      else if (mode === 'locked') await unlockWithPassword();
+    } catch (error) {
+      setAuthError(errorMessage(error));
+      throw error;
+    }
+  }
+
   function handleMarkerPressed(id: string): void {
     const memory = findMemoryForMarker(memories, id);
     if (!memory) {
       setStatus(`地图返回了未知地点：${id}`);
+      return;
+    }
+    const memoryLocation = memory.location;
+    if (!memoryLocation) {
+      setStatus('这条记忆没有可用的地图坐标。');
       return;
     }
     void runTask(() => openMemory(memory));
@@ -409,6 +547,8 @@ export default function App() {
     setVault(bundle.vault);
     setSession(null);
     setMemories([]);
+    setThumbnailRefs({});
+    setSelectedYear(null);
     setSelectedMemory(null);
     setPreviewUri(null);
     setDeviceUnlockEnabled(false);
@@ -519,6 +659,8 @@ export default function App() {
             setVault(null);
             setSession(null);
             setMemories([]);
+            setThumbnailRefs({});
+            setSelectedYear(null);
             setSelectedMemory(null);
             setPreviewUri(null);
             setDeviceUnlockEnabled(false);
@@ -530,234 +672,89 @@ export default function App() {
     );
   }
 
+  if (mode !== 'unlocked') {
+    const authPhase: AuthEntryPhase = mode === 'loading'
+      ? 'booting'
+      : mode === 'account'
+        ? 'account'
+        : mode === 'locked'
+          ? 'locked'
+          : 'setup';
+    return (
+      <>
+        <StatusBar style="dark" />
+        <AuthEntryScreen
+          phase={authPhase}
+          accountValue={accountLoginName}
+          accountPassword={accountLoginPassword}
+          privatePassword={password}
+          privatePasswordConfirmation={passwordConfirmation}
+          showAccountPassword={showAccountPassword}
+          showPrivatePassword={showPrivatePassword}
+          error={authError}
+          busy={busy}
+          onAccountChange={setAccountLoginName}
+          onAccountPasswordChange={setAccountLoginPassword}
+          onPrivatePasswordChange={setPassword}
+          onPrivatePasswordConfirmationChange={setPasswordConfirmation}
+          onToggleAccountPassword={() => setShowAccountPassword((value) => !value)}
+          onTogglePrivatePassword={() => setShowPrivatePassword((value) => !value)}
+          onTogglePrivatePasswordConfirmation={() => setShowPrivatePassword((value) => !value)}
+          onSubmit={() => void runTask(submitAuthEntry)}
+        />
+      </>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.homeRoot}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>VMK V1 · ANDROID TEST</Text>
-            <Text style={styles.heading}>所忆</Text>
-          </View>
-          <Text style={styles.state}>{stateLabel}</Text>
-        </View>
-
-        <View style={styles.statusBox}>
-          <Text style={styles.statusText}>{busy ? '处理中… ' : ''}{status}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>跨端兼容</Text>
-          <Text style={styles.hint}>运行真实 Android 原生 Argon2id，并解开网页端生成的固定 VMK、文字和照片。</Text>
-          <Button title="运行兼容与性能测试" disabled={busy} onPress={() => void runTask(runCompatibility)} />
-        </View>
-
-        {mode !== 'loading' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>本地密文同步</Text>
-            <Text style={styles.hint}>登录密码和短期令牌只保留在当前页面内存中，与私密空间密码完全分离。</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="本地服务地址"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={syncUrl}
-              onChangeText={setSyncUrl}
-            />
-            {syncAuthMode === 'account' ? (
-              syncToken ? (
-                <>
-                  <Text style={styles.hint}>受邀请账号已登录{syncSessionExpiresAt ? `，有效至 ${new Date(syncSessionExpiresAt).toLocaleString()}` : ''}。</Text>
-                  <Button title="退出同步账号" disabled={busy} onPress={() => void runTask(logoutFromSyncService)} />
-                </>
-              ) : (
-                <>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="受邀请账号"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={syncLoginName}
-                    onChangeText={setSyncLoginName}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="独立登录密码"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    secureTextEntry
-                    value={syncLoginPassword}
-                    onChangeText={setSyncLoginPassword}
-                  />
-                  <Button title="登录同步服务" disabled={busy} onPress={() => void runTask(loginToSyncService)} />
-                </>
-              )
-            ) : (
-              <TextInput
-                style={styles.input}
-                placeholder="本地固定访问令牌"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                value={syncToken}
-                onChangeText={setSyncToken}
-              />
-            )}
-            <View style={styles.spacer} />
-            <Button
-              title={syncAuthMode === 'account' ? '改用本地固定令牌' : '改用受邀请账号'}
-              disabled={busy}
-              onPress={() => void runTask(toggleSyncAuthMode)}
-            />
-            <View style={styles.spacer} />
-            <Button title="上传本机密文" disabled={busy || !vault || !syncToken} onPress={() => void runTask(uploadLocalCiphertext)} />
-            <View style={styles.spacer} />
-            <Button title="下载服务器密文" disabled={busy || !syncToken} onPress={() => void runTask(downloadRemoteCiphertext)} />
-          </View>
-        )}
-
-        {mode === 'loading' && <Text style={styles.centerText}>正在启动……</Text>}
-
-        {mode === 'setup' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>创建私密空间</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="私密空间密码（至少 8 个字符）"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="再次输入密码"
-              secureTextEntry
-              value={passwordConfirmation}
-              onChangeText={setPasswordConfirmation}
-            />
-            <Button title="创建并解锁" disabled={busy} onPress={() => void runTask(createPrivateSpace)} />
-            <View style={styles.spacer} />
-            <Button title="导入网页端加密备份" disabled={busy} onPress={() => void runTask(importBundle)} />
-          </View>
-        )}
-
-        {mode === 'locked' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>解锁私密空间</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="私密空间密码"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              onSubmitEditing={() => void runTask(unlockWithPassword)}
-            />
-            <Button title="密码解锁" disabled={busy} onPress={() => void runTask(unlockWithPassword)} />
-            {deviceUnlockEnabled && (
-              <>
-                <View style={styles.spacer} />
-                <Button title="使用本机指纹解锁" disabled={busy} onPress={() => void runTask(quickUnlock)} />
-              </>
-            )}
-            <View style={styles.spacer} />
-            <Button title="导入其他加密备份" disabled={busy} onPress={() => void runTask(importBundle)} />
-          </View>
-        )}
-
-        {mode === 'unlocked' && session && (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>足迹地图</Text>
-              <Text style={styles.hint}>地图只接收已解密记忆的地点坐标；正文、密文、会话密钥和照片不会进入地图 Runtime。</Text>
-              <AmapJsWebViewMap
-                markers={mapMarkers}
-                onMarkerPressed={handleMarkerPressed}
-                onMapPressed={setLocationCoordinates}
-              />
+      <HomeScreen
+        markers={mapMarkers}
+        memories={memories}
+        selectedYear={selectedYear}
+        loading={busy && memories.length === 0}
+        status={busy ? status : undefined}
+        onYearChange={setSelectedYear}
+        onRegionPress={() => setStatus('地区选择入口已保留，当前地区：浙江 · 宁波。')}
+        onMarkerPressed={handleMarkerPressed}
+        onClusterPressed={({ lat, lng }) => setStatus(`已推进地图到记忆区域：${lat.toFixed(3)}, ${lng.toFixed(3)}。`)}
+        onMapPressed={setLocationCoordinates}
+        onCreateMemory={() => setComposerVisible(true)}
+      />
+      <Modal visible={composerVisible} animationType="slide" transparent onRequestClose={() => setComposerVisible(false)}>
+        <KeyboardAvoidingView style={styles.composerBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView contentContainerStyle={styles.composer} keyboardShouldPersistTaps="handled">
+            <View style={styles.composerHeader}>
+              <Text style={styles.composerTitle}>新建记忆</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="关闭" onPress={() => setComposerVisible(false)}><Text style={styles.close}>×</Text></Pressable>
             </View>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>新建测试记忆</Text>
-              <TextInput style={styles.input} placeholder="标题" value={title} onChangeText={setTitle} />
-              <TextInput
-                style={[styles.input, styles.bodyInput]}
-                placeholder="正文"
-                multiline
-                value={body}
-                onChangeText={setBody}
-              />
-              <TextInput style={styles.input} placeholder="日期（YYYY-MM-DD）" value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
-              <TextInput style={styles.input} placeholder="地点（例如：杭州西湖）" value={location} onChangeText={setLocation} />
-              <Text style={styles.hint}>
-                {locationCoordinates
-                  ? `已选坐标：${locationCoordinates.lat.toFixed(5)}, ${locationCoordinates.lng.toFixed(5)}`
-                  : '请先在上方地图点击真实地点，再保存记忆。'}
-              </Text>
-              <TextInput style={styles.input} placeholder="标签（用逗号分隔）" value={tags} onChangeText={setTags} />
-              <Button title={pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择一张真实照片'} disabled={busy} onPress={() => void runTask(choosePhoto)} />
-              <View style={styles.spacer} />
-              <Button title="加密并保存" disabled={busy} onPress={() => void runTask(saveMemory)} />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>本机解锁</Text>
-              <Text style={styles.hint}>保存随机设备钥匙到 Android Keystore，通过它解开 VMK；不保存密码。</Text>
-              <Button
-                title={deviceUnlockEnabled ? '重新设置指纹解锁' : '启用本机指纹解锁'}
-                disabled={busy}
-                onPress={() => void runTask(rememberThisDevice)}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{selectedMemory ? '记忆详情' : `已解密记忆（${memories.length}）`}</Text>
-              {selectedMemory ? (
-                <View style={styles.readerCard}>
-                  <Text style={styles.readerDate}>{selectedMemory.date}</Text>
-                  <Text style={styles.readerTitle}>{selectedMemory.title}</Text>
-                  {selectedMemory.location && <Text style={styles.readerLocation}>⌖ {selectedMemory.location.name}</Text>}
-                  {previewUri && <Image source={{ uri: previewUri }} style={styles.readerPhoto} resizeMode="cover" />}
-                  <Text selectable style={styles.readerBody}>{selectedMemory.pastSelf || '这段记忆没有正文。'}</Text>
-                  {selectedMemory.tag && (
-                    <View style={styles.tagRow}>{selectedMemory.tag.split(' · ').map((tag) => <Text key={tag} style={styles.tag}>#{tag}</Text>)}</View>
-                  )}
-                  <Button title="返回记忆列表" onPress={() => { setSelectedMemory(null); setPreviewUri(null); }} />
-                </View>
-              ) : (
-                <>
-                  {memories.length === 0 && <Text style={styles.hint}>还没有记忆。</Text>}
-                  {memories.map((memory) => (
-                    <Pressable key={memory.id} style={({ pressed }) => [styles.memoryCard, pressed && styles.memoryCardPressed]} onPress={() => void runTask(() => openMemory(memory))}>
-                      <Text style={styles.memoryTitle}>{memory.title}</Text>
-                      <Text numberOfLines={3} style={styles.memoryBody}>{memory.pastSelf}</Text>
-                      <Text style={styles.memoryMeta}>{memory.date}{memory.location ? ` · ${memory.location.name}` : ''}</Text>
-                      <Text style={styles.readLink}>阅读完整记忆 →</Text>
-                    </Pressable>
-                  ))}
-                </>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>密文操作</Text>
-              <Button title="导出加密 JSON" disabled={busy} onPress={() => void runTask(exportBundle)} />
-              <View style={styles.spacer} />
-              <Button title="锁定并清除内存钥匙" disabled={busy} onPress={lock} />
-            </View>
-          </>
-        )}
-
-        <View style={styles.dangerSection}>
-          <Button title="清空本机原型数据" color="#9d2f2f" disabled={busy} onPress={confirmClear} />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <TextInput style={styles.input} placeholder="标题" value={title} onChangeText={setTitle} />
+            <TextInput style={[styles.input, styles.bodyInput]} placeholder="正文" multiline value={body} onChangeText={setBody} />
+            <TextInput style={styles.input} placeholder="日期（YYYY-MM-DD）" value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
+            <TextInput style={styles.input} placeholder="地点" value={location} onChangeText={setLocation} />
+            <TextInput style={styles.input} placeholder="标签（用逗号分隔）" value={tags} onChangeText={setTags} />
+            <Pressable accessibilityRole="button" onPress={() => void runTask(choosePhoto)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择照片'}</Text></Pressable>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={() => void runTask(async () => { await saveMemory(); setComposerVisible(false); })} style={[styles.saveButton, busy && styles.disabled]}><Text style={styles.saveText}>{busy ? '处理中…' : '保存加密记忆'}</Text></Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  homeRoot: { flex: 1, backgroundColor: '#e3e8e5' },
+  composerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(38,41,38,0.18)' },
+  composer: { padding: 20, paddingBottom: 28, gap: 10, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: '#f6f5f0' },
+  composerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  composerTitle: { color: '#3c403d', fontSize: 22, lineHeight: 30, fontWeight: '600' },
+  close: { color: '#7b837d', fontSize: 30, lineHeight: 30, fontWeight: '300' },
+  secondaryButton: { minHeight: 46, borderRadius: 10, borderWidth: 1, borderColor: '#c1a275', alignItems: 'center', justifyContent: 'center' },
+  secondaryText: { color: '#8f6034', fontSize: 14, fontWeight: '600' },
+  saveButton: { minHeight: 52, borderRadius: 10, backgroundColor: '#b5814b', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  saveText: { color: '#fffaf2', fontSize: 15, fontWeight: '600' },
+  disabled: { opacity: 0.55 },
   root: { flex: 1, backgroundColor: '#f3f0e8' },
   page: { padding: 18, paddingTop: 56, paddingBottom: 64, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

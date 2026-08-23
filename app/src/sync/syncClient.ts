@@ -87,13 +87,31 @@ export async function loginSyncSession(
   baseUrl: string,
   credentials: SyncLoginCredentials,
 ): Promise<SyncLoginSession> {
-  const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(credentials),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+  } catch {
+    throw new Error('暂时无法连接所忆，请检查网络后重试。');
+  }
   if (!response.ok) {
-    throw new SyncRequestError(response.status, `登录失败：HTTP ${response.status}。`);
+    let serverMessage = '';
+    try {
+      const body = await response.json() as { error?: unknown };
+      if (typeof body.error === 'string') serverMessage = body.error.trim();
+    } catch {
+      // Some gateways return an empty or non-JSON error body.
+    }
+    if (response.status === 401) {
+      throw new SyncRequestError(response.status, serverMessage || '账号或密码不正确。');
+    }
+    throw new SyncRequestError(
+      response.status,
+      serverMessage || `登录暂时不可用（HTTP ${response.status}）。`,
+    );
   }
   return response.json() as Promise<SyncLoginSession>;
 }

@@ -4,9 +4,11 @@ import App from './App';
 import MapVerticalSliceApp from './src/map/MapVerticalSliceApp';
 import AmapJsWebViewSliceApp from './src/map/AmapJsWebViewSliceApp';
 
-const RootComponent = process.env.EXPO_PUBLIC_AMAP_WEBVIEW_SLICE === '1'
+// Vertical slices remain available during development, while release/standalone
+// builds always enter the account and private-space flow.
+const RootComponent = __DEV__ && process.env.EXPO_PUBLIC_AMAP_WEBVIEW_SLICE === '1'
   ? AmapJsWebViewSliceApp
-  : process.env.EXPO_PUBLIC_AMAP_VERTICAL_SLICE === '1'
+  : __DEV__ && process.env.EXPO_PUBLIC_AMAP_VERTICAL_SLICE === '1'
   ? MapVerticalSliceApp
   : App;
 
