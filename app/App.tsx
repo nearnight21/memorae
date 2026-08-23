@@ -143,6 +143,7 @@ export default function App() {
   const [syncToken, setSyncToken] = useState('');
   const [syncSessionExpiresAt, setSyncSessionExpiresAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState('正在检查本地密文库……');
   const [accountSession, setAccountSession] = useState<MobileAccountSession | null>(null);
   const [accountLoginName, setAccountLoginName] = useState('');
@@ -570,7 +571,18 @@ export default function App() {
     setTags('');
     setPendingPhoto(null);
     await refreshMemories(session);
-    setStatus(`记忆已加密保存${photoMetric}。`);
+    if (!accountSession) {
+      setStatus(`记忆已加密保存${photoMetric}；当前没有账号会话，仅保存在本机。`);
+      return;
+    }
+    setStatus(`记忆已加密保存${photoMetric}；正在同步到云端……`);
+    try {
+      const result = await uploadAccountCiphertext();
+      setStatus(`记忆已加密保存${photoMetric}；已同步到云端（${result.memories} 条记忆密文，${result.photos} 份照片密文）。`);
+    } catch (error) {
+      logMemoryDiagnostics('upload-error', { errorType: memoryDiagnosticErrorType(error) });
+      setStatus(`记忆已加密保存${photoMetric}；本机已保存，云端同步失败：${errorMessage(error)}。可点击“同步”重试。`);
+    }
   }
 
   async function showPhoto(memory: MemoryV2): Promise<void> {
@@ -698,6 +710,30 @@ export default function App() {
     setStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
   }
 
+  async function uploadAccountCiphertext(): Promise<Awaited<ReturnType<typeof uploadCiphertext>>> {
+    if (!accountSession) throw new Error('请先登录账号。');
+    setSyncing(true);
+    try {
+      return await uploadCiphertext(
+        new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }),
+        cipherSyncStorage,
+      );
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function syncAccountCiphertext(): Promise<void> {
+    setStatus('正在同步本机加密记忆……');
+    try {
+      const result = await uploadAccountCiphertext();
+      setStatus(`云端同步完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+    } catch (error) {
+      logMemoryDiagnostics('upload-error', { errorType: memoryDiagnosticErrorType(error) });
+      throw error;
+    }
+  }
+
   async function downloadRemoteCiphertext(): Promise<void> {
     setStatus('正在从本地服务下载密文……');
     const result = await downloadCiphertext({
@@ -801,12 +837,14 @@ export default function App() {
         selectedYear={selectedYear}
         loading={busy && memories.length === 0}
         status={status}
+        syncing={syncing}
         onYearChange={setSelectedYear}
         onRegionPress={() => setStatus('地区选择入口已保留，当前地区：浙江 · 宁波。')}
         onMarkerPressed={handleMarkerPressed}
         onClusterPressed={({ lat, lng }) => setStatus(`已推进地图到记忆区域：${lat.toFixed(3)}, ${lng.toFixed(3)}。`)}
         onMapPressed={setLocationCoordinates}
         onCreateMemory={() => setComposerVisible(true)}
+        onSyncPress={accountSession ? () => void runTask(syncAccountCiphertext) : undefined}
       />
       <Modal visible={composerVisible} animationType="slide" transparent onRequestClose={() => setComposerVisible(false)}>
         <KeyboardAvoidingView style={styles.composerBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
