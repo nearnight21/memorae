@@ -215,6 +215,34 @@ test('上传本机密文时先校验同一私密空间，再上传照片和记�
   });
 });
 
+test('后台上传使用照片引用逐张读取，避免一次性加载全部原图', async () => {
+  const calls: string[] = [];
+  const photoId = 'photo-lazy';
+  const photoKind = 'original' as const;
+  const photo = { id: photoId, kind: photoKind, cryptoVersion: 1, metadata: {}, content: {} } as never;
+  const client = {
+    getVault: async () => vault,
+    putVault: async () => undefined,
+    putMemory: async () => undefined,
+    putPhotoVariant: async () => { calls.push('upload-photo'); },
+  };
+  const storage = {
+    getVault: async () => vault,
+    listMemories: async () => [],
+    listPhotos: async () => { throw new Error('must not eagerly read photo files'); },
+    listPhotoRefs: async () => [{ id: photoId, kind: photoKind }],
+    getPhoto: async (id: string, kind: string) => {
+      calls.push(`read:${id}:${kind}`);
+      return photo;
+    },
+  };
+
+  const result = await uploadCiphertext(client as never, storage as never);
+
+  assert.deepEqual(calls, ['read:photo-lazy:original', 'upload-photo']);
+  assert.equal(result.photos, 1);
+});
+
 test('上传时跳过服务器拒绝的冲突记录，但继续上传其他记忆', async () => {
   const uploaded: string[] = [];
   const client = {

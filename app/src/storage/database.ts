@@ -225,6 +225,13 @@ export async function listEncryptedPhotos(): Promise<EncryptedPhotoV1[]> {
   return Promise.all(rows.map(photoFromRow));
 }
 
+export async function listEncryptedPhotoRefs(): Promise<Array<Pick<EncryptedPhotoV1, 'id' | 'kind'>>> {
+  const database = await openDatabase();
+  return database.getAllAsync<Pick<EncryptedPhotoV1, 'id' | 'kind'>>(
+    'SELECT id, kind FROM photos ORDER BY rowid DESC',
+  );
+}
+
 export async function deleteEncryptedPhotoVariants(id: string): Promise<void> {
   const database = await openDatabase();
   const rows = await database.getAllAsync<Pick<PhotoRow, 'content_file'>>(

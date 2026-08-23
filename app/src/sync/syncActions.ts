@@ -15,6 +15,9 @@ export interface CipherSyncStorage {
   saveVault(vault: VaultEnvelopeV1): Promise<void>;
   listMemories(): Promise<EncryptedMemoryV1[]>;
   listPhotos(): Promise<EncryptedPhotoV1[]>;
+  /** Optional lazy photo access used by interactive/background sync. */
+  listPhotoRefs?(): Promise<Array<Pick<EncryptedPhotoV1, 'id' | 'kind'>>>;
+  getPhoto?(id: string, kind: EncryptedPhotoV1['kind']): Promise<EncryptedPhotoV1 | null>;
   saveMemory(memory: EncryptedMemoryV1): Promise<void>;
   savePhoto(photo: EncryptedPhotoV1): Promise<void>;
   saveCachedPhoto?(photo: EncryptedPhotoV1): Promise<void>;
@@ -50,6 +53,10 @@ export interface CipherSyncResult {
   conflictIds: string[];
 }
 
+function yieldToUi(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function sameVault(left: VaultEnvelopeV1, right: VaultEnvelopeV1): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -77,10 +84,11 @@ export async function uploadCiphertext(
     throw new Error('服务器属于另一个私密空间，已停止上传以免覆盖钥匙信封。');
   }
 
-  const [memories, photos] = await Promise.all([
-    storage.listMemories(),
-    storage.listPhotos(),
-  ]);
+  const memories = await storage.listMemories();
+  const photoRefs = storage.listPhotoRefs && storage.getPhoto
+    ? await storage.listPhotoRefs()
+    : undefined;
+  const photos = photoRefs ? undefined : await storage.listPhotos();
   await client.putVault(localVault);
   const conflictIds: string[] = [];
   for (const memory of memories) {
@@ -95,7 +103,14 @@ export async function uploadCiphertext(
     }
   }
   let uploadedPhotos = 0;
-  for (const photo of photos) {
+  for (const photoRef of photoRefs ?? (photos ?? [])) {
+    // Reading an encrypted original and converting it to JSON can be sizable;
+    // keep each item in its own turn so map/detail touches are not replayed later.
+    await yieldToUi();
+    const photo: EncryptedPhotoV1 | null = photoRefs
+      ? await storage.getPhoto!(photoRef.id, photoRef.kind)
+      : photoRef as EncryptedPhotoV1;
+    if (!photo) continue;
     try {
       await client.putPhotoVariant(photo);
       uploadedPhotos += 1;
