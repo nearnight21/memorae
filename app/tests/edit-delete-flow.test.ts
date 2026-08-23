@@ -105,6 +105,14 @@ test('新增照片的缩略图和预览图并行生成并写入', () => {
   assert.match(encryptPendingPhoto, /Promise\.all\(encryptedVariants\.map\(saveEncryptedPhoto\)\)/);
 });
 
+test('新建记忆复用并行照片加密路径，不再逐档串行处理', () => {
+  const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
+  const saveMemory = appSource.match(/async function saveMemory\(\): Promise<void> \{[\s\S]*?\n  \}\n\n  async function cleanupUnreferencedLocalPhotos/)?.[0];
+  assert.ok(saveMemory, '找不到 saveMemory 实现');
+  assert.match(saveMemory, /encryptPendingPhoto\(session, pendingPhoto\)/);
+  assert.doesNotMatch(saveMemory, /for \(const spec of PHOTO_VARIANT_SPECS\)/);
+});
+
 test('详情浏览只自动读取受限 thumbnail，避免阻塞关闭按钮', () => {
   const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
   const loadDetailPhoto = appSource.match(/async function loadDetailPhoto\([\s\S]*?\n  \}\n\n  function openMemory/)?.[0];

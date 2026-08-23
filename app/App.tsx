@@ -657,52 +657,11 @@ export default function App() {
     let photoMetric = '';
     if (pendingPhoto) {
       const startedAt = performance.now();
-      photoId = nativeCryptoPrimitives.randomUUID();
-      try {
-        for (const spec of PHOTO_VARIANT_SPECS) {
-          const variantBytes = await createJpegPhotoVariant(
-            pendingPhoto.uri,
-            pendingPhoto.width,
-            pendingPhoto.height,
-            spec,
-          );
-          try {
-            await saveEncryptedPhoto(await encryptPhoto(
-              nativeCryptoPrimitives,
-              session,
-              variantBytes,
-              { filename: pendingPhoto.filename, mimeType: 'image/jpeg' },
-              { id: photoId, kind: spec.kind },
-            ));
-          } finally {
-            variantBytes.fill(0);
-          }
-        }
-        const plaintextFile = new File(pendingPhoto.uri);
-        if (plaintextFile.size !== null && plaintextFile.size > MAX_PHOTO_BYTES) {
-          throw new Error('照片不能超过 30MB。');
-        }
-        const photoBytes = await plaintextFile.bytes();
-        try {
-          await saveEncryptedPhoto(await encryptPhoto(
-            nativeCryptoPrimitives,
-            session,
-            photoBytes,
-            { filename: pendingPhoto.filename, mimeType: pendingPhoto.mimeType },
-            { id: photoId, kind: 'original' },
-          ));
-          photoMetric = `；${Math.round(photoBytes.byteLength / 1024)} KiB 原图及两档展示图加密 ${Math.round(performance.now() - startedAt)} ms`;
-        } finally {
-          photoBytes.fill(0);
-        }
-      } catch (error) {
-        try {
-          await deleteEncryptedPhotoVariants(photoId);
-        } catch {
-          // 保留最初的照片处理错误，残留加密文件可在清空本机密文时删除。
-        }
-        throw error;
-      }
+      const encryptedPhoto = await encryptPendingPhoto(session, pendingPhoto);
+      photoId = encryptedPhoto.id;
+      const plaintextFile = new File(pendingPhoto.uri);
+      const byteLength = plaintextFile.size ?? 0;
+      photoMetric = `；${Math.round(byteLength / 1024)} KiB 原图及两档展示图加密 ${Math.round(performance.now() - startedAt)} ms`;
     }
 
     const now = new Date().toISOString();

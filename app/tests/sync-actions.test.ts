@@ -63,15 +63,14 @@ test('记忆密文落盘后先通知读取方，再等待照片缓存', async ()
   await sync;
 });
 
-test('每档照片密文落盘后通知读取方，缩略图无需等待原图完成', async () => {
-  let releaseOriginal: (() => void) | undefined;
-  const originalGate = new Promise<void>((resolve) => { releaseOriginal = resolve; });
+test('恢复同步只下载缩略图，不等待 preview/original', async () => {
+  const requestedKinds: string[] = [];
   const storedKinds: string[] = [];
   const client = {
     getVault: async () => vault,
     listMemories: async () => [memory],
     getPhotoVariant: async (_id: string, kind: string) => {
-      if (kind === 'original') await originalGate;
+      requestedKinds.push(kind);
       return { id: 'photo-1', kind, cryptoVersion: 1, metadata: {}, content: {} };
     },
   };
@@ -95,8 +94,8 @@ test('每档照片密文落盘后通知读取方，缩略图无需等待原图�
 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(thumbnailStored, true);
-  assert.deepEqual(storedKinds, ['thumbnail', 'preview']);
-  releaseOriginal?.();
+  assert.deepEqual(requestedKinds, ['thumbnail']);
+  assert.deepEqual(storedKinds, ['thumbnail']);
   await sync;
 });
 

@@ -28,6 +28,8 @@ export interface DownloadCiphertextOptions {
   client: MemoryRecallSyncClient;
   storage: CipherSyncStorage;
   decryptMemory?: (memory: EncryptedMemoryV1) => Promise<{ photos: Array<{ id: string }> }>;
+  /** Download only the display cache by default; larger variants are on demand. */
+  downloadPhotos?: boolean;
   onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void;
   onMemoriesStored?: (count: number) => void | Promise<void>;
   onPhotoStored?: (photo: EncryptedPhotoV1) => void | Promise<void>;
@@ -219,7 +221,9 @@ export async function downloadCiphertext(
         diagnostics.withValidCoordsCount += 1;
       }
     }
-    for (const photo of memory.photos) photoIds.add(photo.id);
+    if (options.downloadPhotos !== false) {
+      for (const photo of memory.photos) photoIds.add(photo.id);
+    }
   }
 
   // Remove local photo ciphertext only after an accepted edit/delete no longer
@@ -245,27 +249,14 @@ export async function downloadCiphertext(
 
   let downloadedPhotos = 0;
   for (const photoId of photoIds) {
-    for (const kind of ['thumbnail', 'preview'] as const) {
-      try {
-        const photo = await options.client.getPhotoVariant(photoId, kind);
-        await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(photo);
-        await options.onPhotoStored?.(photo);
-        downloadedPhotos += 1;
-      } catch (error) {
-        if (!(error instanceof PhotoVariantNotFoundError)) throw error;
-      }
-    }
     try {
-      const original = await options.client.getPhotoVariant(photoId, 'original');
-      await options.storage.savePhoto(original);
-      await options.onPhotoStored?.(original);
+      const thumbnail = await options.client.getPhotoVariant(photoId, 'thumbnail');
+      await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(thumbnail);
+      await options.onPhotoStored?.(thumbnail);
+      downloadedPhotos += 1;
     } catch (error) {
       if (!(error instanceof PhotoVariantNotFoundError)) throw error;
-      const original = await options.client.getPhoto(photoId);
-      await options.storage.savePhoto(original);
-      await options.onPhotoStored?.(original);
     }
-    downloadedPhotos += 1;
   }
   return {
     memories: memories.length,
