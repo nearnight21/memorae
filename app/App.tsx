@@ -27,6 +27,7 @@ import {
   encryptPhoto,
   unlockVault,
   type MemoryV2,
+  type PhotoKind,
   type VaultEnvelopeV1,
   type VaultSessionV1,
 } from './src/crypto';
@@ -924,7 +925,7 @@ export default function App() {
     );
   }
 
-  async function readDetailPhotoVariant(photoId: string, kind: 'thumbnail') {
+  async function readDetailPhotoVariant(photoId: string, kind: PhotoKind) {
     const local = await getEncryptedPhoto(photoId, kind);
     if (local || !accountSession) return local;
     try {
@@ -944,9 +945,15 @@ export default function App() {
     const photoId = memory.photos[index]?.id;
     if (!session || !photoId) return;
     try {
-      // Keep the initial detail render bounded. A preview can be large enough
-      // to monopolize the JS thread while the user is trying to close detail.
-      const encrypted = await readDetailPhotoVariant(photoId, 'thumbnail');
+      // Prefer the sharper preview, but keep older memories usable when only
+      // a thumbnail was uploaded. Check cancellation between each async step
+      // so closing detail never triggers a second remote fetch.
+      let encrypted = await readDetailPhotoVariant(photoId, 'preview');
+      if (requestId !== detailLoadId.current) return;
+      if (!encrypted) {
+        encrypted = await readDetailPhotoVariant(photoId, 'thumbnail');
+        if (requestId !== detailLoadId.current) return;
+      }
       if (!encrypted) throw new Error('找不到照片密文。');
       if (requestId !== detailLoadId.current) return;
       const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);

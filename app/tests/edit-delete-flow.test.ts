@@ -113,11 +113,12 @@ test('新建记忆复用并行照片加密路径，不再逐档串行处理', ()
   assert.doesNotMatch(saveMemory, /for \(const spec of PHOTO_VARIANT_SPECS\)/);
 });
 
-test('详情浏览只自动读取受限 thumbnail，避免阻塞关闭按钮', () => {
+test('详情浏览优先读取 preview，缺失时回退 thumbnail', () => {
   const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
   const loadDetailPhoto = appSource.match(/async function loadDetailPhoto\([\s\S]*?\n  \}\n\n  function openMemory/)?.[0];
   assert.ok(loadDetailPhoto, '找不到 loadDetailPhoto 实现');
+  assert.match(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'preview'\)/);
   assert.match(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'thumbnail'\)/);
-  assert.doesNotMatch(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'preview'\)/);
   assert.doesNotMatch(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'original'\)/);
+  assert.match(loadDetailPhoto, /if \(!encrypted\) \{[\s\S]*?readDetailPhotoVariant\(photoId, 'thumbnail'\)/);
 });
