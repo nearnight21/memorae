@@ -295,8 +295,8 @@ export default function App() {
     activeSession: VaultSessionV1,
     onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void,
     onMemoriesStored?: (count: number) => void | Promise<void>,
-  ): Promise<number> {
-    if (!accountSession) return 0;
+  ): Promise<{ count: number; conflictIds: string[] }> {
+    if (!accountSession) return { count: 0, conflictIds: [] };
     const download = downloadCiphertext({
       client: new MemoryRecallSyncClient({
         baseUrl: AUTH_API_URL,
@@ -318,7 +318,10 @@ export default function App() {
       setTimeout(() => reject(new Error('远端记忆同步超时，已先显示本机已有记忆。')), 20_000);
     });
     const result = await Promise.race([download, timeout]);
-    return result.requiresUnlock || result.importedVault ? 0 : result.memories;
+    return {
+      count: result.requiresUnlock || result.importedVault ? 0 : result.memories,
+      conflictIds: result.conflictIds,
+    };
   }
 
   async function loadThumbnailRefs(
@@ -348,28 +351,39 @@ export default function App() {
     setMode('unlocked');
     setPassword('');
     let downloadedCount = 0;
+    let remoteConflictIds: string[] = [];
     const remoteDiagnosticsRef = { current: null as CipherSyncDiagnostics | null };
     let syncWarning = '';
     let refreshedAfterRemoteStore = false;
     let migratedCount = 0;
     try {
-      downloadedCount = await downloadAccountMemories(activeSession, (diagnostics) => {
+      const downloadResult = await downloadAccountMemories(activeSession, (diagnostics) => {
         remoteDiagnosticsRef.current = diagnostics;
       }, async () => {
         refreshedAfterRemoteStore = true;
         migratedCount = await refreshMemories(activeSession);
       });
+      downloadedCount = downloadResult.count;
+      remoteConflictIds = downloadResult.conflictIds;
     } catch (error) {
       logMemoryDiagnostics('remote-sync-error', { errorType: memoryDiagnosticErrorType(error) });
-      syncWarning = ` 远端记忆暂时未同步：${errorMessage(error)}`;
+      const partialDiagnostics = remoteDiagnosticsRef.current;
+      if (partialDiagnostics && errorMessage(error).includes('远端记忆同步超时')) {
+        downloadedCount = partialDiagnostics.storedEncryptedCount;
+        remoteConflictIds = partialDiagnostics.conflictIds;
+        syncWarning = ' 照片缓存同步超时，已先显示已落盘记忆。';
+      } else {
+        syncWarning = ` 远端记忆暂时未同步：${errorMessage(error)}`;
+      }
     }
     if (!refreshedAfterRemoteStore) migratedCount = await refreshMemories(activeSession);
     const details = [
       downloadedCount > 0 ? `已同步 ${downloadedCount} 条远端记忆` : '',
+      remoteConflictIds.length > 0 ? `有 ${remoteConflictIds.length} 条冲突未覆盖` : '',
       migratedCount > 0 ? `已将 ${migratedCount} 条旧记忆升级为 MemoryV2` : '',
     ].filter(Boolean).join('，');
     const diagnosticSummary = remoteDiagnosticsRef.current
-      ? `诊断：远端 ${remoteDiagnosticsRef.current.remoteEncryptedCount}，下载 ${remoteDiagnosticsRef.current.storedEncryptedCount}，解密成功 ${remoteDiagnosticsRef.current.decryptSuccessCount}，解密失败 ${remoteDiagnosticsRef.current.decryptFailedCount}，远端地点 ${remoteDiagnosticsRef.current.withLocationCount}，远端有效坐标 ${remoteDiagnosticsRef.current.withValidCoordsCount}；${latestLocalDiagnostics}`
+      ? `诊断：远端 ${remoteDiagnosticsRef.current.remoteEncryptedCount}，下载 ${remoteDiagnosticsRef.current.storedEncryptedCount}，解密成功 ${remoteDiagnosticsRef.current.decryptSuccessCount}，解密失败 ${remoteDiagnosticsRef.current.decryptFailedCount}，冲突 ${remoteDiagnosticsRef.current.conflictIds.length}，远端地点 ${remoteDiagnosticsRef.current.withLocationCount}，远端有效坐标 ${remoteDiagnosticsRef.current.withValidCoordsCount}；${latestLocalDiagnostics}`
       : `诊断：远端同步未返回数量；${latestLocalDiagnostics}`;
     setStatus(`${message}${details ? ` ${details}。` : ''}${syncWarning} ${diagnosticSummary}`);
   }
@@ -578,7 +592,10 @@ export default function App() {
     setStatus(`记忆已加密保存${photoMetric}；正在同步到云端……`);
     try {
       const result = await uploadAccountCiphertext();
-      setStatus(`记忆已加密保存${photoMetric}；已同步到云端（${result.memories} 条记忆密文，${result.photos} 份照片密文）。`);
+      const conflictMessage = result.conflictIds.length > 0
+        ? `；有 ${result.conflictIds.length} 条冲突未覆盖`
+        : '';
+      setStatus(`记忆已加密保存${photoMetric}；已同步到云端（${result.memories} 条记忆密文，${result.photos} 份照片密文）${conflictMessage}。`);
     } catch (error) {
       logMemoryDiagnostics('upload-error', { errorType: memoryDiagnosticErrorType(error) });
       setStatus(`记忆已加密保存${photoMetric}；本机已保存，云端同步失败：${errorMessage(error)}。可点击“同步”重试。`);
@@ -727,7 +744,10 @@ export default function App() {
     setStatus('正在同步本机加密记忆……');
     try {
       const result = await uploadAccountCiphertext();
-      setStatus(`云端同步完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
+      const conflictMessage = result.conflictIds.length > 0
+        ? `；有 ${result.conflictIds.length} 条冲突未覆盖`
+        : '';
+      setStatus(`云端同步完成：${result.memories} 条记忆密文，${result.photos} 份照片密文${conflictMessage}。`);
     } catch (error) {
       logMemoryDiagnostics('upload-error', { errorType: memoryDiagnosticErrorType(error) });
       throw error;

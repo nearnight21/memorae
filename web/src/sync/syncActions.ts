@@ -33,6 +33,7 @@ export interface CipherSyncResult {
   photos: number;
   requiresUnlock: boolean;
   importedVault: boolean;
+  conflictIds: string[];
 }
 
 export class VaultMismatchError extends Error {
@@ -87,13 +88,25 @@ export async function uploadCiphertext(
       }
     }
   }
-  for (const memory of memories) await client.putMemory(memory);
+  const conflictIds: string[] = [];
+  for (const memory of memories) {
+    try {
+      await client.putMemory(memory);
+    } catch (error) {
+      if (error instanceof SyncRequestError && error.status === 409) {
+        conflictIds.push(memory.id);
+        continue;
+      }
+      throw error;
+    }
+  }
 
   return {
     memories: memories.length,
     photos: uploadedPhotos,
     requiresUnlock: false,
     importedVault: false,
+    conflictIds,
   };
 }
 
@@ -118,26 +131,28 @@ export async function downloadCiphertext(
 
   if (!localVault) {
     await options.storage.saveVault(remoteVault);
-    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: true };
+    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: true, conflictIds: [] };
   }
   if (!sameVault(localVault, remoteVault)) {
     throw new VaultMismatchError();
   }
   if (!options.decryptMemory) {
-    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: false };
+    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: false, conflictIds: [] };
   }
 
   const memories = await options.client.listMemories();
   const localMemories = new Map(
     (await options.storage.listMemories()).map((memory) => [memory.id, memory]),
   );
+  const conflictIds: string[] = [];
   const acceptedMemories = memories.filter((remoteMemory) => {
     const localMemory = localMemories.get(remoteMemory.id);
     if (!localMemory) return true;
     if (localMemory.version > remoteMemory.version) return false;
     if (localMemory.version === remoteMemory.version) {
       if (JSON.stringify(localMemory) !== JSON.stringify(remoteMemory)) {
-        throw new Error(`记忆 ${remoteMemory.id} 在本机和服务器存在同版本分叉，已停止下载。`);
+        conflictIds.push(remoteMemory.id);
+        return false;
       }
       return false;
     }
@@ -171,5 +186,6 @@ export async function downloadCiphertext(
     photos: downloadedPhotos,
     requiresUnlock: false,
     importedVault: false,
+    conflictIds,
   };
 }

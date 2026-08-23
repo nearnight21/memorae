@@ -37,6 +37,7 @@ export interface CipherSyncDiagnostics {
   decryptErrorTypes: string[];
   withLocationCount: number;
   withValidCoordsCount: number;
+  conflictIds: string[];
 }
 
 export interface CipherSyncResult {
@@ -44,6 +45,7 @@ export interface CipherSyncResult {
   photos: number;
   requiresUnlock: boolean;
   importedVault: boolean;
+  conflictIds: string[];
 }
 
 function sameVault(left: VaultEnvelopeV1, right: VaultEnvelopeV1): boolean {
@@ -91,13 +93,25 @@ export async function uploadCiphertext(
       }
     }
   }
-  for (const memory of memories) await client.putMemory(memory);
+  const conflictIds: string[] = [];
+  for (const memory of memories) {
+    try {
+      await client.putMemory(memory);
+    } catch (error) {
+      if (error instanceof SyncRequestError && error.status === 409) {
+        conflictIds.push(memory.id);
+        continue;
+      }
+      throw error;
+    }
+  }
 
   return {
     memories: memories.length,
     photos: uploadedPhotos,
     requiresUnlock: false,
     importedVault: false,
+    conflictIds,
   };
 }
 
@@ -113,6 +127,7 @@ export async function downloadCiphertext(
     decryptErrorTypes: [],
     withLocationCount: 0,
     withValidCoordsCount: 0,
+    conflictIds: [],
   };
   const reportDiagnostics = () => options.onDiagnostics?.({
     ...diagnostics,
@@ -123,13 +138,13 @@ export async function downloadCiphertext(
 
   if (!localVault) {
     await options.storage.saveVault(remoteVault);
-    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: true };
+    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: true, conflictIds: [] };
   }
   if (!sameVault(localVault, remoteVault)) {
     throw new Error('服务器与本机不是同一个私密空间，已停止下载。');
   }
   if (!options.decryptMemory) {
-    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: false };
+    return { memories: 0, photos: 0, requiresUnlock: true, importedVault: false, conflictIds: [] };
   }
 
   const memories = await options.client.listMemories();
@@ -145,7 +160,8 @@ export async function downloadCiphertext(
       localMemory.version === remoteMemory.version
       && JSON.stringify(localMemory) !== JSON.stringify(remoteMemory)
     ) {
-      throw new Error(`记忆 ${remoteMemory.id} 在本机和服务器存在同版本分叉，已停止下载。`);
+      diagnostics.conflictIds.push(remoteMemory.id);
+      return false;
     }
     return true;
   });
@@ -203,5 +219,6 @@ export async function downloadCiphertext(
     photos: downloadedPhotos,
     requiresUnlock: false,
     importedVault: false,
+    conflictIds: diagnostics.conflictIds,
   };
 }

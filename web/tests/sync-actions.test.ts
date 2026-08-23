@@ -11,7 +11,7 @@ import {
   downloadPhotoVariant,
   type CipherSyncStorage,
 } from '../src/sync/syncActions';
-import type { MemoryRecallSyncClient } from '../src/sync/syncClient';
+import { SyncRequestError, type MemoryRecallSyncClient } from '../src/sync/syncClient';
 
 const sealed = {
   algorithm: 'AES-256-GCM' as const,
@@ -83,7 +83,65 @@ test('本机与服务器相同版本相同密文时不会重复下载照片', as
     photos: 0,
     requiresUnlock: false,
     importedVault: false,
+    conflictIds: [],
   });
+});
+
+test('同版本分叉只跳过冲突记录，其他远端记忆仍可恢复', async () => {
+  const conflicting = { ...memory, id: 'memory-conflict', payload: { ...sealed, ciphertext: 'different' } };
+  const saved: string[] = [];
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [conflicting],
+    listPhotos: async () => [],
+    saveMemory: async (item) => { saved.push(item.id); },
+    savePhoto: async () => undefined,
+  };
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    listMemories: async (): Promise<EncryptedMemoryV1[]> => [
+      { ...memory, id: 'memory-conflict' },
+      { ...memory, id: 'memory-ok' },
+    ],
+  } as MemoryRecallSyncClient;
+
+  const result = await downloadCiphertext({
+    client,
+    storage,
+    decryptMemory: async () => ({ photos: [] }),
+  });
+
+  assert.deepEqual(saved, ['memory-ok']);
+  assert.deepEqual(result.conflictIds, ['memory-conflict']);
+});
+
+test('上传时 HTTP 409 只记录冲突，不阻断其他记录', async () => {
+  const uploaded: string[] = [];
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    putVault: async () => undefined,
+    putPhotoVariant: async () => undefined,
+    putMemory: async (item: EncryptedMemoryV1) => {
+      if (item.id === 'memory-conflict') throw new SyncRequestError(409, 'conflict');
+      uploaded.push(item.id);
+    },
+  } as unknown as MemoryRecallSyncClient;
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [
+      { ...memory, id: 'memory-conflict' },
+      { ...memory, id: 'memory-ok' },
+    ],
+    listPhotos: async () => [],
+    saveMemory: async () => undefined,
+    savePhoto: async () => undefined,
+  };
+
+  const result = await (await import('../src/sync/syncActions')).uploadCiphertext(client, storage);
+  assert.deepEqual(uploaded, ['memory-ok']);
+  assert.deepEqual(result.conflictIds, ['memory-conflict']);
 });
 
 test('首次恢复只下载缩略图，不预取预览和原图', async () => {
