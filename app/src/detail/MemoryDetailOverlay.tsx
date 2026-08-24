@@ -19,6 +19,7 @@ interface Props {
   photoStates: readonly DetailPhotoState[];
   onClose: () => void;
   onMore: () => void;
+  onPhotoDisplayed: (index: number) => void;
 }
 
 function formatDate(date: string): string {
@@ -31,7 +32,7 @@ function locationLabel(memory: MemoryV2): string {
   return [location.city, location.district, location.name].filter(Boolean).join(' · ');
 }
 
-export default function MemoryDetailOverlay({ memory, photoUris, photoStates, onClose, onMore }: Props) {
+export default function MemoryDetailOverlay({ memory, photoUris, photoStates, onClose, onMore, onPhotoDisplayed }: Props) {
   const { width, height } = useWindowDimensions();
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoOffset = useRef(new Animated.Value(0)).current;
@@ -84,11 +85,11 @@ export default function MemoryDetailOverlay({ memory, photoUris, photoStates, on
         </View>
         <View style={styles.content}>
           {photoCount > 0 && <View style={[styles.photoStage, { width: heroWidth, height: heroHeight }]} {...responder.panHandlers}>
-            {backA && <View style={[styles.photoPaper, styles.backPaperA, { width: heroWidth - 10, height: heroHeight - 10 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backA }} style={styles.photoImage} resizeMode="cover" /></View></View>}
-            {backB && <View style={[styles.photoPaper, styles.backPaperB, { width: heroWidth - 8, height: heroHeight - 8 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backB }} style={styles.photoImage} resizeMode="cover" /></View></View>}
+            {backA && <View style={[styles.photoPaper, styles.backPaperA, { width: heroWidth - 10, height: heroHeight - 10 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backA }} style={styles.photoImage} resizeMode="cover" onLoad={() => onPhotoDisplayed((photoIndex + photoCount - 1) % photoCount)} /></View></View>}
+            {backB && <View style={[styles.photoPaper, styles.backPaperB, { width: heroWidth - 8, height: heroHeight - 8 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backB }} style={styles.photoImage} resizeMode="cover" onLoad={() => onPhotoDisplayed((photoIndex + 1) % photoCount)} /></View></View>}
             <Animated.View style={[styles.photoPaper, styles.heroPaper, { width: heroWidth, height: heroHeight }, { transform: [{ translateX: photoOffset }] }]}>
               <View style={styles.photoInset}>
-                {currentUri && currentState === 'ready' && <Animated.Image source={{ uri: currentUri }} style={styles.photoImage} resizeMode="cover" />}
+                {currentUri && currentState === 'ready' && <Animated.Image source={{ uri: currentUri }} style={styles.photoImage} resizeMode="cover" onLoad={() => onPhotoDisplayed(photoIndex)} />}
                 {(!currentUri || currentState !== 'ready') && <View style={styles.photoState}><Text style={styles.photoStateText}>{currentState === 'loading' ? '照片加载中…' : '照片暂不可用'}</Text></View>}
               </View>
             </Animated.View>

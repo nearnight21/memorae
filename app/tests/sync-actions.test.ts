@@ -216,6 +216,7 @@ test('上传本机密文时先校验同一私密空间，再上传照片和记�
 
 test('后台上传使用照片引用逐张读取，避免一次性加载全部原图', async () => {
   const calls: string[] = [];
+  const metrics: Array<{ operation: string; kind?: string; bytes?: number; durationsMs: Record<string, number> }> = [];
   const photoId = 'photo-lazy';
   const photoKind = 'original' as const;
   const photo = { id: photoId, kind: photoKind, cryptoVersion: 1, metadata: {}, content: {} } as never;
@@ -236,10 +237,15 @@ test('后台上传使用照片引用逐张读取，避免一次性加载全部�
     },
   };
 
-  const result = await uploadCiphertext(client as never, storage as never);
+  const result = await uploadCiphertext(client as never, storage as never, {
+    onPhotoPerformance: (metric) => metrics.push(metric),
+  });
 
   assert.deepEqual(calls, ['read:photo-lazy:original', 'upload-photo']);
   assert.equal(result.photos, 1);
+  assert.deepEqual(metrics.map(({ operation, kind }) => ({ operation, kind })), [{ operation: 'upload', kind: 'original' }]);
+  assert.ok(metrics[0].bytes !== undefined && metrics[0].bytes > 0);
+  assert.deepEqual(Object.keys(metrics[0].durationsMs).sort(), ['storage-read', 'total', 'transfer']);
 });
 
 test('上传时跳过服务器拒绝的冲突记录，但继续上传其他记忆', async () => {

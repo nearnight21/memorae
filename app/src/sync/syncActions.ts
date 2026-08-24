@@ -3,6 +3,8 @@ import type {
   EncryptedPhotoV1,
   VaultEnvelopeV1,
 } from '../crypto';
+import { utf8 } from '../crypto';
+import type { PhotoPerformanceMetric } from '../services/performanceDiagnostics';
 import {
   DirectPhotoTransferUnavailableError,
   MemoryRecallSyncClient,
@@ -33,6 +35,11 @@ export interface DownloadCiphertextOptions {
   onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void;
   onMemoriesStored?: (count: number) => void | Promise<void>;
   onPhotoStored?: (photo: EncryptedPhotoV1) => void | Promise<void>;
+  onPhotoPerformance?: (metric: PhotoPerformanceMetric) => void;
+}
+
+export interface UploadCiphertextOptions {
+  onPhotoPerformance?: (metric: PhotoPerformanceMetric) => void;
 }
 
 export interface CipherSyncDiagnostics {
@@ -77,6 +84,7 @@ async function getRemoteVaultIfPresent(
 export async function uploadCiphertext(
   client: MemoryRecallSyncClient,
   storage: CipherSyncStorage,
+  options: UploadCiphertextOptions = {},
 ): Promise<CipherSyncResult> {
   const localVault = await storage.getVault();
   if (!localVault) throw new Error('本机还没有可以上传的私密空间。');
@@ -109,10 +117,14 @@ export async function uploadCiphertext(
     // Reading an encrypted original and converting it to JSON can be sizable;
     // keep each item in its own turn so map/detail touches are not replayed later.
     await yieldToUi();
+    const readStartedAt = performance.now();
     const photo: EncryptedPhotoV1 | null = photoRefs
       ? await storage.getPhoto!(photoRef.id, photoRef.kind)
       : photoRef as EncryptedPhotoV1;
     if (!photo) continue;
+    const readDuration = performance.now() - readStartedAt;
+    const serializedBytes = utf8(JSON.stringify(photo.content)).byteLength;
+    const transferStartedAt = performance.now();
     try {
       await client.putPhotoVariant(photo);
       uploadedPhotos += 1;
@@ -123,6 +135,16 @@ export async function uploadCiphertext(
         uploadedPhotos += 1;
       }
     }
+    options.onPhotoPerformance?.({
+      operation: 'upload',
+      kind: photo.kind,
+      bytes: serializedBytes,
+      durationsMs: {
+        'storage-read': readDuration,
+        transfer: performance.now() - transferStartedAt,
+        total: performance.now() - readStartedAt,
+      },
+    });
   }
   return {
     memories: memories.length,
@@ -249,10 +271,24 @@ export async function downloadCiphertext(
 
   let downloadedPhotos = 0;
   for (const photoId of photoIds) {
+    const downloadStartedAt = performance.now();
     try {
       const thumbnail = await options.client.getPhotoVariant(photoId, 'thumbnail');
+      const remoteDuration = performance.now() - downloadStartedAt;
+      const saveStartedAt = performance.now();
       await (options.storage.saveCachedPhoto ?? options.storage.savePhoto)(thumbnail);
+      const saveDuration = performance.now() - saveStartedAt;
       await options.onPhotoStored?.(thumbnail);
+      options.onPhotoPerformance?.({
+        operation: 'download',
+        kind: thumbnail.kind,
+        bytes: utf8(JSON.stringify(thumbnail.content)).byteLength,
+        durationsMs: {
+          transfer: remoteDuration,
+          'storage-write': saveDuration,
+          total: performance.now() - downloadStartedAt,
+        },
+      });
       downloadedPhotos += 1;
     } catch (error) {
       if (!(error instanceof PhotoVariantNotFoundError)) throw error;

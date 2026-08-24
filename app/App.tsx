@@ -50,6 +50,10 @@ import {
   uploadCiphertext,
   type CipherSyncDiagnostics,
 } from './src/sync/syncActions';
+import {
+  sanitizePhotoPerformanceMetric,
+  type PhotoPerformanceMetric,
+} from './src/services/performanceDiagnostics';
 import { loginSyncSession, MemoryRecallSyncClient, PhotoVariantNotFoundError, SyncRequestError } from './src/sync/syncClient';
 import AuthEntryScreen, { type AuthEntryPhase } from './src/auth/AuthEntryScreen';
 import {
@@ -150,6 +154,10 @@ function logMemoryDiagnostics(
   console.warn('[memory-diagnostics]', JSON.stringify({ stage, ...values }));
 }
 
+function logPhotoPerformance(metric: PhotoPerformanceMetric): void {
+  logMemoryDiagnostics('photo-performance', sanitizePhotoPerformanceMetric(metric));
+}
+
 export default function App() {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
@@ -197,6 +205,12 @@ export default function App() {
   const [locationCameraTarget, setLocationCameraTarget] = useState<AmapMapCamera | null>(null);
   const locationPickerOriginCamera = useRef<AmapMapCamera | null>(null);
   const detailLoadId = useRef(0);
+  const detailPhotoPerformance = useRef(new Map<number, {
+    startedAt: number;
+    durationsMs: Record<string, number>;
+    bytes?: number;
+    displayStartedAt?: number;
+  }>());
   const editPendingPhotoPool = useRef(new Map<string, PendingPhoto>());
   const thumbnailLoadId = useRef(0);
   const memoriesRef = useRef<MemoryV2[]>([]);
@@ -404,6 +418,7 @@ export default function App() {
         logMemoryDiagnostics('remote-sync', diagnostics);
         onDiagnostics?.(diagnostics);
       },
+      onPhotoPerformance: logPhotoPerformance,
       onMemoriesStored,
       decryptMemory: async (memory) => (await decryptMemoryV2(
         nativeCryptoPrimitives,
@@ -605,41 +620,67 @@ export default function App() {
 
   async function encryptPendingPhoto(activeSession: VaultSessionV1, pending: PendingPhoto): Promise<MemoryPhotoV1> {
     const photoId = nativeCryptoPrimitives.randomUUID();
+    const startedAt = performance.now();
+    const durationsMs: Record<string, number> = {};
+    let totalBytes = 0;
     try {
-      const variantBytes = await Promise.all(PHOTO_VARIANT_SPECS.map((spec) => (
-        createJpegPhotoVariant(pending.uri, pending.width, pending.height, spec)
-      )));
+      const variantStartedAt = performance.now();
+      const variantBytes = await Promise.all(PHOTO_VARIANT_SPECS.map(async (spec) => {
+        const specStartedAt = performance.now();
+        const bytes = await createJpegPhotoVariant(pending.uri, pending.width, pending.height, spec);
+        durationsMs[`resize-${spec.kind}`] = performance.now() - specStartedAt;
+        totalBytes += bytes.byteLength;
+        return { spec, bytes };
+      }));
+      durationsMs['variant-total'] = performance.now() - variantStartedAt;
       try {
-        const encryptedVariants = await Promise.all(variantBytes.map((bytes, index) => {
-          const spec = PHOTO_VARIANT_SPECS[index];
-          return encryptPhoto(
+        const encryptedVariants = await Promise.all(variantBytes.map(async ({ spec, bytes }) => {
+          const encryptStartedAt = performance.now();
+          const encrypted = await encryptPhoto(
             nativeCryptoPrimitives,
             activeSession,
             bytes,
             { filename: pending.filename, mimeType: 'image/jpeg' },
             { id: photoId, kind: spec.kind },
           );
+          durationsMs[`encrypt-${spec.kind}`] = performance.now() - encryptStartedAt;
+          return encrypted;
         }));
+        const saveStartedAt = performance.now();
         await Promise.all(encryptedVariants.map(saveEncryptedPhoto));
+        durationsMs['storage-write-variants'] = performance.now() - saveStartedAt;
       } finally {
-        variantBytes.forEach((bytes) => bytes.fill(0));
+        variantBytes.forEach(({ bytes }) => bytes.fill(0));
       }
       const plaintextFile = new File(pending.uri);
       if (plaintextFile.size !== null && plaintextFile.size > MAX_PHOTO_BYTES) {
         throw new Error('照片不能超过 30MB。');
       }
+      const originalReadStartedAt = performance.now();
       const photoBytes = await plaintextFile.bytes();
+      durationsMs['original-read'] = performance.now() - originalReadStartedAt;
+      totalBytes += photoBytes.byteLength;
       try {
-        await saveEncryptedPhoto(await encryptPhoto(
+        const originalEncryptStartedAt = performance.now();
+        const encryptedOriginal = await encryptPhoto(
           nativeCryptoPrimitives,
           activeSession,
           photoBytes,
           { filename: pending.filename, mimeType: pending.mimeType },
           { id: photoId, kind: 'original' },
-        ));
+        );
+        durationsMs['encrypt-original'] = performance.now() - originalEncryptStartedAt;
+        const originalSaveStartedAt = performance.now();
+        await saveEncryptedPhoto(encryptedOriginal);
+        durationsMs['storage-write-original'] = performance.now() - originalSaveStartedAt;
       } finally {
         photoBytes.fill(0);
       }
+      logPhotoPerformance({
+        operation: 'encrypt',
+        bytes: totalBytes,
+        durationsMs: { ...durationsMs, total: performance.now() - startedAt },
+      });
       return { id: photoId, mimeType: pending.mimeType };
     } catch (error) {
       await deleteEncryptedPhotoVariants(photoId).catch(() => undefined);
@@ -944,37 +985,71 @@ export default function App() {
   async function loadDetailPhoto(memory: MemoryV2, index: number, requestId: number): Promise<void> {
     const photoId = memory.photos[index]?.id;
     if (!session || !photoId) return;
+    const startedAt = performance.now();
+    const durationsMs: Record<string, number> = {};
     try {
       // Prefer the sharper preview, but keep older memories usable when only
       // a thumbnail was uploaded. Check cancellation between each async step
       // so closing detail never triggers a second remote fetch.
+      const previewReadStartedAt = performance.now();
       let encrypted = await readDetailPhotoVariant(photoId, 'preview');
+      durationsMs['read-preview'] = performance.now() - previewReadStartedAt;
       if (requestId !== detailLoadId.current) return;
       if (!encrypted) {
+        const thumbnailReadStartedAt = performance.now();
         encrypted = await readDetailPhotoVariant(photoId, 'thumbnail');
+        durationsMs['read-thumbnail'] = performance.now() - thumbnailReadStartedAt;
         if (requestId !== detailLoadId.current) return;
       }
       if (!encrypted) throw new Error('找不到照片密文。');
       if (requestId !== detailLoadId.current) return;
+      const decryptStartedAt = performance.now();
       const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);
+      durationsMs.decrypt = performance.now() - decryptStartedAt;
       if (requestId !== detailLoadId.current) {
         photo.bytes.fill(0);
         return;
       }
+      const photoBytes = photo.bytes.byteLength;
+      const base64StartedAt = performance.now();
       const uri = `data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`;
+      durationsMs.base64 = performance.now() - base64StartedAt;
       photo.bytes.fill(0);
       if (requestId !== detailLoadId.current) return;
+      detailPhotoPerformance.current.set(index, {
+        startedAt,
+        durationsMs,
+        bytes: photoBytes,
+        displayStartedAt: performance.now(),
+      });
       setDetailPhotoUris((current) => current.map((value, currentIndex) => currentIndex === index ? uri : value));
       setDetailPhotoStates((current) => current.map((value, currentIndex) => currentIndex === index ? 'ready' : value));
     } catch (error) {
+      detailPhotoPerformance.current.delete(index);
       if (requestId !== detailLoadId.current) return;
       setDetailPhotoStates((current) => current.map((value, currentIndex) => currentIndex === index ? 'unavailable' : value));
       logMemoryDiagnostics('detail-photo-error', { memoryId: memory.id, photoId, index, errorType: memoryDiagnosticErrorType(error) });
     }
   }
 
+  function markDetailPhotoDisplayed(index: number): void {
+    const metric = detailPhotoPerformance.current.get(index);
+    if (!metric || metric.displayStartedAt === undefined) return;
+    detailPhotoPerformance.current.delete(index);
+    logPhotoPerformance({
+      operation: 'detail',
+      bytes: metric.bytes,
+      durationsMs: {
+        ...metric.durationsMs,
+        display: performance.now() - metric.displayStartedAt,
+        total: performance.now() - metric.startedAt,
+      },
+    });
+  }
+
   function openMemory(memory: MemoryV2): void {
     const requestId = ++detailLoadId.current;
+    detailPhotoPerformance.current.clear();
     setSelectedMemory(memory);
     setPreviewUri(null);
     setDetailPhotoUris(memory.photos.map(() => null));
@@ -987,6 +1062,7 @@ export default function App() {
 
   function closeMemory(): void {
     detailLoadId.current += 1;
+    detailPhotoPerformance.current.clear();
     setSelectedMemory(null);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
@@ -1139,7 +1215,9 @@ export default function App() {
 
   async function uploadLocalCiphertext(): Promise<void> {
     setStatus('正在把本机密文发送到本地服务……');
-    const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage);
+    const result = await uploadCiphertext(createSyncClient(), cipherSyncStorage, {
+      onPhotoPerformance: logPhotoPerformance,
+    });
     setStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
   }
 
@@ -1148,6 +1226,7 @@ export default function App() {
     return uploadCiphertext(
       new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }),
       cipherSyncStorage,
+      { onPhotoPerformance: logPhotoPerformance },
     );
   }
 
@@ -1308,6 +1387,7 @@ export default function App() {
           photoStates={detailPhotoStates}
           onClose={closeMemory}
           onMore={() => setMoreActionsVisible(true)}
+          onPhotoDisplayed={markDetailPhotoDisplayed}
         />
       )}
       {editDraft && !photoManageVisible && !locationPickerVisible && (

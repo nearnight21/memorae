@@ -17,6 +17,21 @@
 5. 点击“清除内存预览”，确认明文预览消失。
 6. 分别使用约 5 MB、15 MB、30 MB 的照片重复测试，观察是否卡死或闪退。
 
+## 照片性能采样
+
+App 会在 Metro/Android 日志中输出脱敏的 `[memory-diagnostics]` `photo-performance` 记录，包含阶段耗时和密文大小，不包含照片内容、文件名、坐标、正文或密钥。照片上传和下载继续保持单张串行处理，避免无数据依据地提高内存峰值。
+
+在 App 运行并执行一轮单图或多图操作时，可另开 PowerShell 采样 Android 进程 PSS：
+
+```powershell
+cd memory-recall-mobile
+.\scripts\sample-android-memory.ps1 -PackageName com.memorae.cn -IntervalSeconds 5 -Samples 60 -OutputPath .\android-memory.csv
+```
+
+若同时连接多个设备，再追加 `-DeviceSerial <adb-serial>`。
+
+脚本只读取 `adb shell dumpsys meminfo`，输出采样时间、总 PSS、Native Heap 和 Dalvik Heap；它不读取 App 文件、密文或日志内容。单张照片无法做字节级断点续传，网络中断后按照片档位重新申请授权并重传。
+
 ## Android Keystore
 
 1. 解锁后启用“本机指纹解锁”。
