@@ -8,6 +8,7 @@ import {
   getStoredAccountSession,
   getVaultEnvelope,
   markCipherSyncPending,
+  saveCipherSyncPlan,
   clearPrototypeDatabase,
   saveStoredAccountSession,
   saveVaultEnvelope,
@@ -274,6 +275,8 @@ export default function ProductGate({
         if (password !== confirmation) throw new Error('两次输入的私密空间密码不一致。');
         const created = await createVault(password);
         await saveVaultEnvelope(created.envelope);
+        // 初始化私密空间只需要把钥匙信封送到服务端，不应隐式扫描全库照片。
+        await saveCipherSyncPlan({ memoryIds: [], photoRefs: [] });
         await markCipherSyncPending();
         setVault(created.envelope);
         await finishUnlock(created.session);

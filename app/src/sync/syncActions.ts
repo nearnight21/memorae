@@ -16,6 +16,7 @@ export interface CipherSyncStorage {
   getVault(): Promise<VaultEnvelopeV1 | null>;
   saveVault(vault: VaultEnvelopeV1): Promise<void>;
   listMemories(): Promise<EncryptedMemoryV1[]>;
+  getMemory?(id: string): Promise<EncryptedMemoryV1 | null>;
   listPhotos(): Promise<EncryptedPhotoV1[]>;
   /** Optional lazy photo access used by interactive/background sync. */
   listPhotoRefs?(): Promise<Array<Pick<EncryptedPhotoV1, 'id' | 'kind'>>>;
@@ -40,6 +41,22 @@ export interface DownloadCiphertextOptions {
 
 export interface UploadCiphertextOptions {
   onPhotoPerformance?: (metric: PhotoPerformanceMetric) => void;
+  /** 普通变更同步只上传计划中的对象；未提供时执行显式全量上传。 */
+  plan?: UploadPlan;
+}
+
+export interface UploadPlan {
+  memoryIds: readonly string[];
+  photoRefs: ReadonlyArray<Pick<EncryptedPhotoV1, 'id' | 'kind'>>;
+}
+
+export function mergeUploadPlans(left: UploadPlan, right: UploadPlan): UploadPlan {
+  const memoryIds = [...new Set([...left.memoryIds, ...right.memoryIds])];
+  const photoRefs = new Map<string, Pick<EncryptedPhotoV1, 'id' | 'kind'>>();
+  for (const photo of [...left.photoRefs, ...right.photoRefs]) {
+    photoRefs.set(`${photo.id}:${photo.kind}`, photo);
+  }
+  return { memoryIds, photoRefs: [...photoRefs.values()] };
 }
 
 export interface CipherSyncDiagnostics {
@@ -94,11 +111,20 @@ export async function uploadCiphertext(
     throw new Error('服务器属于另一个私密空间，已停止上传以免覆盖钥匙信封。');
   }
 
-  const memories = await storage.listMemories();
-  const photoRefs = storage.listPhotoRefs && storage.getPhoto
-    ? await storage.listPhotoRefs()
-    : undefined;
-  const photos = photoRefs ? undefined : await storage.listPhotos();
+  const plan = options.plan;
+  const memories = plan && storage.getMemory
+    ? (await Promise.all(plan.memoryIds.map((id) => storage.getMemory!(id)))).filter(
+      (memory): memory is EncryptedMemoryV1 => Boolean(memory),
+    )
+    : await storage.listMemories().then((allMemories) => plan
+      ? allMemories.filter((memory) => plan.memoryIds.includes(memory.id))
+      : allMemories);
+  const photoRefs = plan
+    ? [...new Map(plan.photoRefs.map((photo) => [`${photo.id}:${photo.kind}`, photo])).values()]
+    : storage.listPhotoRefs && storage.getPhoto
+      ? await storage.listPhotoRefs()
+      : undefined;
+  const photos = plan || photoRefs ? undefined : await storage.listPhotos();
   await client.putVault(localVault);
   const conflictIds: string[] = [];
   for (const memory of memories) {
@@ -273,6 +299,9 @@ export async function downloadCiphertext(
   for (const photoId of photoIds) {
     const downloadStartedAt = performance.now();
     try {
+      if (options.storage.getPhoto && await options.storage.getPhoto(photoId, 'thumbnail')) {
+        continue;
+      }
       const thumbnail = await options.client.getPhotoVariant(photoId, 'thumbnail');
       const remoteDuration = performance.now() - downloadStartedAt;
       const saveStartedAt = performance.now();

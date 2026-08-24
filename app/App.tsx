@@ -47,8 +47,10 @@ import {
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import {
   downloadCiphertext,
+  mergeUploadPlans,
   uploadCiphertext,
   type CipherSyncDiagnostics,
+  type UploadPlan,
 } from './src/sync/syncActions';
 import {
   sanitizePhotoPerformanceMetric,
@@ -86,6 +88,8 @@ import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
   getEncryptedPhoto,
+  getEncryptedMemory,
+  getPendingUploadPlan,
   getVaultEnvelope,
   initializeStorage,
   listEncryptedMemories,
@@ -93,6 +97,7 @@ import {
   listEncryptedPhotos,
   saveEncryptedMemory,
   saveEncryptedPhoto,
+  savePendingUploadPlan,
   saveVaultEnvelope,
 } from './src/storage/database';
 
@@ -135,6 +140,7 @@ const cipherSyncStorage = {
   getVault: getVaultEnvelope,
   saveVault: saveVaultEnvelope,
   listMemories: listEncryptedMemories,
+  getMemory: getEncryptedMemory,
   listPhotos: listEncryptedPhotos,
   listPhotoRefs: listEncryptedPhotoRefs,
   getPhoto: getEncryptedPhoto,
@@ -214,8 +220,26 @@ export default function App() {
   const editPendingPhotoPool = useRef(new Map<string, PendingPhoto>());
   const thumbnailLoadId = useRef(0);
   const memoriesRef = useRef<MemoryV2[]>([]);
-  const accountUploadQueue = useRef<Promise<void>>(Promise.resolve());
+  const accountUploadQueue = useRef<Promise<void> | null>(null);
+  const pendingAccountUploadPlan = useRef<UploadPlan>({ memoryIds: [], photoRefs: [] });
+  const activeAccountUploadPlan = useRef<UploadPlan | null>(null);
+  const uploadPlanWriteQueue = useRef(Promise.resolve());
+  const pendingAccountUploadMessages = useRef<Array<{
+    onSuccess: (result: Awaited<ReturnType<typeof uploadCiphertext>>) => string;
+    onFailure: (error: unknown) => string;
+  }>>([]);
   let latestLocalDiagnostics = '';
+
+  function photoRefsForIds(ids: readonly string[]): Array<{ id: string; kind: PhotoKind }> {
+    return ids.flatMap((id) => (['thumbnail', 'preview', 'original'] as const).map((kind) => ({ id, kind })));
+  }
+
+  function persistPendingAccountUploadPlan(plan: UploadPlan | null): Promise<void> {
+    uploadPlanWriteQueue.current = uploadPlanWriteQueue.current
+      .catch(() => undefined)
+      .then(() => savePendingUploadPlan(plan));
+    return uploadPlanWriteQueue.current;
+  }
 
   const stateLabel = useMemo(() => ({
     loading: '启动中',
@@ -275,10 +299,12 @@ export default function App() {
     void (async () => {
       try {
         await initializeStorage();
-        const [storedVault, storedAccount] = await Promise.all([
+        const [storedVault, storedAccount, storedUploadPlan] = await Promise.all([
           getVaultEnvelope(),
           getStoredAccountSession(),
+          getPendingUploadPlan(),
         ]);
+        if (storedUploadPlan) pendingAccountUploadPlan.current = storedUploadPlan;
         setVault(storedVault);
         setDeviceUnlockEnabled(await hasDeviceUnlock());
         if (!storedAccount || !isAccountSessionActive(storedAccount)) {
@@ -512,6 +538,14 @@ export default function App() {
         : `诊断：远端同步未返回数量；${latestLocalDiagnostics}`;
       setStatus(`${message}${details ? ` ${details}。` : ''}${syncWarning ? ` ${syncWarning}` : ' 同步完成。'} ${diagnosticSummary}`);
     });
+    if (accountSession && (pendingAccountUploadPlan.current.memoryIds.length > 0
+      || pendingAccountUploadPlan.current.photoRefs.length > 0)) {
+      queueAccountUpload(
+        { memoryIds: [], photoRefs: [] },
+        () => '本地待同步变更已在后台继续上传。',
+        (error) => `本地待同步变更仍未上传：${errorMessage(error)}。`,
+      );
+    }
   }
 
   function lock(): void {
@@ -768,6 +802,10 @@ export default function App() {
     }
     setStatus(`记忆已加密保存${photoMetric}；正在后台同步云端。`);
     queueAccountUpload(
+      {
+        memoryIds: [memory.id],
+        photoRefs: photoRefsForIds(photoId ? [photoId] : []),
+      },
       (result) => {
         const conflictMessage = result.conflictIds.length > 0
           ? `；有 ${result.conflictIds.length} 条冲突未覆盖`
@@ -928,6 +966,10 @@ export default function App() {
       }
       setStatus('编辑已保存到本机；正在后台同步云端。');
       queueAccountUpload(
+        {
+          memoryIds: [nextMemory.id],
+          photoRefs: photoRefsForIds(newlyEncryptedIds),
+        },
         (result) => `编辑已保存并同步（${result.memories} 条记忆密文，${result.photos} 份照片密文）。`,
         (error) => `编辑已保存到本机，云端同步失败：${errorMessage(error)}。下次点击完成时会重试。`,
       );
@@ -961,6 +1003,7 @@ export default function App() {
     }
     setStatus('记忆已从本机删除；正在后台同步删除标记。');
     queueAccountUpload(
+      { memoryIds: [selectedMemory.id], photoRefs: [] },
       (result) => `记忆已删除并同步（${result.memories} 条记忆密文）。COS 中未引用的照片密文等待后续 GC。`,
       (error) => `记忆已从本机删除，删除标记尚未同步：${errorMessage(error)}。下次点击完成时会重试。`,
     );
@@ -1221,32 +1264,65 @@ export default function App() {
     setStatus(`上传完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
   }
 
-  async function uploadAccountCiphertext(): Promise<Awaited<ReturnType<typeof uploadCiphertext>>> {
+  async function uploadAccountCiphertext(
+    plan?: UploadPlan,
+  ): Promise<Awaited<ReturnType<typeof uploadCiphertext>>> {
     if (!accountSession) throw new Error('请先登录账号。');
     return uploadCiphertext(
       new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }),
       cipherSyncStorage,
-      { onPhotoPerformance: logPhotoPerformance },
+      { onPhotoPerformance: logPhotoPerformance, plan },
     );
   }
 
   function queueAccountUpload(
+    plan: UploadPlan,
     onSuccess: (result: Awaited<ReturnType<typeof uploadCiphertext>>) => string,
     onFailure: (error: unknown) => string,
   ): void {
     if (!accountSession) return;
-    const nextUpload = accountUploadQueue.current
-      .catch(() => undefined)
-      .then(async () => {
+    pendingAccountUploadPlan.current = mergeUploadPlans(pendingAccountUploadPlan.current, plan);
+    const durablePlan = activeAccountUploadPlan.current
+      ? mergeUploadPlans(activeAccountUploadPlan.current, pendingAccountUploadPlan.current)
+      : pendingAccountUploadPlan.current;
+    void persistPendingAccountUploadPlan(durablePlan);
+    pendingAccountUploadMessages.current.push({ onSuccess, onFailure });
+    if (accountUploadQueue.current) return;
+    const run = (async () => {
+      const persisted = await getPendingUploadPlan();
+      if (persisted) {
+        pendingAccountUploadPlan.current = mergeUploadPlans(persisted, pendingAccountUploadPlan.current);
+      }
+      while (pendingAccountUploadPlan.current.memoryIds.length > 0
+        || pendingAccountUploadPlan.current.photoRefs.length > 0) {
+        const currentPlan = pendingAccountUploadPlan.current;
+        pendingAccountUploadPlan.current = { memoryIds: [], photoRefs: [] };
+        const messages = pendingAccountUploadMessages.current.splice(0);
+        activeAccountUploadPlan.current = currentPlan;
         try {
-          const result = await uploadAccountCiphertext();
-          setStatus(onSuccess(result));
+          const result = await uploadAccountCiphertext(currentPlan);
+          activeAccountUploadPlan.current = null;
+          await persistPendingAccountUploadPlan(
+            pendingAccountUploadPlan.current.memoryIds.length > 0
+              || pendingAccountUploadPlan.current.photoRefs.length > 0
+              ? pendingAccountUploadPlan.current
+              : null,
+          );
+          for (const message of messages) setStatus(message.onSuccess(result));
         } catch (error) {
+          pendingAccountUploadPlan.current = mergeUploadPlans(currentPlan, pendingAccountUploadPlan.current);
+          activeAccountUploadPlan.current = null;
+          await persistPendingAccountUploadPlan(pendingAccountUploadPlan.current);
           logMemoryDiagnostics('upload-error', { errorType: memoryDiagnosticErrorType(error) });
-          setStatus(onFailure(error));
+          for (const message of messages) setStatus(message.onFailure(error));
+          break;
         }
-      });
-    accountUploadQueue.current = nextUpload;
+      }
+    })().finally(() => {
+      activeAccountUploadPlan.current = null;
+      accountUploadQueue.current = null;
+    });
+    accountUploadQueue.current = run;
   }
 
   async function downloadRemoteCiphertext(): Promise<void> {

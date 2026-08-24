@@ -34,6 +34,7 @@ import {
 } from './product/productStore';
 import type { StoredAccountSession } from './sync/accountSession';
 import { MEMORY_RECALL_API_URL } from './sync/config';
+import type { UploadPlan } from './sync/syncActions';
 import { MemoryRecallSyncClient, SyncRequestError } from './sync/syncClient';
 import { useSilentCipherSync } from './sync/useSilentCipherSync';
 import { geocodeAddress, hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from './lib/geo';
@@ -56,6 +57,10 @@ interface AppProps {
   initialMemories: Memory[];
   onAccountSessionExpired: () => void;
   onLock: () => void;
+}
+
+function photoRefsForIds(ids: readonly string[]): UploadPlan['photoRefs'] {
+  return ids.flatMap((id) => (['thumbnail', 'preview', 'original'] as const).map((kind) => ({ id, kind })));
 }
 
 export default function App({
@@ -135,7 +140,7 @@ export default function App({
         }
       }
       if (persistedUpdates.length > 0 && !cancelled) {
-        await enqueueSilentSync();
+        await enqueueSilentSync({ memoryIds: persistedUpdates.map((memory) => memory.id), photoRefs: [] });
         const updatesById = new Map(persistedUpdates.map((memory) => [memory.id, memory]));
         setMemories((current) => current.map((memory) => {
           const update = updatesById.get(memory.id);
@@ -365,8 +370,11 @@ export default function App({
       rotation: rnd(-9, 9),
     };
 
-    await saveProductMemory(session, completedMemory);
-    await enqueueSilentSync();
+    const newPhotoRefs = await saveProductMemory(session, completedMemory);
+    await enqueueSilentSync({
+      memoryIds: [completedMemory.id],
+      photoRefs: photoRefsForIds(newPhotoRefs.map((photo) => photo.id)),
+    });
     const updated = [completedMemory, ...memories];
     setMemories(updated);
     if (memories.length === 0) setFirstMemoryFeedback(completedMemory);
@@ -399,8 +407,14 @@ export default function App({
       || previousMem.lat !== updatedMem.lat
       || previousMem.lng !== updatedMem.lng
     ) : false;
-    await saveProductMemory(session, updatedMem);
-    await enqueueSilentSync();
+    const previousPhotoIds = new Set(previousMem?.photoIds ?? []);
+    const savedPhotoRefs = await saveProductMemory(session, updatedMem);
+    await enqueueSilentSync({
+      memoryIds: [updatedMem.id],
+      photoRefs: photoRefsForIds(savedPhotoRefs
+        .filter((photo) => !previousPhotoIds.has(photo.id))
+        .map((photo) => photo.id)),
+    });
     handleUpdateMemory(updatedMem);
     if (locationChanged) setFocusMemory(updatedMem);
   };
@@ -439,7 +453,7 @@ export default function App({
 
   const handleDeleteMemory = async (id: string) => {
     await deleteProductMemory(id);
-    await enqueueSilentSync();
+    await enqueueSilentSync({ memoryIds: [id], photoRefs: [] });
     const updated = memories.filter(m => m.id !== id);
     setMemories(updated);
     if (selectedMemory && selectedMemory.id === id) {

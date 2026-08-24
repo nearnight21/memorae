@@ -14,6 +14,7 @@ import {
   readCipherSyncQueueState,
   type CipherSyncQueueState,
 } from '../sync/syncQueue';
+import type { UploadPlan } from '../sync/syncActions';
 
 const DATABASE_NAME = 'memory-recall-vmk-prototype';
 const DATABASE_VERSION = 2;
@@ -25,6 +26,7 @@ const PHOTO_ID_INDEX = 'photo-id';
 const VAULT_KEY = 'vault-v1';
 const ACCOUNT_SESSION_KEY = 'account-session-v1';
 const CIPHER_SYNC_QUEUE_KEY = 'cipher-sync-queue-v1';
+const CIPHER_SYNC_PLAN_KEY = 'cipher-sync-plan-v1';
 const ENCRYPTED_PHOTO_CACHE_LIMIT_BYTES = 96 * 1024 * 1024;
 
 interface StoredEncryptedPhoto extends EncryptedPhotoV1 {
@@ -195,6 +197,47 @@ export async function markCipherSyncPending(): Promise<CipherSyncQueueState> {
     store.put(next, CIPHER_SYNC_QUEUE_KEY);
     await transactionComplete(transaction);
     return next;
+  });
+}
+
+export async function getEncryptedMemory(memoryId: string): Promise<EncryptedMemoryV1 | null> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(MEMORY_STORE, 'readonly');
+    const value = await requestResult(
+      transaction.objectStore(MEMORY_STORE).get(memoryId) as IDBRequest<EncryptedMemoryV1 | undefined>,
+    );
+    return value ?? null;
+  });
+}
+
+export async function getCipherSyncPlan(): Promise<UploadPlan | null> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readonly');
+    const value = await requestResult(transaction.objectStore(META_STORE).get(CIPHER_SYNC_PLAN_KEY));
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Partial<UploadPlan>;
+    if (!Array.isArray(candidate.memoryIds) || !Array.isArray(candidate.photoRefs)) return null;
+    if (!candidate.memoryIds.every((id) => typeof id === 'string')) return null;
+    if (!candidate.photoRefs.every((photo) => (
+      Boolean(photo)
+      && typeof photo === 'object'
+      && typeof (photo as { id?: unknown }).id === 'string'
+      && ['thumbnail', 'preview', 'original'].includes((photo as { kind?: unknown }).kind as string)
+    ))) return null;
+    return {
+      memoryIds: [...candidate.memoryIds],
+      photoRefs: candidate.photoRefs.map((photo) => ({ id: photo.id, kind: photo.kind })),
+    } as UploadPlan;
+  });
+}
+
+export async function saveCipherSyncPlan(plan: UploadPlan | null): Promise<void> {
+  return withDatabase(async (database) => {
+    const transaction = database.transaction(META_STORE, 'readwrite');
+    const store = transaction.objectStore(META_STORE);
+    if (plan) store.put(plan, CIPHER_SYNC_PLAN_KEY);
+    else store.delete(CIPHER_SYNC_PLAN_KEY);
+    await transactionComplete(transaction);
   });
 }
 

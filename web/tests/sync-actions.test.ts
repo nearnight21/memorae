@@ -9,6 +9,7 @@ import type {
 import {
   downloadCiphertext,
   downloadPhotoVariant,
+  mergeUploadPlans,
   uploadCiphertext,
   type CipherSyncStorage,
 } from '../src/sync/syncActions';
@@ -199,6 +200,54 @@ test('照片上传失败时仍先上传记忆密文', async () => {
   assert.deepEqual(uploaded, ['memory-before-photo']);
 });
 
+test('增量上传只读取计划中的照片，不扫描整个照片库', async () => {
+  const uploadedMemories: string[] = [];
+  const uploadedPhotos: string[] = [];
+  const selected = photo('thumbnail', 'photo-new');
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    putVault: async () => undefined,
+    putMemory: async (item: EncryptedMemoryV1) => { uploadedMemories.push(item.id); },
+    putPhotoVariant: async (item: EncryptedPhotoV1) => { uploadedPhotos.push(`${item.id}:${item.kind}`); },
+  } as unknown as MemoryRecallSyncClient;
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [memory, { ...memory, id: 'memory-other' }],
+    listPhotos: async () => { throw new Error('增量上传不应扫描全部照片'); },
+    getPhoto: async (id, kind) => id === selected.id && kind === selected.kind ? selected : null,
+    saveMemory: async () => undefined,
+    savePhoto: async () => undefined,
+  };
+
+  await uploadCiphertext(client, storage, {
+    memoryIds: [memory.id],
+    photoRefs: [{ id: selected.id, kind: selected.kind }],
+  });
+
+  assert.deepEqual(uploadedMemories, [memory.id]);
+  assert.deepEqual(uploadedPhotos, ['photo-new:thumbnail']);
+});
+
+test('上传计划合并并去重记忆和照片档位', () => {
+  assert.deepEqual(
+    mergeUploadPlans(
+      { memoryIds: ['memory-1'], photoRefs: [{ id: 'photo-1', kind: 'thumbnail' }] },
+      { memoryIds: ['memory-1', 'memory-2'], photoRefs: [
+        { id: 'photo-1', kind: 'thumbnail' },
+        { id: 'photo-1', kind: 'original' },
+      ] },
+    ),
+    {
+      memoryIds: ['memory-1', 'memory-2'],
+      photoRefs: [
+        { id: 'photo-1', kind: 'thumbnail' },
+        { id: 'photo-1', kind: 'original' },
+      ],
+    },
+  );
+});
+
 test('首次恢复只下载缩略图，不预取预览和原图', async () => {
   const photoIds = Array.from({ length: 18 }, (_, index) => `photo-${String(index + 1).padStart(3, '0')}`);
   const requestedKinds: PhotoKind[] = [];
@@ -235,6 +284,34 @@ test('首次恢复只下载缩略图，不预取预览和原图', async () => {
   assert.deepEqual(cachedKinds, Array<PhotoKind>(18).fill('thumbnail'));
   assert.deepEqual(permanentlySavedKinds, []);
   assert.equal(result.photos, 18);
+});
+
+test('远端记忆版本更新但本地已有缩略图时跳过 COS 下载', async () => {
+  let downloadCalls = 0;
+  const remoteMemory = { ...memory, version: 2 };
+  const client = {
+    getVault: async (): Promise<VaultEnvelopeV1> => vault,
+    listMemories: async (): Promise<EncryptedMemoryV1[]> => [remoteMemory],
+    getPhotoVariant: async () => { downloadCalls += 1; throw new Error('不应下载已缓存缩略图'); },
+  } as unknown as MemoryRecallSyncClient;
+  const storage: CipherSyncStorage = {
+    getVault: async () => vault,
+    saveVault: async () => undefined,
+    listMemories: async () => [memory],
+    listPhotos: async () => [],
+    getPhoto: async () => photo('thumbnail'),
+    saveMemory: async () => undefined,
+    savePhoto: async () => undefined,
+  };
+
+  const result = await downloadCiphertext({
+    client,
+    storage,
+    decryptMemory: async () => ({ photos: [{ id: 'photo-001' }] }),
+  });
+
+  assert.equal(downloadCalls, 0);
+  assert.equal(result.photos, 0);
 });
 
 test('按需照片下载只请求指定档位，原图不写入默认缓存', async () => {

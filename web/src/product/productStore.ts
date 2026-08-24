@@ -302,12 +302,16 @@ async function currentEncrypted(memoryId: string): Promise<EncryptedMemoryV1 | u
   return (await listEncryptedMemories()).find((memory) => memory.id === memoryId);
 }
 
-export async function saveProductMemory(session: VaultSessionV1, memory: Memory): Promise<void> {
+export async function saveProductMemory(
+  session: VaultSessionV1,
+  memory: Memory,
+): Promise<MemoryPhotoV1[]> {
   const current = await currentEncrypted(memory.id);
   const previous = current && !current.deleted ? (await decryptMemoryV2(session, current)).memory : undefined;
   const photos = await photoReferences(session, memory);
   const next = toMemoryV2(memory, photos, previous);
   await saveEncryptedMemory(await encryptMemoryV2(session, next, (current?.version ?? 0) + 1));
+  return photos;
 }
 
 export async function deleteProductMemory(memoryId: string): Promise<void> {

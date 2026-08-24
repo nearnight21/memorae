@@ -8,11 +8,13 @@ import {
   type EncryptedPhotoV1,
   type VaultEnvelopeV1,
 } from '../crypto';
+import type { UploadPlan } from '../sync/syncActions';
 
 const DATABASE_NAME = 'memory-recall-vmk.db';
 const PHOTO_DIRECTORY_NAME = 'encrypted-photos-v1';
 const VAULT_META_KEY = 'vault-envelope-v1';
 const DEVICE_UNLOCK_META_KEY = 'device-unlock-v1';
+const PENDING_UPLOAD_PLAN_META_KEY = 'pending-upload-plan-v1';
 const STORAGE_SCHEMA_VERSION = 2;
 
 let databasePromise: Promise<SQLiteDatabase> | null = null;
@@ -134,6 +136,32 @@ export async function saveDeviceUnlockRecord(value: string | null): Promise<void
   await setMetadata(DEVICE_UNLOCK_META_KEY, value);
 }
 
+export async function getPendingUploadPlan(): Promise<UploadPlan | null> {
+  const value = await getMetadata(PENDING_UPLOAD_PLAN_META_KEY);
+  if (!value) return null;
+  try {
+    const candidate = JSON.parse(value) as Partial<UploadPlan>;
+    if (!Array.isArray(candidate.memoryIds) || !Array.isArray(candidate.photoRefs)) return null;
+    if (!candidate.memoryIds.every((id) => typeof id === 'string')) return null;
+    if (!candidate.photoRefs.every((photo) => (
+      Boolean(photo)
+      && typeof photo === 'object'
+      && typeof (photo as { id?: unknown }).id === 'string'
+      && ['thumbnail', 'preview', 'original'].includes((photo as { kind?: unknown }).kind as string)
+    ))) return null;
+    return {
+      memoryIds: [...candidate.memoryIds],
+      photoRefs: candidate.photoRefs.map((photo) => ({ id: photo.id!, kind: photo.kind! })),
+    } as UploadPlan;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePendingUploadPlan(plan: UploadPlan | null): Promise<void> {
+  await setMetadata(PENDING_UPLOAD_PLAN_META_KEY, plan ? JSON.stringify(plan) : null);
+}
+
 export async function saveEncryptedMemory(memory: EncryptedMemoryV1): Promise<void> {
   const database = await openDatabase();
   await database.runAsync(
@@ -150,6 +178,15 @@ export async function listEncryptedMemories(): Promise<EncryptedMemoryV1[]> {
     'SELECT encrypted_json FROM memories ORDER BY rowid DESC',
   );
   return rows.map((row) => JSON.parse(row.encrypted_json) as EncryptedMemoryV1);
+}
+
+export async function getEncryptedMemory(memoryId: string): Promise<EncryptedMemoryV1 | null> {
+  const database = await openDatabase();
+  const row = await database.getFirstAsync<{ encrypted_json: string }>(
+    'SELECT encrypted_json FROM memories WHERE id = ?',
+    memoryId,
+  );
+  return row ? JSON.parse(row.encrypted_json) as EncryptedMemoryV1 : null;
 }
 
 export async function saveEncryptedPhoto(photo: EncryptedPhotoV1): Promise<void> {
