@@ -1,6 +1,7 @@
 import {
   Image,
   KeyboardAvoidingView,
+  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import type { MemoryLocationV2 } from '../memory/memoryV2';
 import { androidTopInset } from '../ui/layout';
+import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
 
 export interface MemoryEditValues {
   title: string;
@@ -23,6 +25,7 @@ export interface MemoryEditValues {
 }
 
 interface Props extends MemoryEditValues {
+  mode?: 'create' | 'edit';
   photoUris: readonly (string | null)[];
   busy?: boolean;
   onChange: (field: keyof Omit<MemoryEditValues, 'location' | 'photoCount'>, value: string) => void;
@@ -51,6 +54,7 @@ function PhotoSheet({ uri, style }: { uri: string | null; style?: object }) {
 }
 
 export default function MemoryEditOverlay({
+  mode = 'edit',
   title,
   date,
   pastSelf,
@@ -68,8 +72,13 @@ export default function MemoryEditOverlay({
   const { width, height } = useWindowDimensions();
   const count = Math.max(photoCount, photoUris.length);
   const photos = Array.from({ length: count }, (_, index) => photoUris[index] ?? null);
-  const heroWidth = Math.min(Math.max(width - 32, 280), 358);
-  const heroHeight = Math.min(Math.max(height * 0.5, 360), 422);
+  const topInset = androidTopInset();
+  const { width: heroWidth, height: heroHeight, top: heroTop } = memoryHeroLayout(
+    width,
+    height,
+    topInset,
+    PixelRatio.get(),
+  );
   const dateLabel = date.replace(/-/g, '.');
 
   return (
@@ -77,17 +86,17 @@ export default function MemoryEditOverlay({
       <View pointerEvents="none" style={styles.mapReadability} />
       <View pointerEvents="none" style={styles.mapDim} />
       <View pointerEvents="none" style={styles.warmGradient} />
-      <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="取消编辑" onPress={onCancel} style={styles.topAction}>
-          <Text style={styles.cancelText}>取消</Text>
+      <View style={[styles.topBar, { top: topInset }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={mode === 'create' ? '退出新建' : '取消编辑'} onPress={onCancel} style={styles.topAction}>
+          <Text style={styles.cancelText}>{mode === 'create' ? '退出' : '取消'}</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="保存编辑" disabled={busy} onPress={onSave} style={styles.topAction}>
+        <Pressable accessibilityRole="button" accessibilityLabel={mode === 'create' ? '完成新建' : '保存编辑'} disabled={busy} onPress={onSave} style={styles.topAction}>
           <Text style={[styles.saveText, busy && styles.disabled]}>{busy ? '保存中…' : '完成'}</Text>
         </Pressable>
       </View>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingTop: androidTopInset() + 10 }]}
+        contentContainerStyle={[styles.content, { paddingTop: heroTop }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -99,7 +108,7 @@ export default function MemoryEditOverlay({
           </View>
         )}
         <Pressable accessibilityRole="button" accessibilityLabel="管理照片" onPress={onManagePhotos} style={styles.photoSummary}>
-          <Text style={styles.photoSummaryText}>{count} 张 · 管理</Text>
+          <Text style={styles.photoSummaryText}>{count > 0 ? `${count} 张 · 管理` : '＋ 添加照片'}</Text>
         </Pressable>
         <View style={[styles.editBody, count === 0 && styles.noPhotoBody]}>
           <View style={styles.titleFocus}>
@@ -174,8 +183,8 @@ const styles = StyleSheet.create({
   mapReadability: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.34)' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(42,36,30,0.12)' },
   warmGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '52%', backgroundColor: 'rgba(233,221,202,0.72)' },
-  topBar: { position: 'absolute', top: androidTopInset(), left: 0, right: 0, height: 44, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 5 },
-  topAction: { minWidth: 34, minHeight: 36, justifyContent: 'center' },
+  topBar: { position: 'absolute', left: 0, right: 0, height: 44, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 5 },
+  topAction: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
   cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, lineHeight: 20, fontWeight: '500' },
   saveText: { color: '#754f31', fontSize: 14, lineHeight: 20, fontWeight: '500', textAlign: 'right' },
   disabled: { opacity: 0.45 },
@@ -185,7 +194,7 @@ const styles = StyleSheet.create({
   photoPaper: { position: 'absolute', padding: 7, backgroundColor: 'rgba(245,238,226,0.92)', borderWidth: 1, borderColor: 'rgba(215,204,188,0.72)', shadowColor: '#1a140f', shadowOpacity: 0.26, shadowRadius: 8, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   backPaperA: { transform: [{ rotate: '2.2deg' }], top: 16, left: 4 },
   backPaperB: { transform: [{ rotate: '-1.6deg' }], top: 4, left: 2 },
-  heroPaper: { transform: [{ rotate: '-0.6deg' }], top: 8 },
+  heroPaper: { transform: [{ rotate: '-0.35deg' }], top: 8 },
   photoInset: { flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', overflow: 'hidden', backgroundColor: '#dfe4df' },
   photoImage: { width: '100%', height: '100%' },
   paperEdge: { position: 'absolute', left: 7, right: 7, bottom: 8, height: 2, backgroundColor: 'rgba(216,203,185,0.55)' },

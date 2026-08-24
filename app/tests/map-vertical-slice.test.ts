@@ -4,9 +4,21 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
+import { buildAmapRuntimeHtml } from '../src/map/amapRuntimeHtml';
 import { findMemoryForMarker, memoriesToMapMarkers } from '../src/map/memoryMapAdapter';
+import {
+  buildHomeRegionOptions,
+  currentHomeRegionLabel,
+  HOME_CHINA_CAMERA,
+} from '../src/map/homeMapModel';
 import { normalizeLocationResult } from '../src/location/locationClient';
 import type { MemoryV2 } from '../src/memory/memoryV2';
+import {
+  circularPhotoIndex,
+  shouldDismissDetail,
+  shouldStartDetailDismiss,
+  shouldStartPhotoPaging,
+} from '../src/detail/detailGestures';
 import {
   CITY_LABEL_MIN_ZOOM,
   OVERSEAS_CITIES,
@@ -92,8 +104,19 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /message\.type === 'setCamera'/);
   assert.match(runtimeSource, /Math\.abs\(currentLat - message\.lat\)/);
   assert.match(runtimeSource, /\.marker \{ display: block;/);
+  assert.match(runtimeSource, /memory-count/);
+  assert.match(runtimeSource, /groupDescriptor/);
+  assert.match(runtimeSource, /zooms: \[4, 14\]/);
+  assert.match(runtimeSource, /Math\.max\(4, Math\.min\(14, message\.zoom\)\)/);
+  assert.doesNotMatch(runtimeSource, /setFitView|MarkerCluster|transform:scale/);
   assert.doesNotMatch(source, /onScroll|onTouchMove|onPanResponderMove/);
   assert.match(source, /clearSensitiveData/);
+});
+
+test('地图 Runtime 内嵌脚本保持可执行语法', () => {
+  const html = buildAmapRuntimeHtml('test-key', 'test-security-code');
+  const script = html.slice(html.indexOf('<script>') + '<script>'.length, html.lastIndexOf('</script>'));
+  assert.doesNotThrow(() => new Function(script));
 });
 
 test('地点服务结果转换为 MemoryV2.location 时保留版面坐标，不把经纬度写入 mx/my', () => {
@@ -130,12 +153,34 @@ test('正式详情和地点选择器保留本轮冻结的运行状态边界', as
   assert.match(detailSource, /photoCount > 1/);
   assert.match(detailSource, /loading/);
   assert.match(detailSource, /unavailable/);
+  assert.match(detailSource, /circularPhotoIndex/);
+  assert.match(detailSource, /detailResponder\.panHandlers/);
+  assert.match(detailSource, /shouldDismissDetail/);
+  assert.doesNotMatch(detailSource, /accessibilityLabel="关闭详情"/);
+  assert.doesNotMatch(detailSource, /styles\.closeIcon/);
   assert.doesNotMatch(detailSource, /updatedAt/);
   assert.match(pickerSource, /requestId\.current/);
   assert.match(pickerSource, /locationClient\.reverse/);
   assert.match(pickerSource, /locationClient\.suggest/);
   assert.match(pickerSource, /initialCamera/);
   assert.match(pickerSource, /onConfirm/);
+});
+
+test('详情照片支持首尾循环，并按主方向区分翻页与下滑关闭', () => {
+  assert.equal(circularPhotoIndex(2, 1, 3), 0);
+  assert.equal(circularPhotoIndex(0, -1, 3), 2);
+  assert.equal(circularPhotoIndex(0, 1, 1), 0);
+  assert.equal(circularPhotoIndex(0, 1, 0), 0);
+
+  assert.equal(shouldStartPhotoPaging(24, 4), true);
+  assert.equal(shouldStartPhotoPaging(12, 12), false);
+  assert.equal(shouldStartDetailDismiss(4, 24), true);
+  assert.equal(shouldStartDetailDismiss(20, 20), false);
+  assert.equal(shouldStartDetailDismiss(0, -24), false);
+
+  assert.equal(shouldDismissDetail(130, 0.2, 800), true);
+  assert.equal(shouldDismissDetail(30, 1, 800), true);
+  assert.equal(shouldDismissDetail(80, 0.4, 800), false);
 });
 
 test('地点选择模式复用 Home 的唯一地图实例', async () => {
@@ -163,7 +208,8 @@ test('正式 App 只把有效地点坐标送入本地地图，不把正文或照
   assert.match(source, /memory\.location/);
   assert.match(source, /AmapJsWebViewMap/);
   assert.match(source, /memoriesToMapMarkers/);
-  assert.match(source, /locationCoordinates/);
+  assert.match(source, /firstPhotoCoordinates/);
+  assert.match(source, /mobileLocationClient\.convertGps/);
   assert.match(source, /provider: 'amap'/);
   assert.match(source, /handleMarkerPressed/);
   assert.doesNotMatch(source, /pastSelf.*AmapJsWebViewMap|photos.*AmapJsWebViewMap/);
@@ -205,6 +251,73 @@ test('真实 MemoryV2 到地图 Marker 的适配只暴露坐标，并能反查�
   ]);
   assert.equal(findMemoryForMarker([withCoordinates], 'with-coordinates'), withCoordinates);
   assert.equal(findMemoryForMarker([withCoordinates], 'missing'), null);
+});
+
+test('地图缩略图尺寸不再由照片数量决定，同省多段记忆按段数生成区域角标数据', () => {
+  const memory = (id: string, lat: number, lng: number, photoCount: number): MemoryV2 => ({
+    schemaVersion: 2,
+    id,
+    title: id,
+    pastSelf: '',
+    presentSelf: '',
+    date: '2026-08-24',
+    category: 'travel',
+    tag: '',
+    pinnedBy: 'pin',
+    board: { px: 20, py: 20, rotation: 0 },
+    location: {
+      name: '宁波',
+      mx: 50,
+      my: 50,
+      lat,
+      lng,
+      country: '中国',
+      province: '浙江省',
+      city: '宁波市',
+    },
+    photos: Array.from({ length: photoCount }, (_, index) => ({ id: `${id}-photo-${index}`, mimeType: 'image/jpeg' })),
+    createdAt: '2026-08-24T00:00:00.000Z',
+    updatedAt: '2026-08-24T00:00:00.000Z',
+  });
+  const memories = [
+    memory('memory-a', 29.8683, 121.544, 1),
+    memory('memory-b', 29.872, 121.55, 3),
+    memory('memory-c', 29.88, 121.56, 6),
+  ];
+  const markers = memoriesToMapMarkers(memories, {
+    'memory-a': ['data:image/jpeg;base64,YQ=='],
+    'memory-b': ['data:image/jpeg;base64,Yg==', 'data:image/jpeg;base64,Yw=='],
+    'memory-c': ['data:image/jpeg;base64,ZA==', 'data:image/jpeg;base64,ZQ=='],
+  });
+
+  assert.equal(markers.length, 3);
+  assert.deepEqual(markers.map((marker) => marker.thumbnailRef), [
+    'data:image/jpeg;base64,YQ==',
+    'data:image/jpeg;base64,Yg==',
+    'data:image/jpeg;base64,ZA==',
+  ]);
+  assert.ok(markers.every((marker) => !('scale' in marker) && !('photoCount' in marker) && !('thumbnailRefs' in marker)));
+
+  const options = buildHomeRegionOptions(memories);
+  assert.deepEqual(options.find((option) => option.key === 'country:中国')?.camera, HOME_CHINA_CAMERA);
+  assert.equal(options.find((option) => option.key === 'province:中国:浙江省')?.memoryCount, 3);
+  assert.equal(options.find((option) => option.key === 'city:中国:浙江省:宁波市')?.memoryCount, 3);
+  const bounds = { north: 31, south: 28, east: 123, west: 120 };
+  assert.equal(currentHomeRegionLabel({ ...HOME_CHINA_CAMERA, bounds }, memories), '中国');
+  assert.equal(currentHomeRegionLabel({ lat: 30, lng: 121.5, zoom: 6, bounds }, memories), '浙江');
+  assert.equal(currentHomeRegionLabel({ lat: 30, lng: 121.5, zoom: 9, bounds }, memories), '浙江 · 宁波');
+});
+
+test('Home 地区选择接通真实视野和相机导航，不再使用占位提示', async () => {
+  const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
+  const homeSource = await readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8');
+  assert.match(appSource, /buildHomeRegionOptions/);
+  assert.match(appSource, /currentHomeRegionLabel/);
+  assert.match(appSource, /initialCamera=\{HOME_CHINA_CAMERA\}/);
+  assert.match(appSource, /onRegionSelect=\{selectHomeRegion\}/);
+  assert.doesNotMatch(appSource, /地区选择入口已保留/);
+  assert.match(homeSource, /regionOptions\.map/);
+  assert.match(homeSource, /memoryCount\} 段/);
 });
 
 test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {

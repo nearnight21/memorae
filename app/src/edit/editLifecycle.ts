@@ -16,6 +16,30 @@ export interface EditableMemoryValues {
   location: MemoryV2['location'];
 }
 
+export function buildCreatedMemory(
+  values: EditableMemoryValues,
+  photos: MemoryPhotoV1[],
+  id: string,
+  createdAt: string,
+): MemoryV2 {
+  return {
+    schemaVersion: 2,
+    id,
+    title: values.title.trim() || '无标题',
+    date: values.date,
+    category: values.location ? 'travel' : 'growth',
+    tag: '',
+    pastSelf: values.pastSelf,
+    presentSelf: values.presentSelf,
+    pinnedBy: 'pin',
+    board: { px: 20, py: 20, rotation: 0 },
+    location: values.location,
+    photos: photos.map((photo) => ({ ...photo })),
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
 export function buildEditedMemory(
   original: MemoryV2,
   values: EditableMemoryValues,

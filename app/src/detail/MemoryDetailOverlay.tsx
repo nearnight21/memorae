@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   PanResponder,
+  PixelRatio,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +12,13 @@ import {
 } from 'react-native';
 import type { MemoryV2 } from '../memory/memoryV2';
 import { androidTopInset } from '../ui/layout';
+import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
+import {
+  circularPhotoIndex,
+  shouldDismissDetail,
+  shouldStartDetailDismiss,
+  shouldStartPhotoPaging,
+} from './detailGestures';
 
 export type DetailPhotoState = 'loading' | 'ready' | 'unavailable';
 
@@ -36,14 +45,21 @@ export default function MemoryDetailOverlay({ memory, photoUris, photoStates, on
   const { width, height } = useWindowDimensions();
   const [photoIndex, setPhotoIndex] = useState(0);
   const photoOffset = useRef(new Animated.Value(0)).current;
+  const detailOffset = useRef(new Animated.Value(0)).current;
+  const detailDismissing = useRef(false);
   const photoCount = memory.photos.length;
-  const heroWidth = Math.min(width - 32, 358);
-  const heroHeight = Math.min(Math.max(height * 0.43, 300), 422);
+  const topInset = androidTopInset();
+  const { width: heroWidth, height: heroHeight, top: heroTop } = memoryHeroLayout(
+    width,
+    height,
+    topInset,
+    PixelRatio.get(),
+  );
   const currentUri = photoUris[photoIndex] ?? null;
   const currentState = photoStates[photoIndex] ?? (photoCount > 0 ? 'loading' : 'unavailable');
 
   const movePhoto = (direction: -1 | 1) => {
-    const next = Math.max(0, Math.min(photoCount - 1, photoIndex + direction));
+    const next = circularPhotoIndex(photoIndex, direction, photoCount);
     if (next === photoIndex) {
       Animated.spring(photoOffset, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }).start();
       return;
@@ -53,37 +69,72 @@ export default function MemoryDetailOverlay({ memory, photoUris, photoStates, on
   };
 
   const responder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > Math.abs(gesture.dy) && Math.abs(gesture.dx) > 8,
+    onMoveShouldSetPanResponder: (_, gesture) => shouldStartPhotoPaging(gesture.dx, gesture.dy),
     onPanResponderMove: (_, gesture) => photoOffset.setValue(gesture.dx),
     onPanResponderRelease: (_, gesture) => {
       if (gesture.dx < -48) movePhoto(1);
       else if (gesture.dx > 48) movePhoto(-1);
       else Animated.spring(photoOffset, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }).start();
     },
+    onPanResponderTerminate: () => {
+      Animated.spring(photoOffset, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }).start();
+    },
   }), [photoIndex, photoCount, photoOffset]);
+
+  const resetDetailPosition = useCallback(() => {
+    Animated.spring(detailOffset, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 4,
+    }).start();
+  }, [detailOffset]);
+
+  const dismissDetail = useCallback(() => {
+    if (detailDismissing.current) return;
+    detailDismissing.current = true;
+    Animated.timing(detailOffset, {
+      toValue: height + 40,
+      duration: 210,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        onClose();
+        return;
+      }
+      detailDismissing.current = false;
+      resetDetailPosition();
+    });
+  }, [detailOffset, height, onClose, resetDetailPosition]);
+
+  const detailResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => shouldStartDetailDismiss(gesture.dx, gesture.dy),
+    onPanResponderMove: (_, gesture) => detailOffset.setValue(Math.max(0, gesture.dy)),
+    onPanResponderRelease: (_, gesture) => {
+      if (shouldDismissDetail(gesture.dy, gesture.vy, height)) dismissDetail();
+      else resetDetailPosition();
+    },
+    onPanResponderTerminate: resetDetailPosition,
+  }), [detailOffset, dismissDetail, height, resetDetailPosition]);
 
   const backA = photoCount > 1 ? photoUris[(photoIndex + photoCount - 1) % photoCount] : null;
   const backB = photoCount > 2 ? photoUris[(photoIndex + 1) % photoCount] : null;
 
   return (
-    <View style={styles.root}>
+    <Animated.View
+      style={[styles.root, { transform: [{ translateY: detailOffset }] }]}
+      {...detailResponder.panHandlers}
+    >
       <View pointerEvents="none" style={styles.mapDim} />
       <View pointerEvents="none" style={[styles.warmGradient, { top: height * 0.51, height: height * 0.49 }]} />
       <View style={styles.safeArea}>
-        <View style={styles.topBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="关闭详情"
-            onPress={onClose}
-            style={styles.iconButton}
-          >
-            <Text style={styles.closeIcon}>×</Text>
-          </Pressable>
+        <View style={[styles.topBar, { top: topInset }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="更多操作" onPress={onMore} style={styles.iconButton}>
             <Text style={styles.moreIcon}>···</Text>
           </Pressable>
         </View>
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingTop: heroTop }]}>
           {photoCount > 0 && <View style={[styles.photoStage, { width: heroWidth, height: heroHeight }]} {...responder.panHandlers}>
             {backA && <View style={[styles.photoPaper, styles.backPaperA, { width: heroWidth - 10, height: heroHeight - 10 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backA }} style={styles.photoImage} resizeMode="cover" onLoad={() => onPhotoDisplayed((photoIndex + photoCount - 1) % photoCount)} /></View></View>}
             {backB && <View style={[styles.photoPaper, styles.backPaperB, { width: heroWidth - 8, height: heroHeight - 8 }]}><View style={styles.photoInset}><Animated.Image source={{ uri: backB }} style={styles.photoImage} resizeMode="cover" onLoad={() => onPhotoDisplayed((photoIndex + 1) % photoCount)} /></View></View>}
@@ -109,7 +160,7 @@ export default function MemoryDetailOverlay({ memory, photoUris, photoStates, on
           {photoCount > 1 && <Text style={styles.pagination}>{photoIndex + 1} / {photoCount}</Text>}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -117,13 +168,12 @@ const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent', zIndex: 10 },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(42,36,30,0.12)' },
   warmGradient: { position: 'absolute', left: 0, right: 0, backgroundColor: 'rgba(233,221,202,0.72)' },
-  safeArea: { flex: 1, paddingTop: androidTopInset() },
-  topBar: { height: 62, paddingHorizontal: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  iconButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(244,236,221,0.84)' },
-  closeIcon: { color: '#302a23', fontSize: 27, lineHeight: 29, fontWeight: '600' },
+  safeArea: { flex: 1 },
+  topBar: { position: 'absolute', left: 0, right: 0, height: 44, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', zIndex: 5 },
+  iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(244,236,221,0.84)' },
   moreIcon: { color: '#302a23', fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: 1 },
   content: { flex: 1, alignItems: 'center' },
-  photoStage: { marginTop: 0, alignItems: 'center', justifyContent: 'center' },
+  photoStage: { alignItems: 'center', justifyContent: 'center' },
   photoPaper: { position: 'absolute', padding: 7, backgroundColor: 'rgba(245,238,226,0.92)', borderWidth: 1, borderColor: 'rgba(215,204,188,0.72)', shadowColor: '#1a140f', shadowOpacity: 0.26, shadowRadius: 8, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
   backPaperA: { transform: [{ rotate: '2deg' }], top: 14, left: 4 },
   backPaperB: { transform: [{ rotate: '-1.6deg' }], top: 4, left: 2 },

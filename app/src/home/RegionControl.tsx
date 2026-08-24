@@ -3,18 +3,20 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 interface Props {
   label: string;
   onPress?: () => void;
+  expanded?: boolean;
 }
 
-export default function RegionControl({ label, onPress }: Props) {
+export default function RegionControl({ label, onPress, expanded = false }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="选择地区"
+      accessibilityState={{ expanded }}
       onPress={onPress}
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <Text numberOfLines={1} style={styles.label}>{label}</Text>
-      <Text style={styles.chevron}>⌄</Text>
+      <Text style={styles.chevron}>{expanded ? '⌃' : '⌄'}</Text>
     </Pressable>
   );
 }

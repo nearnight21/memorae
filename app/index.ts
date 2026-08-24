@@ -1,4 +1,7 @@
+import React from 'react';
 import { registerRootComponent } from 'expo';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import App from './App';
 import MapVerticalSliceApp from './src/map/MapVerticalSliceApp';
@@ -12,7 +15,19 @@ const RootComponent = __DEV__ && process.env.EXPO_PUBLIC_AMAP_WEBVIEW_SLICE === 
   ? MapVerticalSliceApp
   : App;
 
+function ApplicationRoot() {
+  return React.createElement(
+    GestureHandlerRootView,
+    { style: { flex: 1 } },
+    React.createElement(
+      SafeAreaProvider,
+      null,
+      React.createElement(RootComponent),
+    ),
+  );
+}
+
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
-registerRootComponent(RootComponent);
+registerRootComponent(ApplicationRoot);

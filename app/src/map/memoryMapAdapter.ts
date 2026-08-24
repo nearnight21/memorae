@@ -11,14 +11,19 @@ export function memoriesToMapMarkers(
   return memories.flatMap((memory) => {
     const location = memory.location;
     if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return [];
-    const base = { id: memory.id, lat: location.lat!, lng: location.lng! };
+    const base = {
+      id: memory.id,
+      lat: location.lat!,
+      lng: location.lng!,
+      ...(location.country ? { country: location.country } : {}),
+      ...(location.province ? { province: location.province } : {}),
+      ...(location.city ? { city: location.city } : {}),
+    };
     if (!thumbnailRefs) return [base];
     const refs = thumbnailRefs[memory.id] ?? [];
     return [{
       ...base,
-      photoCount: memory.photos.length,
-      thumbnailRefs: refs.slice(0, 3),
-      scale: Math.min(1.2, 0.82 + Math.min(memory.photos.length, 3) * 0.11),
+      ...(refs[0] ? { thumbnailRef: refs[0] } : {}),
     }];
   });
 }

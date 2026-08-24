@@ -86,4 +86,8 @@ export class MobileLocationClient {
   reverse(coordinates: LocationCoordinates): Promise<LocationReverseResult | null> {
     return this.client.reverseLocation(coordinates);
   }
+
+  convertGps(coordinates: LocationCoordinates): Promise<LocationCoordinates | null> {
+    return this.client.convertGpsCoordinates(coordinates);
+  }
 }

@@ -36,6 +36,11 @@ export interface LocationReverseResponse {
   adcode?: string;
 }
 
+export interface LocationCoordinatesResponse {
+  lat: number;
+  lng: number;
+}
+
 export interface SyncClientOptions {
   baseUrl: string;
   token: string;
@@ -204,6 +209,13 @@ export class MemoryRecallSyncClient {
       lng: String(coordinates.lng),
     });
     return this.request(`/v1/location/reverse?${params.toString()}`);
+  }
+
+  convertGpsCoordinates(coordinates: { lat: number; lng: number }): Promise<LocationCoordinatesResponse | null> {
+    return this.request('/v1/location/convert-gps', {
+      method: 'POST',
+      body: JSON.stringify(coordinates),
+    });
   }
 
   putPhoto(photo: EncryptedPhotoV1): Promise<void> {

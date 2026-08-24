@@ -11,9 +11,26 @@ export interface AmapWebViewMarker {
   id: string;
   lat: number;
   lng: number;
-  photoCount?: number;
-  thumbnailRefs?: string[];
-  scale?: number;
+  thumbnailRef?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+}
+
+export interface AmapMapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
+export interface AmapMapClusterPress {
+  lat: number;
+  lng: number;
+  ids: string[];
+  count: number;
+  scope?: 'country' | 'province' | 'city';
+  label?: string;
 }
 
 type RuntimeEvent =
@@ -21,10 +38,24 @@ type RuntimeEvent =
   | { type: 'ready' }
   | { type: 'markersApplied'; count: number }
   | { type: 'markerPressed'; id: string }
-  | { type: 'clusterPressed'; id?: string; lat: number; lng: number }
+  | ({ type: 'clusterPressed' } & AmapMapClusterPress)
   | { type: 'mapPressed'; lat: number; lng: number }
-  | { type: 'cameraIdle'; lat: number; lng: number; zoom?: number }
+  | { type: 'cameraIdle'; lat: number; lng: number; zoom?: number; bounds?: AmapMapBounds }
   | { type: 'error'; message: string };
+
+function parseBounds(value: unknown): AmapMapBounds | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const bounds = value as Record<string, unknown>;
+  if (!['north', 'south', 'east', 'west'].every((key) => (
+    typeof bounds[key] === 'number' && Number.isFinite(bounds[key])
+  ))) return undefined;
+  return {
+    north: bounds.north as number,
+    south: bounds.south as number,
+    east: bounds.east as number,
+    west: bounds.west as number,
+  };
+}
 
 function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
   if (!value || typeof value !== 'object' || !('type' in value)) return null;
@@ -37,11 +68,13 @@ function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
     && typeof message.lat === 'number' && Number.isFinite(message.lat)
     && typeof message.lng === 'number' && Number.isFinite(message.lng)
   ) {
+    const bounds = parseBounds(message.bounds);
     return {
       type: 'cameraIdle',
       lat: message.lat,
       lng: message.lng,
       ...(typeof message.zoom === 'number' && Number.isFinite(message.zoom) ? { zoom: message.zoom } : {}),
+      ...(bounds ? { bounds } : {}),
     };
   }
   if (message.type === 'markersApplied' && typeof message.count === 'number' && Number.isFinite(message.count)) {
@@ -57,9 +90,16 @@ function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
   ) {
     return {
       type: message.type,
-      id: typeof message.id === 'string' ? message.id : undefined,
       lat: message.lat,
       lng: message.lng,
+      ids: Array.isArray(message.ids) ? message.ids.filter((id): id is string => typeof id === 'string') : [],
+      count: typeof message.count === 'number' && Number.isFinite(message.count)
+        ? Math.max(1, Math.floor(message.count))
+        : 1,
+      scope: message.scope === 'country' || message.scope === 'province' || message.scope === 'city'
+        ? message.scope
+        : undefined,
+      label: typeof message.label === 'string' ? message.label : undefined,
     };
   }
   if (
@@ -78,7 +118,7 @@ function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
 interface Props {
   markers: AmapWebViewMarker[];
   onMarkerPressed?: (id: string) => void;
-  onClusterPressed?: (coordinates: { lat: number; lng: number; id?: string }) => void;
+  onClusterPressed?: (cluster: AmapMapClusterPress) => void;
   onMapPressed?: (coordinates: { lat: number; lng: number }) => void;
   onCameraIdle?: (coordinates: AmapMapCamera) => void;
   initialCamera?: AmapMapCamera;
@@ -91,6 +131,7 @@ export interface AmapMapCamera {
   lat: number;
   lng: number;
   zoom?: number;
+  bounds?: AmapMapBounds;
 }
 
 interface WebViewHandle {
@@ -121,9 +162,10 @@ function validMarkers(markers: AmapWebViewMarker[]): AmapWebViewMarker[] {
     id: marker.id,
     lat: marker.lat,
     lng: marker.lng,
-    ...(Number.isFinite(marker.photoCount) ? { photoCount: Math.max(0, Math.floor(marker.photoCount!)) } : {}),
-    ...(Array.isArray(marker.thumbnailRefs) ? { thumbnailRefs: marker.thumbnailRefs.slice(0, 3) } : {}),
-    ...(Number.isFinite(marker.scale) ? { scale: Math.max(0.72, Math.min(1.35, marker.scale!)) } : {}),
+    ...(typeof marker.thumbnailRef === 'string' ? { thumbnailRef: marker.thumbnailRef } : {}),
+    ...(typeof marker.country === 'string' ? { country: marker.country } : {}),
+    ...(typeof marker.province === 'string' ? { province: marker.province } : {}),
+    ...(typeof marker.city === 'string' ? { city: marker.city } : {}),
   }));
 }
 
@@ -218,13 +260,18 @@ export default function AmapJsWebViewMap({
       post(webViewRef.current, { type: 'setSelected', id: message.id });
       onMarkerPressed?.(message.id);
     } else if (message.type === 'clusterPressed') {
-      onClusterPressed?.({ lat: message.lat, lng: message.lng, id: message.id });
+      onClusterPressed?.(message);
     } else if (message.type === 'mapPressed') {
       setStatus(`已选择地图坐标：${message.lat.toFixed(5)}, ${message.lng.toFixed(5)}。`);
       onMapPressed?.({ lat: message.lat, lng: message.lng });
     } else if (message.type === 'cameraIdle') {
       setStatus(`地图已停稳：${message.lat.toFixed(5)}, ${message.lng.toFixed(5)}。`);
-      onCameraIdle?.({ lat: message.lat, lng: message.lng, zoom: message.zoom });
+      onCameraIdle?.({
+        lat: message.lat,
+        lng: message.lng,
+        zoom: message.zoom,
+        ...(message.bounds ? { bounds: message.bounds } : {}),
+      });
     } else if (message.type === 'error') {
       setReady(false);
       setStatus(`地图错误：${message.message}`);

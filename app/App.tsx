@@ -6,15 +6,9 @@ import {
   Alert,
   BackHandler,
   Button,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import {
@@ -67,6 +61,12 @@ import {
 } from './src/auth/accountSession';
 import AmapJsWebViewMap, { type AmapMapCamera } from './src/map/AmapJsWebViewMap';
 import { findMemoryForMarker, memoriesToMapMarkers, type MemoryThumbnailRefs } from './src/map/memoryMapAdapter';
+import {
+  buildHomeRegionOptions,
+  currentHomeRegionLabel,
+  HOME_CHINA_CAMERA,
+  type HomeRegionOption,
+} from './src/map/homeMapModel';
 import { loadDecryptedMemories } from './src/memory/memoryStore';
 import HomeScreen from './src/home/HomeScreen';
 import MemoryDetailOverlay, { type DetailPhotoState } from './src/detail/MemoryDetailOverlay';
@@ -75,15 +75,17 @@ import MemoryPhotoManageOverlay, { type PhotoManageItem } from './src/edit/Memor
 import MemoryActionsSheet from './src/edit/MemoryActionsSheet';
 import MemoryDeleteConfirmSheet from './src/edit/MemoryDeleteConfirmSheet';
 import {
+  buildCreatedMemory,
   buildEditedMemory,
   createDeleteTombstone,
   mergePhotoManageSelection,
   removedPhotoIds,
 } from './src/edit/editLifecycle';
 import LocationPicker from './src/location/LocationPicker';
-import { MobileLocationClient, type SelectedLocation } from './src/location/locationClient';
+import { MobileLocationClient, normalizeLocationResult } from './src/location/locationClient';
 import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
+import { firstPhotoCoordinates, type PhotoCoordinates } from './src/photos/photoMetadata';
 import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
@@ -109,9 +111,15 @@ interface PendingPhoto {
   height: number;
 }
 
+interface PendingPhotoSelection {
+  photos: PendingPhoto[];
+  coordinates: PhotoCoordinates | null;
+}
+
 interface EditDraftState {
-  original: MemoryV2;
-  baseVersion: number;
+  kind: 'create' | 'edit';
+  original: MemoryV2 | null;
+  baseVersion: number | null;
   title: string;
   date: string;
   pastSelf: string;
@@ -123,7 +131,6 @@ interface EditDraftState {
 
 type Mode = 'loading' | 'account' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
-type LocationPickerPurpose = 'create' | 'edit' | null;
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
 const AUTH_API_URL = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
@@ -134,6 +141,17 @@ function todayValue(): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function fallbackPhotoLocation(coordinates: PhotoCoordinates): MemoryLocationV2 {
+  return {
+    name: '照片拍摄位置',
+    mx: 50,
+    my: 50,
+    lat: coordinates.lat,
+    lng: coordinates.lng,
+    provider: 'photo-exif',
+  };
 }
 
 const cipherSyncStorage = {
@@ -171,11 +189,10 @@ export default function App() {
   const [memories, setMemories] = useState<MemoryV2[]>([]);
   const [thumbnailRefs, setThumbnailRefs] = useState<MemoryThumbnailRefs>({});
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
-  const [composerVisible, setComposerVisible] = useState(false);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
-  const [locationPickerPurpose, setLocationPickerPurpose] = useState<LocationPickerPurpose>(null);
   const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraftState | null>(null);
+  const [draftVisible, setDraftVisible] = useState(false);
   const [photoManageVisible, setPhotoManageVisible] = useState(false);
   const [moreActionsVisible, setMoreActionsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -183,14 +200,6 @@ export default function App() {
   const [detailPhotoStates, setDetailPhotoStates] = useState<DetailPhotoState[]>([]);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [date, setDate] = useState(todayValue());
-  const [location, setLocation] = useState('');
-  const [locationCoordinates, setLocationCoordinates] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
-  const [tags, setTags] = useState('');
-  const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto | null>(null);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
   const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
@@ -207,7 +216,8 @@ export default function App() {
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [showPrivatePassword, setShowPrivatePassword] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [homeCamera, setHomeCamera] = useState<AmapMapCamera | null>(null);
+  const [homeCamera, setHomeCamera] = useState<AmapMapCamera>({ ...HOME_CHINA_CAMERA });
+  const [homeCameraTarget, setHomeCameraTarget] = useState<AmapMapCamera | null>(null);
   const [locationCameraTarget, setLocationCameraTarget] = useState<AmapMapCamera | null>(null);
   const locationPickerOriginCamera = useRef<AmapMapCamera | null>(null);
   const detailLoadId = useRef(0);
@@ -257,6 +267,14 @@ export default function App() {
     () => memoriesToMapMarkers(visibleMemories, thumbnailRefs),
     [thumbnailRefs, visibleMemories],
   );
+  const homeRegionOptions = useMemo(
+    () => buildHomeRegionOptions(visibleMemories),
+    [visibleMemories],
+  );
+  const homeRegionLabel = useMemo(
+    () => currentHomeRegionLabel(homeCamera, visibleMemories),
+    [homeCamera, visibleMemories],
+  );
   const mobileLocationClient = useMemo(
     () => accountSession
       ? new MobileLocationClient(new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }))
@@ -282,7 +300,7 @@ export default function App() {
         cancelLocationPicker();
         return true;
       }
-      if (editDraft) {
+      if (editDraft && draftVisible) {
         cancelEdit();
         return true;
       }
@@ -293,7 +311,7 @@ export default function App() {
       return false;
     });
     return () => subscription.remove();
-  }, [deleteConfirmVisible, moreActionsVisible, photoManageVisible, locationPickerVisible, editDraft, selectedMemory, cancelLocationPicker]);
+  }, [deleteConfirmVisible, moreActionsVisible, photoManageVisible, locationPickerVisible, editDraft, draftVisible, selectedMemory, cancelLocationPicker]);
 
   useEffect(() => {
     void (async () => {
@@ -557,17 +575,15 @@ export default function App() {
     setSelectedYear(null);
     setSelectedMemory(null);
     setEditDraft(null);
+    setDraftVisible(false);
+    editPendingPhotoPool.current.clear();
     setPhotoManageVisible(false);
     setMoreActionsVisible(false);
     setDeleteConfirmVisible(false);
     setLocationPickerVisible(false);
-    setLocationPickerPurpose(null);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
     setPreviewUri(null);
-    setPendingPhoto(null);
-    setLocationCoordinates(null);
-    setSelectedLocation(null);
     setMode(vault ? 'locked' : 'setup');
     setStatus('私密空间已经锁定，内存钥匙已清零。');
   }
@@ -623,33 +639,88 @@ export default function App() {
     setStatus('设备钥匙已写入 Android Keystore；VMK 本身没有直接保存。');
   }
 
-  async function pickPendingPhoto(): Promise<PendingPhoto | null> {
+  async function pickPendingPhotos(): Promise<PendingPhotoSelection | null> {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) throw new Error('没有获得照片访问权限。');
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: 0,
+      orderedSelection: true,
+      exif: true,
       quality: 1,
     });
     if (result.canceled) return null;
-    const asset = result.assets[0];
-    const byteLength = asset.fileSize ?? new File(asset.uri).size;
-    if (byteLength === null) throw new Error('无法读取所选照片的大小。');
-    if (byteLength > MAX_PHOTO_BYTES) throw new Error('照片不能超过 30MB。');
+    const photos: PendingPhoto[] = [];
+    for (const [index, asset] of result.assets.entries()) {
+      const byteLength = asset.fileSize ?? new File(asset.uri).size;
+      if (byteLength === null) throw new Error('无法读取所选照片的大小。');
+      if (byteLength > MAX_PHOTO_BYTES) {
+        throw new Error(`照片“${asset.fileName ?? index + 1}”超过 30MB。`);
+      }
+      photos.push({
+        uri: asset.uri,
+        filename: asset.fileName ?? `photo-${Date.now()}-${index}.jpg`,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+        width: asset.width,
+        height: asset.height,
+      });
+    }
     return {
-      uri: asset.uri,
-      filename: asset.fileName ?? `photo-${Date.now()}.jpg`,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      width: asset.width,
-      height: asset.height,
+      photos,
+      coordinates: firstPhotoCoordinates(result.assets.map((asset) => asset.exif)),
     };
   }
 
-  async function choosePhoto(): Promise<void> {
-    const photo = await pickPendingPhoto();
-    if (!photo) return;
-    setPendingPhoto(photo);
-    setStatus(`已选择照片：${photo.filename}`);
+  async function resolvePhotoLocation(coordinates: PhotoCoordinates): Promise<MemoryLocationV2> {
+    if (!mobileLocationClient) return fallbackPhotoLocation(coordinates);
+    try {
+      const converted = await mobileLocationClient.convertGps(coordinates);
+      if (!converted) return fallbackPhotoLocation(coordinates);
+      const reverse = await mobileLocationClient.reverse(converted);
+      if (reverse) return normalizeLocationResult(reverse);
+      return { ...fallbackPhotoLocation(converted), provider: 'amap' };
+    } catch {
+      return fallbackPhotoLocation(coordinates);
+    }
+  }
+
+  async function beginCreateMemory(): Promise<void> {
+    if (editDraft?.kind === 'create' && !draftVisible) {
+      setDraftVisible(true);
+      setStatus('已恢复尚未完成的新建草稿。');
+      return;
+    }
+    if (editDraft) return;
+    const selection = await pickPendingPhotos();
+    if (!selection || selection.photos.length === 0) return;
+    setStatus(selection.coordinates ? '正在读取照片拍摄地点……' : '正在创建记忆草稿……');
+    const photoLocation = selection.coordinates
+      ? await resolvePhotoLocation(selection.coordinates)
+      : null;
+    setEditDraft({
+      kind: 'create',
+      original: null,
+      baseVersion: null,
+      title: '',
+      date: todayValue(),
+      pastSelf: '',
+      presentSelf: '',
+      location: photoLocation,
+      photos: [],
+      pendingPhotos: selection.photos,
+    });
+    editPendingPhotoPool.current = new Map(
+      selection.photos.map((photo) => [`pending:${photo.uri}`, photo]),
+    );
+    setDraftVisible(true);
+    if (photoLocation && Number.isFinite(photoLocation.lat) && Number.isFinite(photoLocation.lng)) {
+      setHomeCamera((current) => ({ lat: photoLocation.lat!, lng: photoLocation.lng!, zoom: current?.zoom }));
+    }
+    setStatus(photoLocation
+      ? `已从照片读取地点：${photoLocation.name}。`
+      : `已选择 ${selection.photos.length} 张照片，请继续编辑记忆。`);
   }
 
   async function encryptPendingPhoto(activeSession: VaultSessionV1, pending: PendingPhoto): Promise<MemoryPhotoV1> {
@@ -722,100 +793,6 @@ export default function App() {
     }
   }
 
-  async function saveMemory(): Promise<void> {
-    if (!session) throw new Error('请先解锁。');
-    if (!title.trim() && !body.trim()) throw new Error('标题和正文不能同时为空。');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
-    if (location.trim() && !locationCoordinates && !selectedLocation) throw new Error('请先在地点选择器中确认真实坐标。');
-    setStatus('正在加密并保存……');
-
-    let photoId: string | undefined;
-    let photoMetric = '';
-    if (pendingPhoto) {
-      const startedAt = performance.now();
-      const encryptedPhoto = await encryptPendingPhoto(session, pendingPhoto);
-      photoId = encryptedPhoto.id;
-      const plaintextFile = new File(pendingPhoto.uri);
-      const byteLength = plaintextFile.size ?? 0;
-      photoMetric = `；${Math.round(byteLength / 1024)} KiB 原图及两档展示图加密 ${Math.round(performance.now() - startedAt)} ms`;
-    }
-
-    const now = new Date().toISOString();
-    const memoryLocation: MemoryLocationV2 | null = selectedLocation ?? (
-      location.trim() || locationCoordinates
-        ? {
-            name: location.trim() || '地图选点',
-            mx: 50,
-            my: 50,
-            ...(locationCoordinates ?? {}),
-            ...(locationCoordinates ? { provider: 'amap' } : {}),
-          }
-        : null
-    );
-    const memory: MemoryV2 = {
-      schemaVersion: 2,
-      id: nativeCryptoPrimitives.randomUUID(),
-      title: title.trim() || '无标题',
-      pastSelf: body.trim(),
-      presentSelf: '',
-      date,
-      category: memoryLocation ? 'travel' : 'growth',
-      tag: tags.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean).join(' · '),
-      pinnedBy: 'pin',
-      board: { px: 20, py: 20, rotation: 0 },
-      location: memoryLocation,
-      photos: photoId && pendingPhoto
-        ? [{ id: photoId, mimeType: pendingPhoto.mimeType }]
-        : [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    try {
-      const encryptedMemory = await encryptMemoryV2(
-        nativeCryptoPrimitives,
-        session,
-        memory,
-      );
-      await saveEncryptedMemory(encryptedMemory);
-    } catch (error) {
-      if (photoId) {
-        try {
-          await deleteEncryptedPhotoVariants(photoId);
-        } catch {
-          // 保留最初的记忆保存错误，残留加密文件可在清空本机密文时删除。
-        }
-      }
-      throw error;
-    }
-    setTitle('');
-    setBody('');
-    setDate(todayValue());
-    setLocation('');
-    setLocationCoordinates(null);
-    setSelectedLocation(null);
-    setTags('');
-    setPendingPhoto(null);
-    appendMemoryToLocalState(memory);
-    if (!accountSession) {
-      setStatus(`记忆已加密保存${photoMetric}；当前没有账号会话，仅保存在本机。`);
-      return;
-    }
-    setStatus(`记忆已加密保存${photoMetric}；正在后台同步云端。`);
-    queueAccountUpload(
-      {
-        memoryIds: [memory.id],
-        photoRefs: photoRefsForIds(photoId ? [photoId] : []),
-      },
-      (result) => {
-        const conflictMessage = result.conflictIds.length > 0
-          ? `；有 ${result.conflictIds.length} 条冲突未覆盖`
-          : '';
-        return `记忆已加密保存${photoMetric}；已同步到云端（${result.memories} 条记忆密文，${result.photos} 份照片密文）${conflictMessage}。`;
-      },
-      (error) => `记忆已加密保存${photoMetric}；云端同步失败：${errorMessage(error)}。下次点击完成时会重试。`,
-    );
-  }
-
   async function cleanupUnreferencedLocalPhotos(photoIds: readonly string[], excludedMemoryId?: string): Promise<void> {
     if (photoIds.length === 0) return;
     const referenced = new Set<string>();
@@ -841,6 +818,7 @@ export default function App() {
     if (!current || current.deleted) throw new Error('这条记忆已经不存在。');
     setMoreActionsVisible(false);
     setEditDraft({
+      kind: 'edit',
       original: selectedMemory,
       baseVersion: current.version,
       title: selectedMemory.title,
@@ -851,12 +829,19 @@ export default function App() {
       photos: selectedMemory.photos.map((photo) => ({ ...photo })),
       pendingPhotos: [],
     });
+    setDraftVisible(true);
     editPendingPhotoPool.current.clear();
   }
 
   function cancelEdit(): void {
     setPhotoManageVisible(false);
+    if (editDraft?.kind === 'create') {
+      setDraftVisible(false);
+      setStatus('新建草稿已保留在本机当前会话中。');
+      return;
+    }
     setEditDraft(null);
+    setDraftVisible(false);
     editPendingPhotoPool.current.clear();
     setStatus('已取消编辑，原记忆没有变化。');
   }
@@ -897,11 +882,24 @@ export default function App() {
     ];
   }
 
-  async function addEditPhoto(): Promise<PhotoManageItem | null> {
-    const photo = await pickPendingPhoto();
-    if (!photo) return null;
-    editPendingPhotoPool.current.set(editPhotoKey(photo), photo);
-    return { id: editPhotoKey(photo), mimeType: photo.mimeType, uri: photo.uri, pending: true };
+  async function addDraftPhotos(): Promise<PhotoManageItem[]> {
+    const selection = await pickPendingPhotos();
+    if (!selection) return [];
+    for (const photo of selection.photos) {
+      editPendingPhotoPool.current.set(editPhotoKey(photo), photo);
+    }
+    if (editDraft?.kind === 'create' && !editDraft.location && selection.coordinates) {
+      const photoLocation = await resolvePhotoLocation(selection.coordinates);
+      setEditDraft((current) => current?.kind === 'create' && !current.location
+        ? { ...current, location: photoLocation }
+        : current);
+    }
+    return selection.photos.map((photo) => ({
+      id: editPhotoKey(photo),
+      mimeType: photo.mimeType,
+      uri: photo.uri,
+      pending: true,
+    }));
   }
 
   function completePhotoManage(items: PhotoManageItem[]): void {
@@ -929,34 +927,79 @@ export default function App() {
   }
 
   function openEditLocation(): void {
-    setLocationPickerPurpose('edit');
     locationPickerOriginCamera.current = homeCamera;
+    setHomeCameraTarget(null);
     setLocationPickerVisible(true);
   }
 
   async function saveEditedMemory(): Promise<void> {
     if (!session || !editDraft) return;
-    if (!editDraft.title.trim()) throw new Error('标题不能为空。');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(editDraft.date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
-    setStatus('正在保存编辑并加密照片……');
+    const draft = editDraft;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
+    if (draft.kind === 'edit' && !draft.title.trim()) throw new Error('标题不能为空。');
 
-    const current = (await listEncryptedMemories()).find((memory) => memory.id === editDraft.original.id);
-    if (!current || current.deleted) throw new Error('这条记忆已经被删除。');
-    if (current.version !== editDraft.baseVersion) throw new Error('这条记忆已在其他位置更新，请重新打开后再编辑。');
+    const current = draft.kind === 'edit' && draft.original
+      ? (await listEncryptedMemories()).find((memory) => memory.id === draft.original!.id) ?? null
+      : null;
+    if (draft.kind === 'edit') {
+      if (!draft.original || draft.baseVersion === null || !current || current.deleted) {
+        throw new Error('这条记忆已经被删除。');
+      }
+      if (current.version !== draft.baseVersion) {
+        throw new Error('这条记忆已在其他位置更新，请重新打开后再编辑。');
+      }
+    }
 
+    setStatus(draft.kind === 'create' ? '正在加密照片并创建记忆……' : '正在保存编辑并加密照片……');
     const newlyEncryptedIds: string[] = [];
-    let nextPhotos = [...editDraft.photos];
+    const nextPhotos = [...draft.photos];
     try {
-      for (const pending of editDraft.pendingPhotos) {
+      for (const pending of draft.pendingPhotos) {
         const photo = await encryptPendingPhoto(session, pending);
         newlyEncryptedIds.push(photo.id);
         nextPhotos.push(photo);
       }
+
+      const now = new Date().toISOString();
+      if (draft.kind === 'create') {
+        const nextMemory = buildCreatedMemory(
+          draft,
+          nextPhotos,
+          nativeCryptoPrimitives.randomUUID(),
+          now,
+        );
+        await saveEncryptedMemory(await encryptMemoryV2(
+          nativeCryptoPrimitives,
+          session,
+          nextMemory,
+        ));
+        appendMemoryToLocalState(nextMemory);
+        setEditDraft(null);
+        setDraftVisible(false);
+        setPhotoManageVisible(false);
+        editPendingPhotoPool.current.clear();
+        if (!accountSession) {
+          setStatus('新记忆已加密保存到本机。');
+          return;
+        }
+        setStatus('新记忆已保存到本机；正在后台同步云端。');
+        queueAccountUpload(
+          {
+            memoryIds: [nextMemory.id],
+            photoRefs: photoRefsForIds(newlyEncryptedIds),
+          },
+          (result) => `新记忆已保存并同步（${result.memories} 条记忆密文，${result.photos} 份照片密文）。`,
+          (error) => `新记忆已保存到本机，云端同步失败：${errorMessage(error)}。下次点击完成时会重试。`,
+        );
+        return;
+      }
+
+      if (!draft.original || !current) throw new Error('这条记忆已经不存在。');
       const nextMemory = buildEditedMemory(
-        editDraft.original,
-        editDraft,
+        draft.original,
+        draft,
         nextPhotos,
-        new Date().toISOString(),
+        now,
       );
       await saveEncryptedMemory(await encryptMemoryV2(
         nativeCryptoPrimitives,
@@ -965,10 +1008,12 @@ export default function App() {
         current.version + 1,
       ));
 
-      const orphanedPhotoIds = removedPhotoIds(editDraft.original.photos, nextPhotos);
+      const orphanedPhotoIds = removedPhotoIds(draft.original.photos, nextPhotos);
       replaceMemoryInLocalState(nextMemory);
       setEditDraft(null);
+      setDraftVisible(false);
       setPhotoManageVisible(false);
+      editPendingPhotoPool.current.clear();
       openMemory(nextMemory);
       void cleanupUnreferencedLocalPhotos(orphanedPhotoIds, nextMemory.id).catch(() => undefined);
       if (!accountSession) {
@@ -1125,43 +1170,22 @@ export default function App() {
 
   function confirmLocation(next: MemoryLocationV2): void {
     locationPickerOriginCamera.current = null;
-    if (locationPickerPurpose === 'edit') {
-      setEditDraft((current) => current ? { ...current, location: next } : current);
-    } else {
-      setSelectedLocation(next as SelectedLocation);
-      setLocation(next.name);
-      setLocationCoordinates(
-        Number.isFinite(next.lat) && Number.isFinite(next.lng)
-          ? { lat: next.lat!, lng: next.lng! }
-          : null,
-      );
-      if (Number.isFinite(next.lat) && Number.isFinite(next.lng)) {
-        setHomeCamera((current) => ({ lat: next.lat!, lng: next.lng!, zoom: current?.zoom }));
-      }
+    setEditDraft((current) => current ? { ...current, location: next } : current);
+    if (Number.isFinite(next.lat) && Number.isFinite(next.lng)) {
+      setHomeCamera((current) => ({ lat: next.lat!, lng: next.lng!, zoom: current?.zoom }));
     }
+    setHomeCameraTarget(null);
     setLocationCameraTarget(null);
     setLocationPickerVisible(false);
-    setLocationPickerPurpose(null);
-    if (locationPickerPurpose === 'create') setComposerVisible(true);
   }
 
   function cancelLocationPicker(): void {
     const origin = locationPickerOriginCamera.current;
     if (origin) setHomeCamera(origin);
     locationPickerOriginCamera.current = null;
+    setHomeCameraTarget(null);
     setLocationCameraTarget(null);
     setLocationPickerVisible(false);
-    const purpose = locationPickerPurpose;
-    setLocationPickerPurpose(null);
-    if (purpose === 'create') setComposerVisible(true);
-  }
-
-  function openLocationPicker(): void {
-    locationPickerOriginCamera.current = homeCamera;
-    setComposerVisible(false);
-    setLocationPickerPurpose('create');
-    setLocationCameraTarget(null);
-    setLocationPickerVisible(true);
   }
 
   async function submitAuthEntry(): Promise<void> {
@@ -1188,6 +1212,16 @@ export default function App() {
       return;
     }
     void runTask(async () => { openMemory(memory); });
+  }
+
+  function handleHomeCameraIdle(camera: AmapMapCamera): void {
+    setHomeCamera(camera);
+    setHomeCameraTarget(null);
+  }
+
+  function selectHomeRegion(region: HomeRegionOption): void {
+    setHomeCameraTarget(region.camera);
+    setStatus(`已定位到${region.label}：${region.memoryCount} 段记忆。`);
   }
 
   async function exportBundle(): Promise<void> {
@@ -1440,25 +1474,31 @@ export default function App() {
         markers={mapMarkers}
         memories={memories}
         selectedYear={selectedYear}
+        regionLabel={homeRegionLabel}
+        regionOptions={homeRegionOptions}
         loading={busy && memories.length === 0}
         status={status}
         onYearChange={setSelectedYear}
-        onRegionPress={() => setStatus('地区选择入口已保留，当前地区：浙江 · 宁波。')}
+        onRegionSelect={selectHomeRegion}
         onMarkerPressed={handleMarkerPressed}
-        onClusterPressed={({ lat, lng }) => setStatus(`已推进地图到记忆区域：${lat.toFixed(3)}, ${lng.toFixed(3)}。`)}
-        onCameraIdle={setHomeCamera}
-        onCreateMemory={() => setComposerVisible(true)}
-        chromeVisible={!selectedMemory && !editDraft && !composerVisible}
-        initialCamera={homeCamera ?? undefined}
-        cameraTarget={locationPickerVisible ? locationCameraTarget : null}
-        markerUpdatesPaused={Boolean(selectedMemory || editDraft || composerVisible || locationPickerVisible)}
+        onClusterPressed={({ count, label, lat, lng }) => setStatus(
+          label
+            ? `${label}有 ${count} 段记忆，已展开该区域。`
+            : `已展开 ${count} 段记忆：${lat.toFixed(3)}, ${lng.toFixed(3)}。`,
+        )}
+        onCameraIdle={handleHomeCameraIdle}
+        onCreateMemory={() => void runTask(beginCreateMemory)}
+        chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible}
+        initialCamera={HOME_CHINA_CAMERA}
+        cameraTarget={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
+        markerUpdatesPaused={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
         locationMode={locationPickerVisible}
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
             mapAlreadyMounted
             active={locationPickerVisible}
-            initialLocation={locationPickerPurpose === 'edit' ? editDraft?.location : null}
-            initialCamera={homeCamera ?? undefined}
+            initialLocation={editDraft?.location ?? null}
+            initialCamera={homeCamera}
             cameraIdle={homeCamera}
             cameraTarget={locationCameraTarget}
             locationClient={mobileLocationClient}
@@ -1478,8 +1518,9 @@ export default function App() {
           onPhotoDisplayed={markDetailPhotoDisplayed}
         />
       )}
-      {editDraft && !photoManageVisible && !locationPickerVisible && (
+      {editDraft && draftVisible && !photoManageVisible && !locationPickerVisible && (
         <MemoryEditOverlay
+          mode={editDraft.kind}
           title={editDraft.title}
           date={editDraft.date}
           pastSelf={editDraft.pastSelf}
@@ -1495,10 +1536,10 @@ export default function App() {
           onSave={() => void runTask(saveEditedMemory)}
         />
       )}
-      {editDraft && photoManageVisible && !locationPickerVisible && (
+      {editDraft && draftVisible && photoManageVisible && !locationPickerVisible && (
         <MemoryPhotoManageOverlay
           items={editPhotoItems(editDraft)}
-          onAddPhoto={addEditPhoto}
+          onAddPhotos={addDraftPhotos}
           onCancel={cancelPhotoManage}
           onComplete={completePhotoManage}
         />
@@ -1517,44 +1558,12 @@ export default function App() {
           onCancel={() => setDeleteConfirmVisible(false)}
         />
       )}
-      <Modal visible={composerVisible} animationType="slide" transparent onRequestClose={() => setComposerVisible(false)}>
-        <KeyboardAvoidingView style={styles.composerBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={styles.composer} keyboardShouldPersistTaps="handled">
-            <View style={styles.composerHeader}>
-              <Text style={styles.composerTitle}>新建记忆</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="关闭" onPress={() => setComposerVisible(false)}><Text style={styles.close}>×</Text></Pressable>
-            </View>
-            <TextInput style={styles.input} placeholder="标题" value={title} onChangeText={setTitle} />
-            <TextInput style={[styles.input, styles.bodyInput]} placeholder="正文" multiline value={body} onChangeText={setBody} />
-            <TextInput style={styles.input} placeholder="日期（YYYY-MM-DD）" value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
-            <Pressable accessibilityRole="button" accessibilityLabel="选择地点" onPress={openLocationPicker} style={styles.locationButton}>
-              <Text style={location ? styles.locationValue : styles.locationPlaceholder}>{location || '选择地点（搜索或拖动地图）'}</Text>
-            </Pressable>
-            <TextInput style={styles.input} placeholder="标签（用逗号分隔）" value={tags} onChangeText={setTags} />
-            <Pressable accessibilityRole="button" onPress={() => void runTask(choosePhoto)} style={styles.secondaryButton}><Text style={styles.secondaryText}>{pendingPhoto ? `已选：${pendingPhoto.filename}` : '选择照片'}</Text></Pressable>
-            <Pressable accessibilityRole="button" disabled={busy} onPress={() => void runTask(async () => { await saveMemory(); setComposerVisible(false); })} style={[styles.saveButton, busy && styles.disabled]}><Text style={styles.saveText}>{busy ? '处理中…' : '保存加密记忆'}</Text></Pressable>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   homeRoot: { flex: 1, backgroundColor: '#e3e8e5' },
-  composerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(38,41,38,0.18)' },
-  composer: { padding: 20, paddingBottom: 28, gap: 10, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: '#f6f5f0' },
-  composerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  composerTitle: { color: '#3c403d', fontSize: 22, lineHeight: 30, fontWeight: '600' },
-  close: { color: '#7b837d', fontSize: 30, lineHeight: 30, fontWeight: '300' },
-  secondaryButton: { minHeight: 46, borderRadius: 10, borderWidth: 1, borderColor: '#c1a275', alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { color: '#8f6034', fontSize: 14, fontWeight: '600' },
-  locationButton: { minHeight: 46, borderWidth: 1, borderColor: '#c8c8be', borderRadius: 10, paddingHorizontal: 12, justifyContent: 'center', backgroundColor: '#fafaf7' },
-  locationValue: { color: '#171a16', fontSize: 14 },
-  locationPlaceholder: { color: '#8c9188', fontSize: 14 },
-  saveButton: { minHeight: 52, borderRadius: 10, backgroundColor: '#b5814b', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  saveText: { color: '#fffaf2', fontSize: 15, fontWeight: '600' },
-  disabled: { opacity: 0.55 },
   root: { flex: 1, backgroundColor: '#f3f0e8' },
   page: { padding: 18, paddingTop: 56, paddingBottom: 64, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

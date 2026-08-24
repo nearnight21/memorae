@@ -18,12 +18,12 @@ export interface PhotoManageItem {
 
 interface Props {
   items: readonly PhotoManageItem[];
-  onAddPhoto: () => Promise<PhotoManageItem | null>;
+  onAddPhotos: () => Promise<PhotoManageItem[]>;
   onCancel: () => void;
   onComplete: (items: PhotoManageItem[]) => void;
 }
 
-export default function MemoryPhotoManageOverlay({ items, onAddPhoto, onCancel, onComplete }: Props) {
+export default function MemoryPhotoManageOverlay({ items, onAddPhotos, onCancel, onComplete }: Props) {
   const [workingItems, setWorkingItems] = useState<PhotoManageItem[]>(() => [...items]);
   const [busy, setBusy] = useState(false);
 
@@ -31,8 +31,8 @@ export default function MemoryPhotoManageOverlay({ items, onAddPhoto, onCancel, 
     if (busy) return;
     setBusy(true);
     try {
-      const item = await onAddPhoto();
-      if (item) setWorkingItems((current) => [...current, item]);
+      const addedItems = await onAddPhotos();
+      if (addedItems.length > 0) setWorkingItems((current) => [...current, ...addedItems]);
     } finally {
       setBusy(false);
     }
