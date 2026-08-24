@@ -886,6 +886,17 @@ export default function App() {
     ];
   }
 
+  function editPhotoUris(draft: EditDraftState): Array<string | null> {
+    const uriById = new Map<string, string | null>();
+    if (selectedMemory) {
+      selectedMemory.photos.forEach((photo, index) => uriById.set(photo.id, detailPhotoUris[index] ?? null));
+    }
+    return [
+      ...draft.photos.map((photo) => uriById.get(photo.id) ?? null),
+      ...draft.pendingPhotos.map((photo) => photo.uri),
+    ];
+  }
+
   async function addEditPhoto(): Promise<PhotoManageItem | null> {
     const photo = await pickPendingPhoto();
     if (!photo) return null;
@@ -1437,6 +1448,7 @@ export default function App() {
         onClusterPressed={({ lat, lng }) => setStatus(`已推进地图到记忆区域：${lat.toFixed(3)}, ${lng.toFixed(3)}。`)}
         onCameraIdle={setHomeCamera}
         onCreateMemory={() => setComposerVisible(true)}
+        chromeVisible={!selectedMemory && !editDraft && !composerVisible}
         initialCamera={homeCamera ?? undefined}
         cameraTarget={locationPickerVisible ? locationCameraTarget : null}
         markerUpdatesPaused={Boolean(selectedMemory || editDraft || composerVisible || locationPickerVisible)}
@@ -1474,6 +1486,7 @@ export default function App() {
           presentSelf={editDraft.presentSelf}
           location={editDraft.location}
           photoCount={editDraft.photos.length + editDraft.pendingPhotos.length}
+          photoUris={editPhotoUris(editDraft)}
           busy={busy}
           onChange={(field, value) => setEditDraft((current) => current ? { ...current, [field]: value } : current)}
           onLocation={openEditLocation}

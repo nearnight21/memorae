@@ -25,6 +25,7 @@ interface Props {
   locationMode?: boolean;
   locationOverlay?: ReactNode;
   onCreateMemory?: () => void;
+  chromeVisible?: boolean;
 }
 
 export default function HomeScreen({
@@ -46,6 +47,7 @@ export default function HomeScreen({
   locationMode = false,
   locationOverlay,
   onCreateMemory,
+  chromeVisible = true,
 }: Props) {
   const years = useMemo(() => Array.from(new Set(
     memories.map((memory) => memory.date.slice(0, 4)).filter((year) => /^\d{4}$/.test(year)),
@@ -62,10 +64,10 @@ export default function HomeScreen({
           initialCamera={initialCamera}
           cameraTarget={cameraTarget}
           markerUpdatesPaused={markerUpdatesPaused}
-          showStatus={!locationMode}
+          showStatus={!locationMode && chromeVisible}
         />
       </View>
-      {!locationMode && <View pointerEvents="box-none" style={styles.overlay}>
+      {!locationMode && chromeVisible && <View pointerEvents="box-none" style={styles.overlay}>
         <View pointerEvents="box-none" style={styles.topRow}>
           <RegionControl label={regionLabel} onPress={onRegionPress} />
         </View>

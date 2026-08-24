@@ -1,4 +1,5 @@
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import type { MemoryLocationV2 } from '../memory/memoryV2';
@@ -21,6 +23,7 @@ export interface MemoryEditValues {
 }
 
 interface Props extends MemoryEditValues {
+  photoUris: readonly (string | null)[];
   busy?: boolean;
   onChange: (field: keyof Omit<MemoryEditValues, 'location' | 'photoCount'>, value: string) => void;
   onLocation: () => void;
@@ -34,6 +37,19 @@ function locationLabel(location: MemoryLocationV2 | null): string {
   return [location.city, location.district, location.name].filter(Boolean).join(' · ');
 }
 
+function PhotoSheet({ uri, style }: { uri: string | null; style?: object }) {
+  return (
+    <View style={[styles.photoPaper, style]}>
+      <View style={styles.photoInset}>
+        {uri
+          ? <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
+          : <View style={styles.photoUnavailable}><Text style={styles.photoUnavailableText}>照片加载中…</Text></View>}
+      </View>
+      <View style={styles.paperEdge} />
+    </View>
+  );
+}
+
 export default function MemoryEditOverlay({
   title,
   date,
@@ -41,6 +57,7 @@ export default function MemoryEditOverlay({
   presentSelf,
   location,
   photoCount,
+  photoUris,
   busy = false,
   onChange,
   onLocation,
@@ -48,92 +65,155 @@ export default function MemoryEditOverlay({
   onCancel,
   onSave,
 }: Props) {
+  const { width, height } = useWindowDimensions();
+  const count = Math.max(photoCount, photoUris.length);
+  const photos = Array.from({ length: count }, (_, index) => photoUris[index] ?? null);
+  const heroWidth = Math.min(Math.max(width - 32, 280), 358);
+  const heroHeight = Math.min(Math.max(height * 0.5, 360), 422);
+  const dateLabel = date.replace(/-/g, '.');
+
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View pointerEvents="none" style={styles.mapReadability} />
       <View pointerEvents="none" style={styles.mapDim} />
       <View pointerEvents="none" style={styles.warmGradient} />
-      <View style={styles.safeArea}>
-        <View style={styles.topBar}>
-          <Pressable accessibilityRole="button" accessibilityLabel="取消编辑" onPress={onCancel} style={styles.topAction}>
-            <Text style={styles.cancelText}>取消</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="保存编辑" disabled={busy} onPress={onSave} style={styles.topAction}>
-            <Text style={[styles.saveText, busy && styles.disabled]}>{busy ? '保存中…' : '完成'}</Text>
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Pressable accessibilityRole="button" accessibilityLabel="管理照片" onPress={onManagePhotos} style={styles.photoSummary}>
-            <Text style={styles.photoSummaryTitle}>{photoCount} 张照片</Text>
-            <Text style={styles.photoSummaryAction}>管理</Text>
-          </Pressable>
-          <TextInput
-            accessibilityLabel="标题"
-            value={title}
-            onChangeText={(value) => onChange('title', value)}
-            style={[styles.titleInput, styles.underlineInput]}
-            placeholder="标题"
-            placeholderTextColor="#786a5d"
-            selectTextOnFocus
-          />
-          <View style={styles.metaRow}>
+      <View style={styles.topBar}>
+        <Pressable accessibilityRole="button" accessibilityLabel="取消编辑" onPress={onCancel} style={styles.topAction}>
+          <Text style={styles.cancelText}>取消</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="保存编辑" disabled={busy} onPress={onSave} style={styles.topAction}>
+          <Text style={[styles.saveText, busy && styles.disabled]}>{busy ? '保存中…' : '完成'}</Text>
+        </Pressable>
+      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingTop: androidTopInset() + 10 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {count > 0 && (
+          <View style={[styles.photoStage, { width: heroWidth, height: heroHeight + 12 }]}>
+            {photos[2] && <PhotoSheet uri={photos[2]} style={[styles.backPaperA, { width: heroWidth - 10, height: heroHeight - 10 }]} />}
+            {photos[1] && <PhotoSheet uri={photos[1]} style={[styles.backPaperB, { width: heroWidth - 8, height: heroHeight - 8 }]} />}
+            <PhotoSheet uri={photos[0]} style={[styles.heroPaper, { width: heroWidth, height: heroHeight }]} />
+          </View>
+        )}
+        <Pressable accessibilityRole="button" accessibilityLabel="管理照片" onPress={onManagePhotos} style={styles.photoSummary}>
+          <Text style={styles.photoSummaryText}>{count} 张 · 管理</Text>
+        </Pressable>
+        <View style={[styles.editBody, count === 0 && styles.noPhotoBody]}>
+          <View style={styles.titleFocus}>
             <TextInput
-              accessibilityLabel="日期"
-              value={date}
-              onChangeText={(value) => onChange('date', value)}
-              style={[styles.dateInput, styles.underlineInput]}
-              placeholder="YYYY-MM-DD"
+              accessibilityLabel="标题"
+              value={title}
+              onChangeText={(value) => onChange('title', value)}
+              style={styles.titleInput}
+              placeholder="标题"
               placeholderTextColor="#786a5d"
-              keyboardType="numbers-and-punctuation"
+              selectTextOnFocus
             />
+          </View>
+          <View style={styles.metaRow}>
+            <View style={styles.dateTarget}>
+              <TextInput
+                accessibilityLabel="日期"
+                value={dateLabel}
+                onChangeText={(value) => onChange('date', value.replace(/\./g, '-'))}
+                style={styles.dateInput}
+                placeholder="YYYY.MM.DD"
+                placeholderTextColor="#786a5d"
+                keyboardType="numbers-and-punctuation"
+              />
+              <View style={styles.shortUnderline} />
+              <Text style={styles.chevron}>⌄</Text>
+            </View>
+            <Text style={styles.separator}>·</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="编辑地点" onPress={onLocation} style={styles.locationAction}>
               <Text style={styles.locationText} numberOfLines={1}>{locationLabel(location)}</Text>
+              <View style={styles.locationUnderline} />
+              <Text style={styles.chevron}>⌄</Text>
             </Pressable>
           </View>
-          <TextInput
-            accessibilityLabel="当时的我"
-            value={pastSelf}
-            onChangeText={(value) => onChange('pastSelf', value)}
-            style={[styles.bodyInput, styles.underlineInput]}
-            placeholder="当时的我"
-            placeholderTextColor="#786a5d"
-            multiline
-            textAlignVertical="top"
-          />
-          <TextInput
-            accessibilityLabel="现在的我"
-            value={presentSelf}
-            onChangeText={(value) => onChange('presentSelf', value)}
-            style={[styles.bodyInput, styles.underlineInput]}
-            placeholder="现在的我"
-            placeholderTextColor="#786a5d"
-            multiline
-            textAlignVertical="top"
-          />
-        </ScrollView>
-      </View>
+          <View style={styles.originalFocus}>
+            <TextInput
+              accessibilityLabel="当时的我"
+              value={pastSelf}
+              onChangeText={(value) => onChange('pastSelf', value)}
+              style={styles.bodyInput}
+              placeholder="当时的我"
+              placeholderTextColor="#786a5d"
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+          <View style={styles.timeSeparation} />
+          <View style={styles.revisitThread}>
+            <View style={styles.threadRail}><View style={styles.threadPoint} /><View style={styles.threadLine} /></View>
+            <View style={styles.revisitCopy}>
+              <Text style={styles.revisitLabel}>现在的我</Text>
+              <TextInput
+                accessibilityLabel="现在的我"
+                value={presentSelf}
+                onChangeText={(value) => onChange('presentSelf', value)}
+                style={styles.revisitInput}
+                placeholder="写下现在的感受"
+                placeholderTextColor="rgba(102,88,75,0.56)"
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, zIndex: 12, backgroundColor: 'transparent' },
+  mapReadability: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.34)' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(42,36,30,0.12)' },
   warmGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '52%', backgroundColor: 'rgba(233,221,202,0.72)' },
-  safeArea: { flex: 1, paddingTop: androidTopInset() },
-  topBar: { height: 62, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  topAction: { minWidth: 54, minHeight: 40, justifyContent: 'center' },
-  cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, fontWeight: '500' },
-  saveText: { color: '#754f31', fontSize: 14, fontWeight: '500', textAlign: 'right' },
+  topBar: { position: 'absolute', top: androidTopInset(), left: 0, right: 0, height: 44, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 5 },
+  topAction: { minWidth: 34, minHeight: 36, justifyContent: 'center' },
+  cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, lineHeight: 20, fontWeight: '500' },
+  saveText: { color: '#754f31', fontSize: 14, lineHeight: 20, fontWeight: '500', textAlign: 'right' },
   disabled: { opacity: 0.45 },
-  content: { paddingHorizontal: 28, paddingTop: 8, paddingBottom: 48, gap: 14 },
-  photoSummary: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, minHeight: 30 },
-  photoSummaryTitle: { color: 'rgba(118,105,86,0.95)', fontSize: 12, fontWeight: '500' },
-  photoSummaryAction: { color: '#754f31', fontSize: 12, fontWeight: '600' },
-  titleInput: { color: '#27231e', fontSize: 25, lineHeight: 34, fontWeight: '600', paddingVertical: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dateInput: { flex: 0.32, color: 'rgba(103,91,77,0.9)', fontSize: 12, fontWeight: '600', paddingVertical: 4 },
-  locationAction: { flex: 1, minWidth: 0, paddingVertical: 8 },
-  locationText: { color: 'rgba(103,91,77,0.9)', fontSize: 12 },
-  underlineInput: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(139,96,59,0.46)' },
-  bodyInput: { minHeight: 92, color: '#40382f', fontSize: 15, lineHeight: 24, paddingVertical: 6 },
+  scroll: { flex: 1 },
+  content: { alignItems: 'center', paddingBottom: 48 },
+  photoStage: { alignItems: 'center', justifyContent: 'center' },
+  photoPaper: { position: 'absolute', padding: 7, backgroundColor: 'rgba(245,238,226,0.92)', borderWidth: 1, borderColor: 'rgba(215,204,188,0.72)', shadowColor: '#1a140f', shadowOpacity: 0.26, shadowRadius: 8, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+  backPaperA: { transform: [{ rotate: '2.2deg' }], top: 16, left: 4 },
+  backPaperB: { transform: [{ rotate: '-1.6deg' }], top: 4, left: 2 },
+  heroPaper: { transform: [{ rotate: '-0.6deg' }], top: 8 },
+  photoInset: { flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', overflow: 'hidden', backgroundColor: '#dfe4df' },
+  photoImage: { width: '100%', height: '100%' },
+  paperEdge: { position: 'absolute', left: 7, right: 7, bottom: 8, height: 2, backgroundColor: 'rgba(216,203,185,0.55)' },
+  photoUnavailable: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(223,228,223,0.88)' },
+  photoUnavailableText: { color: '#746a5d', fontSize: 13 },
+  photoSummary: { alignSelf: 'stretch', minHeight: 28, paddingHorizontal: 20, alignItems: 'flex-end', justifyContent: 'center' },
+  photoSummaryText: { color: 'rgba(118,105,86,0.95)', fontSize: 12, lineHeight: 20, fontWeight: '500' },
+  editBody: { alignSelf: 'stretch', paddingHorizontal: 40, paddingTop: 4, paddingBottom: 24 },
+  noPhotoBody: { paddingTop: 76 },
+  titleFocus: { alignSelf: 'flex-start', minWidth: 150, minHeight: 37, paddingHorizontal: 0, backgroundColor: 'rgba(201,168,130,0.09)' },
+  titleInput: { color: '#27231e', fontSize: 25, lineHeight: 34, fontWeight: '500', padding: 0 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', minHeight: 28, marginTop: 1 },
+  dateTarget: { position: 'relative', width: 82, height: 26, justifyContent: 'flex-start' },
+  dateInput: { color: 'rgba(103,91,77,0.9)', fontSize: 12, lineHeight: 20, fontWeight: '600', padding: 0, paddingRight: 12 },
+  shortUnderline: { position: 'absolute', left: 0, bottom: 1, width: 78, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(138,117,97,0.38)' },
+  chevron: { position: 'absolute', right: 0, top: 0, color: 'rgba(128,101,78,0.86)', fontSize: 11, lineHeight: 20 },
+  separator: { color: 'rgba(103,91,77,0.72)', fontSize: 12, marginHorizontal: 4 },
+  locationAction: { position: 'relative', maxWidth: 220, minWidth: 120, height: 26, paddingRight: 16, justifyContent: 'flex-start' },
+  locationText: { color: 'rgba(103,91,77,0.9)', fontSize: 12, lineHeight: 20, padding: 0 },
+  locationUnderline: { position: 'absolute', left: 0, right: 14, bottom: 1, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(139,96,59,0.46)' },
+  originalFocus: { minHeight: 77, marginTop: 4, paddingHorizontal: 4, backgroundColor: 'rgba(201,168,130,0.08)' },
+  bodyInput: { minHeight: 70, color: '#40382f', fontSize: 15, lineHeight: 24, padding: 0 },
+  timeSeparation: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(133,118,102,0.25)', marginTop: 6 },
+  revisitThread: { flexDirection: 'row', minHeight: 100, marginTop: 12, paddingLeft: 12 },
+  threadRail: { width: 10, alignItems: 'center' },
+  threadPoint: { width: 7, height: 7, borderRadius: 4, marginTop: 4, backgroundColor: '#754f31' },
+  threadLine: { flex: 1, width: StyleSheet.hairlineWidth, marginTop: 2, backgroundColor: 'rgba(133,118,102,0.25)' },
+  revisitCopy: { flex: 1, paddingLeft: 10 },
+  revisitLabel: { color: 'rgba(102,88,75,0.88)', fontSize: 13, lineHeight: 20, fontWeight: '500' },
+  revisitInput: { minHeight: 54, color: '#40382f', fontSize: 14, lineHeight: 22, padding: 0, marginTop: 2 },
 });

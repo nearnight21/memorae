@@ -147,7 +147,7 @@ test('地点选择模式复用 Home 的唯一地图实例', async () => {
   assert.match(appSource, /locationPickerOriginCamera/);
   assert.match(appSource, /setHomeCamera\(origin\)/);
   assert.match(homeSource, /locationOverlay/);
-  assert.match(homeSource, /showStatus=\{!locationMode\}/);
+  assert.match(homeSource, /showStatus=\{!locationMode && chromeVisible\}/);
 });
 
 test('远端照片同步完成后批量刷新缩略图，不逐张重建地图 Marker', async () => {
