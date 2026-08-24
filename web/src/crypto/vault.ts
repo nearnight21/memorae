@@ -3,8 +3,15 @@ import { base64ToBytes, bytesToBase64, randomBytes, utf8 } from './encoding';
 
 export const CRYPTO_VERSION = 1 as const;
 
-const VAULT_SCHEMA = 'memory-recall-vault';
-const AES_GCM = 'AES-256-GCM';
+export const VAULT_SCHEMA = 'memory-recall-vault' as const;
+export const AES_GCM = 'AES-256-GCM' as const;
+// FROZEN: change only with a protocol version, cross-client vectors, and migration plan.
+export const FROZEN_KDF_DEFAULTS = Object.freeze({
+  memoryKiB: 64 * 1024,
+  iterations: 3,
+  parallelism: 1,
+  hashLength: 32,
+} as const);
 const VMK_AAD = 'memory-recall:v1:key:vmk';
 const TEXT_KEY_AAD = 'memory-recall:v1:key:text';
 const PHOTO_KEY_AAD = 'memory-recall:v1:key:photo';
@@ -162,10 +169,10 @@ export async function createVault(
   const kdf: Argon2idParameters = {
     name: 'Argon2id',
     salt: bytesToBase64(randomBytes(16)),
-    memoryKiB: options.memoryKiB ?? 64 * 1024,
-    iterations: options.iterations ?? 3,
-    parallelism: options.parallelism ?? 1,
-    hashLength: 32,
+    memoryKiB: options.memoryKiB ?? FROZEN_KDF_DEFAULTS.memoryKiB,
+    iterations: options.iterations ?? FROZEN_KDF_DEFAULTS.iterations,
+    parallelism: options.parallelism ?? FROZEN_KDF_DEFAULTS.parallelism,
+    hashLength: FROZEN_KDF_DEFAULTS.hashLength,
   };
 
   const unlockKey = await deriveUnlockKey(password, kdf);

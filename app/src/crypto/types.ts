@@ -2,6 +2,14 @@ export const CRYPTO_VERSION = 1 as const;
 export const VAULT_SCHEMA = 'memory-recall-vault' as const;
 export const AES_GCM = 'AES-256-GCM' as const;
 
+// FROZEN: change only with a protocol version, cross-client vectors, and migration plan.
+export const FROZEN_KDF_DEFAULTS = Object.freeze({
+  memoryKiB: 64 * 1024,
+  iterations: 3,
+  parallelism: 1,
+  hashLength: 32,
+} as const);
+
 export interface Argon2idParameters {
   name: 'Argon2id';
   salt: string;

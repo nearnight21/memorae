@@ -25,6 +25,7 @@ import {
   type MemoryV2,
   type VaultEnvelopeV1,
 } from '../src/crypto';
+import { AES_GCM, CRYPTO_VERSION, FROZEN_KDF_DEFAULTS, VAULT_SCHEMA } from '../src/crypto/types';
 import { nodeCryptoPrimitives } from './support/nodePrimitives';
 
 const TEST_KDF = {
@@ -223,6 +224,22 @@ test('创建、加密、锁定和重新解锁形成闭环', async () => {
   assert.deepEqual(
     (await decryptPhoto(nodeCryptoPrimitives, restoredSession, encryptedPhoto)).bytes,
     photoBytes,
+  );
+});
+
+test('加密协议冻结：Web/Mobile 默认 KDF 与信封版本不可漂移', async () => {
+  const { envelope } = await createVault(nodeCryptoPrimitives, 'freeze-protocol-password');
+  assert.equal(CRYPTO_VERSION, 1);
+  assert.equal(VAULT_SCHEMA, 'memory-recall-vault');
+  assert.equal(AES_GCM, 'AES-256-GCM');
+  assert.deepEqual(
+    {
+      memoryKiB: envelope.kdf.memoryKiB,
+      iterations: envelope.kdf.iterations,
+      parallelism: envelope.kdf.parallelism,
+      hashLength: envelope.kdf.hashLength,
+    },
+    FROZEN_KDF_DEFAULTS,
   );
 });
 

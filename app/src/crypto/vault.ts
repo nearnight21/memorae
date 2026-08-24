@@ -2,6 +2,7 @@ import { base64ToBytes, bytesToBase64, utf8 } from './encoding';
 import {
   AES_GCM,
   CRYPTO_VERSION,
+  FROZEN_KDF_DEFAULTS,
   VAULT_SCHEMA,
   type Argon2idParameters,
   type CryptoPrimitives,
@@ -134,10 +135,10 @@ export async function createVault(
   const kdf: Argon2idParameters = {
     name: 'Argon2id',
     salt: bytesToBase64(salt),
-    memoryKiB: options.memoryKiB ?? 64 * 1024,
-    iterations: options.iterations ?? 3,
-    parallelism: options.parallelism ?? 1,
-    hashLength: 32,
+    memoryKiB: options.memoryKiB ?? FROZEN_KDF_DEFAULTS.memoryKiB,
+    iterations: options.iterations ?? FROZEN_KDF_DEFAULTS.iterations,
+    parallelism: options.parallelism ?? FROZEN_KDF_DEFAULTS.parallelism,
+    hashLength: FROZEN_KDF_DEFAULTS.hashLength,
   };
   const unlockKey = await deriveUnlockKey(primitives, password, kdf);
 

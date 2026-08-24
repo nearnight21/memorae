@@ -23,6 +23,7 @@ import {
 import {
   DEFAULT_PENDING_UPLOAD_TTL_MS,
   DEFAULT_SIGNED_URL_TTL_SECONDS,
+  FROZEN_PHOTO_TRANSFER_LIMITS,
   PHOTO_CIPHER_CONTENT_TYPE,
   PhotoTransferConflictError,
   PhotoTransferNotFoundError,
@@ -347,9 +348,7 @@ const STORED_COS_PHOTO_COLUMNS = `
 `;
 
 const MAX_DIRECT_PHOTO_BYTES: Record<PhotoKind, number> = {
-  thumbnail: 2 * 1024 * 1024,
-  preview: 8 * 1024 * 1024,
-  original: 64 * 1024 * 1024,
+  ...FROZEN_PHOTO_TRANSFER_LIMITS.maxBytes,
 };
 
 async function deleteUploadedObject(objectStore: DirectPhotoObjectStore, key: string): Promise<void> {

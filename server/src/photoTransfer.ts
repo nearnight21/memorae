@@ -9,6 +9,17 @@ export const PHOTO_CIPHER_CONTENT_TYPE = 'application/octet-stream';
 export const DEFAULT_SIGNED_URL_TTL_SECONDS = 5 * 60;
 export const DEFAULT_PENDING_UPLOAD_TTL_MS = 15 * 60 * 1000;
 
+// FROZEN: these transfer limits are part of the v1 client/COS contract.
+export const FROZEN_PHOTO_TRANSFER_LIMITS = Object.freeze({
+  signedUrlTtlSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
+  pendingUploadTtlMs: DEFAULT_PENDING_UPLOAD_TTL_MS,
+  maxBytes: Object.freeze({
+    thumbnail: 2 * 1024 * 1024,
+    preview: 8 * 1024 * 1024,
+    original: 64 * 1024 * 1024,
+  }),
+} as const);
+
 export interface BeginPhotoUploadInput {
   id: string;
   kind: PhotoKind;

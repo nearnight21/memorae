@@ -24,6 +24,7 @@ import {
   type MemoryV2,
   type VaultEnvelopeV1,
 } from '../src/crypto';
+import { AES_GCM, CRYPTO_VERSION, FROZEN_KDF_DEFAULTS, VAULT_SCHEMA } from '../src/crypto/vault';
 import { base64ToBytes } from '../src/crypto/encoding';
 import { assertPrototypeBundle } from '../src/prototype/storage';
 import { fitPhotoWithin } from '../src/photos/photoVariants';
@@ -171,6 +172,22 @@ test('换设备导入 JSON 后，可以用同一密码恢复并解密记忆', as
   );
 
   assert.deepEqual(restored, sampleMemory);
+});
+
+test('加密协议冻结：Web/Mobile 默认 KDF 与信封版本不可漂移', async () => {
+  const { envelope } = await createVault('freeze-protocol-password');
+  assert.equal(CRYPTO_VERSION, 1);
+  assert.equal(VAULT_SCHEMA, 'memory-recall-vault');
+  assert.equal(AES_GCM, 'AES-256-GCM');
+  assert.deepEqual(
+    {
+      memoryKiB: envelope.kdf.memoryKiB,
+      iterations: envelope.kdf.iterations,
+      parallelism: envelope.kdf.parallelism,
+      hashLength: envelope.kdf.hashLength,
+    },
+    FROZEN_KDF_DEFAULTS,
+  );
 });
 
 test('MemoryV1 加密后可以逐字段恢复', async () => {

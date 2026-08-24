@@ -1,5 +1,7 @@
 # Memory Recall 技术基线
 
+> 加密、照片传输与同步规则已按 [`docs/SYNC-CRYPTO-FREEZE.md`](docs/SYNC-CRYPTO-FREEZE.md) 冻结；除非明确升级协议版本，否则不得修改。
+
 > 基线日期：2026-08-21
 >
 > 基线分支：`codex/cos-direct-transfer`
