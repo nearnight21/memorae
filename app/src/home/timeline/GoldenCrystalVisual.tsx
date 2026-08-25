@@ -11,8 +11,8 @@ import {
 
 import {
   generateCrystalPath,
-  generateInnerRimPath,
   generateSurfaceArcPath,
+  insetCrystalGeometry,
 } from './goldenCrystalGeometry';
 import type {
   GoldenCrystalGeometry,
@@ -71,10 +71,10 @@ export function GoldenCrystalTrackLayers({
             start={vec(0, trackTop)}
             end={vec(0, trackTop + trackHeight)}
             colors={[
-              'rgba(255,255,252,0.22)',
-              'rgba(255,250,241,0.065)',
-              'rgba(225,194,153,0.035)',
-              'rgba(142,98,58,0.055)',
+              'rgba(255,255,252,0.19)',
+              'rgba(255,250,241,0.07)',
+              'rgba(220,186,142,0.025)',
+              'rgba(138,97,57,0.035)',
             ]}
             positions={[0, 0.32, 0.7, 1]}
           />
@@ -84,33 +84,15 @@ export function GoldenCrystalTrackLayers({
           y={trackTop + 0.45 * scale}
           width={width + 24 * scale}
           height={0.5 * scale}
-          color="rgba(255,255,255,0.42)"
+          color="rgba(255,255,255,0.38)"
         />
         <Rect
           x={-12 * scale}
           y={trackTop + trackHeight - 0.85 * scale}
           width={width + 24 * scale}
           height={0.45 * scale}
-          color="rgba(171,117,68,0.16)"
+          color="rgba(171,117,68,0.13)"
         />
-        <RoundedRect
-          x={-12 * scale}
-          y={centerY - 4.5 * scale}
-          width={width + 24 * scale}
-          height={9 * scale}
-          r={4.5 * scale}
-        >
-          <LinearGradient
-            start={vec(0, centerY - 4.5 * scale)}
-            end={vec(0, centerY + 4.5 * scale)}
-            colors={[
-              'rgba(255,255,255,0.065)',
-              'rgba(207,160,104,0.025)',
-              'rgba(255,250,241,0.05)',
-            ]}
-            positions={[0, 0.52, 1]}
-          />
-        </RoundedRect>
         <Rect
           x={-12 * scale}
           y={centerY - lineWidth / 2}
@@ -160,24 +142,24 @@ export function GoldenCrystalMaterialLayers({
     centerX,
     centerY,
   }), [centerX, centerY, scaledGeometry]);
-  const innerRim = useMemo(() => generateInnerRimPath({
-    ...scaledGeometry,
-    centerX,
-    centerY,
+  const innerOutline = useMemo(() => generateCrystalPath({
+    ...insetCrystalGeometry(scaledGeometry, 2.8 * scale),
+    centerX: centerX + 0.15 * scale,
+    centerY: centerY + 0.35 * scale,
   }), [centerX, centerY, scale, scaledGeometry]);
   const softHighlight = useMemo(() => generateSurfaceArcPath(
-    centerX - 1.2 * scale,
+    centerX - 1.6 * scale,
     centerY,
-    scaledGeometry.width * 0.7,
+    scaledGeometry.width * 0.62,
     lighting.softHighlightY * scale,
-    1.8 * scale,
+    2.2 * scale,
   ), [centerX, centerY, lighting.softHighlightY, scale, scaledGeometry.width]);
   const specularHighlight = useMemo(() => generateSurfaceArcPath(
-    centerX - 7.8 * scale,
+    centerX - 5.4 * scale,
     centerY,
-    scaledGeometry.width * 0.27,
+    scaledGeometry.width * 0.38,
     lighting.specularY * scale,
-    0.75 * scale,
+    1.1 * scale,
   ), [centerX, centerY, lighting.specularY, scale, scaledGeometry.width]);
   const lowerShade = useMemo(() => generateSurfaceArcPath(
     centerX + 0.8 * scale,
@@ -196,43 +178,27 @@ export function GoldenCrystalMaterialLayers({
             start={vec(centerX - scaledGeometry.width / 2, centerY - scaledGeometry.height / 2)}
             end={vec(centerX + scaledGeometry.width / 2, centerY + scaledGeometry.height / 2)}
             colors={[
-              'rgba(255,255,252,0.28)',
-              'rgba(255,251,243,0.055)',
-              'rgba(230,197,153,0.018)',
-              'rgba(255,247,231,0.09)',
+              'rgba(255,255,252,0.46)',
+              'rgba(255,251,243,0.13)',
+              'rgba(230,197,153,0.035)',
+              'rgba(255,247,231,0.18)',
             ]}
             positions={[0, 0.36, 0.69, 1]}
           />
         </Path>
-      </Group>
-
-      <Group opacity={goldenLayerOpacity(layers, 'volume')} clip={outline}>
-        <Path path={outline}>
-          <LinearGradient
-            start={vec(centerX - scaledGeometry.width / 2, centerY)}
-            end={vec(centerX + scaledGeometry.width / 2, centerY)}
-            colors={[
-              'rgba(139,92,55,0.13)',
-              'rgba(255,255,255,0.012)',
-              'rgba(255,255,255,0.008)',
-              'rgba(154,96,42,0.105)',
-            ]}
-            positions={[0, 0.28, 0.68, 1]}
-          />
-        </Path>
         <Rect
           x={centerX - scaledGeometry.width / 2}
-          y={centerY - trackHeight * 0.4}
+          y={centerY - trackHeight * 0.48}
           width={scaledGeometry.width}
-          height={trackHeight * 0.8}
+          height={trackHeight * 0.96}
         >
           <LinearGradient
             start={vec(centerX, centerY - trackHeight / 2)}
             end={vec(centerX, centerY + trackHeight / 2)}
             colors={[
-              'rgba(255,255,255,0.095)',
-              'rgba(214,169,112,0.02)',
-              'rgba(255,255,255,0.055)',
+              'rgba(255,255,255,0.12)',
+              'rgba(214,169,112,0.035)',
+              'rgba(255,255,255,0.08)',
             ]}
             positions={[0, 0.55, 1]}
           />
@@ -243,38 +209,63 @@ export function GoldenCrystalMaterialLayers({
         <Path
           path={outline}
           style="stroke"
-          strokeWidth={1.05 * scale}
+          strokeWidth={1.1 * scale}
         >
           <LinearGradient
-            start={vec(centerX - scaledGeometry.width / 2, centerY - scaledGeometry.height / 2)}
-            end={vec(centerX + scaledGeometry.width / 2, centerY + scaledGeometry.height / 2)}
+            start={vec(centerX, centerY - scaledGeometry.height / 2)}
+            end={vec(centerX, centerY + scaledGeometry.height / 2)}
             colors={[
-              'rgba(255,255,252,0.72)',
-              'rgba(121,83,54,0.32)',
-              'rgba(255,250,240,0.56)',
-              'rgba(137,87,45,0.28)',
+              'rgba(103,67,39,0.05)',
+              'rgba(116,75,43,0.26)',
+              'rgba(103,61,31,0.82)',
             ]}
-            positions={[0, 0.3, 0.66, 1]}
+            positions={[0, 0.5, 1]}
+          />
+        </Path>
+        <Path
+          path={outline}
+          style="stroke"
+          strokeWidth={0.9 * scale}
+        >
+          <LinearGradient
+            start={vec(centerX, centerY - scaledGeometry.height / 2)}
+            end={vec(centerX, centerY + scaledGeometry.height / 2)}
+            colors={[
+              'rgba(255,255,252,0.98)',
+              'rgba(255,247,232,0.8)',
+              'rgba(255,252,245,0.28)',
+              'rgba(255,250,240,0.06)',
+            ]}
+            positions={[0, 0.28, 0.66, 1]}
           />
         </Path>
       </Group>
 
       <Group opacity={goldenLayerOpacity(layers, 'innerRim')}>
         <Path
-          path={innerRim}
-          color="rgba(244,224,198,0.72)"
+          path={innerOutline}
           style="stroke"
-          strokeWidth={0.62 * scale}
-          strokeCap="round"
-        />
+          strokeWidth={0.58 * scale}
+        >
+          <LinearGradient
+            start={vec(centerX, centerY - scaledGeometry.height / 2)}
+            end={vec(centerX, centerY + scaledGeometry.height / 2)}
+            colors={[
+              'rgba(255,252,245,0.8)',
+              'rgba(229,201,169,0.48)',
+              'rgba(126,82,49,0.52)',
+            ]}
+            positions={[0, 0.56, 1]}
+          />
+        </Path>
       </Group>
 
       <Group opacity={goldenLayerOpacity(layers, 'softHighlight')} clip={outline}>
         <Path
           path={softHighlight}
-          color="rgba(255,255,255,0.7)"
+          color="rgba(255,255,255,0.82)"
           style="stroke"
-          strokeWidth={2.8 * scale}
+          strokeWidth={3.1 * scale}
           strokeCap="round"
         >
           <BlurMask blur={lighting.softHighlightBlur * scale} style="normal" />
@@ -284,9 +275,9 @@ export function GoldenCrystalMaterialLayers({
       <Group opacity={goldenLayerOpacity(layers, 'specularHighlight')} clip={outline}>
         <Path
           path={specularHighlight}
-          color="rgba(255,255,255,0.92)"
+          color="rgba(255,255,255,0.94)"
           style="stroke"
-          strokeWidth={0.68 * scale}
+          strokeWidth={0.78 * scale}
           strokeCap="round"
         />
       </Group>
@@ -294,9 +285,9 @@ export function GoldenCrystalMaterialLayers({
       <Group opacity={goldenLayerOpacity(layers, 'lowerShade')} clip={outline}>
         <Path
           path={lowerShade}
-          color="rgba(145,84,30,0.42)"
+          color="rgba(154,91,31,0.5)"
           style="stroke"
-          strokeWidth={1.45 * scale}
+          strokeWidth={1.8 * scale}
           strokeCap="round"
         >
           <BlurMask blur={lighting.lowerShadeBlur * scale} style="normal" />

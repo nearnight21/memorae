@@ -94,12 +94,10 @@ export function CrystalTimelineGoldenRenderer({
             {
               opacity: layers.label.opacity,
               left: centerX - scaledGeometryWidth * 0.42,
-              top: centerY - preset.typography.labelLineHeight * scale / 2,
+              top: centerY - 10 * scale,
               width: scaledGeometryWidth * 0.84,
-              color: preset.typography.labelColor,
-              fontSize: preset.typography.labelFontSize * scale,
-              lineHeight: preset.typography.labelLineHeight * scale,
-              fontWeight: preset.typography.labelFontWeight,
+              fontSize: 13.5 * scale,
+              lineHeight: 20 * scale,
             },
           ]}
         >
@@ -119,7 +117,9 @@ const styles = StyleSheet.create({
   },
   label: {
     position: 'absolute',
-    letterSpacing: 0.08,
+    color: '#3b2b21',
+    fontWeight: '500',
+    letterSpacing: 0.12,
     textAlign: 'center',
   },
 });
