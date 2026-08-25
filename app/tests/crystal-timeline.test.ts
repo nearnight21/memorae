@@ -27,8 +27,8 @@ import {
 import { GOLDEN_CRYSTAL_PRESET } from '../src/home/timeline/goldenCrystalPreset';
 
 test('水晶时间轴冻结 390×844 验收几何，不回退为过大滑块或细线导轨', () => {
-  assert.equal(CRYSTAL_LENS_WIDTH, 88);
-  assert.equal(CRYSTAL_LENS_HEIGHT, 58);
+  assert.equal(CRYSTAL_LENS_WIDTH, 90);
+  assert.equal(CRYSTAL_LENS_HEIGHT, 52);
   assert.equal(CRYSTAL_RAIL_HEIGHT, 44);
   assert.equal(CRYSTAL_RAIL_CORE_HEIGHT, 0.78);
   assert.equal(CRYSTAL_HOME_BOTTOM_PADDING, 48);

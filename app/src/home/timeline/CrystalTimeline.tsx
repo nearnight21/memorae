@@ -389,11 +389,11 @@ const styles = StyleSheet.create({
   },
   lensYear: {
     minWidth: TIMELINE_ITEM_WIDTH,
-    color: '#35291f',
-    fontSize: 13.5,
-    lineHeight: 20,
-    fontWeight: '500',
-    letterSpacing: 0.2,
+    color: GOLDEN_CRYSTAL_PRESET.typography.labelColor,
+    fontSize: GOLDEN_CRYSTAL_PRESET.typography.labelFontSize,
+    lineHeight: GOLDEN_CRYSTAL_PRESET.typography.labelLineHeight,
+    fontWeight: GOLDEN_CRYSTAL_PRESET.typography.labelFontWeight,
+    letterSpacing: 0.08,
     textAlign: 'center',
   },
 });

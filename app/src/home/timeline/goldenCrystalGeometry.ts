@@ -13,6 +13,34 @@ function point(x: number, y: number): string {
   return `${fixed(x)} ${fixed(y)}`;
 }
 
+interface CrystalPoint {
+  x: number;
+  y: number;
+}
+
+function closedBezierPath(points: readonly CrystalPoint[], tension: number): string {
+  const commands = [`M ${point(points[0].x, points[0].y)}`];
+  for (let index = 0; index < points.length; index += 1) {
+    const previous = points[(index - 1 + points.length) % points.length];
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const afterNext = points[(index + 2) % points.length];
+    const control1 = {
+      x: current.x + (next.x - previous.x) * tension / 6,
+      y: current.y + (next.y - previous.y) * tension / 6,
+    };
+    const control2 = {
+      x: next.x - (afterNext.x - current.x) * tension / 6,
+      y: next.y - (afterNext.y - current.y) * tension / 6,
+    };
+    commands.push(
+      `C ${point(control1.x, control1.y)} ${point(control2.x, control2.y)} ${point(next.x, next.y)}`,
+    );
+  }
+  commands.push('Z');
+  return commands.join(' ');
+}
+
 export function generateCrystalPath(params: CrystalPathParams): string {
   const {
     centerX,
@@ -32,41 +60,58 @@ export function generateCrystalPath(params: CrystalPathParams): string {
   const right = centerX + halfWidth + rightBulge;
   const top = centerY - halfHeight;
   const bottom = centerY + halfHeight;
-  const topDepth = height * topCurve;
-  const bottomDepth = height * bottomCurve;
-  const shoulder = Math.max(0.04, Math.min(0.22, shoulderTightness));
-  const topCenterX = centerX - width * 0.025;
-  const bottomCenterX = centerX + width * 0.055;
+  const shoulder = Math.max(0.08, Math.min(0.24, shoulderTightness));
+  const topSpan = width * (0.28 + topCurve * 0.08);
+  const bottomSpan = width * (0.28 + bottomCurve * 0.08);
+  const rightShoulderInset = width * shoulder * 0.45;
+  const leftShoulderInset = width * shoulder * 0.48;
+  const points: readonly CrystalPoint[] = [
+    { x: centerX - topSpan, y: top + verticalAsymmetry * 0.08 },
+    { x: centerX + topSpan * 0.96, y: top - verticalAsymmetry * 0.06 },
+    {
+      x: right - rightShoulderInset,
+      y: centerY - height * (0.24 + topCurve * 0.1),
+    },
+    { x: right, y: centerY - height * 0.018 + verticalAsymmetry * 0.04 },
+    {
+      x: right - rightShoulderInset * 1.08,
+      y: centerY + height * (0.235 + bottomCurve * 0.1),
+    },
+    { x: centerX + bottomSpan, y: bottom + verticalAsymmetry * 0.08 },
+    { x: centerX - bottomSpan * 0.96, y: bottom - verticalAsymmetry * 0.03 },
+    {
+      x: left + leftShoulderInset * 1.05,
+      y: centerY + height * (0.24 + bottomCurve * 0.09),
+    },
+    { x: left, y: centerY + height * 0.01 - verticalAsymmetry * 0.04 },
+    {
+      x: left + leftShoulderInset,
+      y: centerY - height * (0.235 + topCurve * 0.1),
+    },
+  ];
 
-  return [
-    `M ${point(topCenterX, top)}`,
-    `C ${point(centerX + width * (0.22 + shoulder * 0.18), top - height * 0.008)}`,
-    `${point(right - width * (0.12 + shoulder * 0.08), top + topDepth * 0.34)}`,
-    `${point(right - width * 0.018, centerY - height * 0.105 + verticalAsymmetry * 0.18)}`,
-    `C ${point(right + rightBulge * 0.16, centerY + height * 0.08)}`,
-    `${point(right - width * (0.1 + shoulder * 0.06), bottom - bottomDepth * 0.3)}`,
-    `${point(bottomCenterX, bottom + verticalAsymmetry * 0.16)}`,
-    `C ${point(centerX - width * (0.23 + shoulder * 0.12), bottom + height * 0.012)}`,
-    `${point(left + width * (0.095 + shoulder * 0.05), bottom - bottomDepth * 0.34)}`,
-    `${point(left + width * 0.012, centerY + height * 0.065 - verticalAsymmetry * 0.12)}`,
-    `C ${point(left - leftBulge * 0.14, centerY - height * 0.105)}`,
-    `${point(left + width * (0.1 + shoulder * 0.05), top + topDepth * 0.32)}`,
-    `${point(topCenterX, top)}`,
-    'Z',
-  ].join(' ');
+  return closedBezierPath(points, 0.86);
 }
 
-export function insetCrystalGeometry(
-  geometry: GoldenCrystalGeometry,
-  inset: number,
-): GoldenCrystalGeometry {
-  return {
-    ...geometry,
-    width: Math.max(8, geometry.width - inset * 2),
-    height: Math.max(8, geometry.height - inset * 2),
-    leftBulge: Math.max(0, geometry.leftBulge - inset * 0.18),
-    rightBulge: Math.max(0, geometry.rightBulge - inset * 0.18),
-  };
+export function generateInnerRimPath(params: CrystalPathParams): string {
+  const { centerX, centerY, width, height, verticalAsymmetry } = params;
+  const left = centerX - width / 2;
+  const right = centerX + width / 2;
+  const top = centerY - height / 2;
+  const bottom = centerY + height / 2;
+
+  return [
+    `M ${point(left + width * 0.1, centerY - height * 0.08)}`,
+    `C ${point(left + width * 0.11, top + height * 0.18)}`,
+    `${point(centerX - width * 0.25, top + height * 0.105)}`,
+    `${point(centerX - width * 0.03, top + height * 0.115 - verticalAsymmetry * 0.04)}`,
+    `C ${point(centerX + width * 0.19, top + height * 0.1)}`,
+    `${point(right - width * 0.12, top + height * 0.2)}`,
+    `${point(right - width * 0.08, centerY - height * 0.03)}`,
+    `C ${point(right - width * 0.06, centerY + height * 0.14)}`,
+    `${point(centerX + width * 0.28, bottom - height * 0.1)}`,
+    `${point(centerX + width * 0.05, bottom - height * 0.095 + verticalAsymmetry * 0.03)}`,
+  ].join(' ');
 }
 
 export function generateSurfaceArcPath(

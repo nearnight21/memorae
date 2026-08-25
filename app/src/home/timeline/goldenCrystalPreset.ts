@@ -5,6 +5,7 @@ export type GoldenLayerKey =
   | 'ticks'
   | 'years'
   | 'body'
+  | 'volume'
   | 'outerRim'
   | 'innerRim'
   | 'softHighlight'
@@ -46,12 +47,20 @@ export interface GoldenTrackPreset {
   tickWidth: number;
 }
 
+export interface GoldenTypographyPreset {
+  labelFontSize: number;
+  labelLineHeight: number;
+  labelColor: string;
+  labelFontWeight: '400';
+}
+
 export interface GoldenCrystalPreset {
   referenceViewport: { width: number; height: number };
   label: string;
   geometry: GoldenCrystalGeometry;
   lighting: GoldenCrystalLighting;
   track: GoldenTrackPreset;
+  typography: GoldenTypographyPreset;
   yearOffsets: readonly number[];
   years: readonly string[];
   layers: GoldenLayerState;
@@ -62,6 +71,7 @@ export const GOLDEN_LAYER_ORDER: readonly GoldenLayerKey[] = [
   'ticks',
   'years',
   'body',
+  'volume',
   'outerRim',
   'innerRim',
   'softHighlight',
@@ -75,6 +85,7 @@ export const GOLDEN_LAYER_LABELS: Record<GoldenLayerKey, string> = {
   ticks: 'Ticks',
   years: 'Years',
   body: 'Body',
+  volume: 'Volume',
   outerRim: 'Outer Rim',
   innerRim: 'Inner Rim',
   softHighlight: 'Soft Highlight',
@@ -87,21 +98,21 @@ export const GOLDEN_CRYSTAL_PRESET: GoldenCrystalPreset = {
   referenceViewport: { width: 390, height: 844 },
   label: '2021',
   geometry: {
-    width: 88,
-    height: 58,
-    leftBulge: 1.4,
-    rightBulge: 1.8,
-    topCurve: 0.14,
-    bottomCurve: 0.17,
-    shoulderTightness: 0.11,
-    verticalAsymmetry: 1.2,
+    width: 90,
+    height: 52,
+    leftBulge: 1.1,
+    rightBulge: 1.6,
+    topCurve: 0.11,
+    bottomCurve: 0.15,
+    shoulderTightness: 0.16,
+    verticalAsymmetry: 1.4,
   },
   lighting: {
-    softHighlightY: -17.2,
-    softHighlightBlur: 0.9,
-    specularY: -19.3,
-    lowerShadeY: 18.5,
-    lowerShadeBlur: 0.8,
+    softHighlightY: -15.2,
+    softHighlightBlur: 1.1,
+    specularY: -18.1,
+    lowerShadeY: 16.2,
+    lowerShadeBlur: 0.7,
   },
   track: {
     centerYRatio: 0.8615,
@@ -110,19 +121,26 @@ export const GOLDEN_CRYSTAL_PRESET: GoldenCrystalPreset = {
     tickHeight: 8.5,
     tickWidth: 0.62,
   },
+  typography: {
+    labelFontSize: 12,
+    labelLineHeight: 18,
+    labelColor: '#5a4030',
+    labelFontWeight: '400',
+  },
   yearOffsets: [-168, -116, -64, 0, 66, 118, 170],
   years: ['2018', '2019', '2020', '2021', '2022', '2023', '2024'],
   layers: {
-    track: { enabled: true, opacity: 0.72 },
+    track: { enabled: true, opacity: 0.82 },
     ticks: { enabled: true, opacity: 0.68 },
     years: { enabled: true, opacity: 0.72 },
-    body: { enabled: true, opacity: 0.34 },
-    outerRim: { enabled: true, opacity: 0.76 },
-    innerRim: { enabled: true, opacity: 0.48 },
-    softHighlight: { enabled: true, opacity: 0.44 },
-    specularHighlight: { enabled: true, opacity: 0.7 },
-    lowerShade: { enabled: true, opacity: 0.38 },
-    label: { enabled: true, opacity: 0.92 },
+    body: { enabled: true, opacity: 0.2 },
+    volume: { enabled: true, opacity: 0.42 },
+    outerRim: { enabled: true, opacity: 0.7 },
+    innerRim: { enabled: true, opacity: 0.36 },
+    softHighlight: { enabled: true, opacity: 0.32 },
+    specularHighlight: { enabled: true, opacity: 0.58 },
+    lowerShade: { enabled: true, opacity: 0.24 },
+    label: { enabled: true, opacity: 0.82 },
   },
 };
 
