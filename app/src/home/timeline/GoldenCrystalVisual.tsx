@@ -205,38 +205,56 @@ export function GoldenCrystalMaterialLayers({
         </Rect>
       </Group>
 
+      <Group opacity={goldenLayerOpacity(layers, 'innerVolume')} clip={outline}>
+        <Path path={outline}>
+          <LinearGradient
+            start={vec(centerX - scaledGeometry.width / 2, centerY)}
+            end={vec(centerX + scaledGeometry.width / 2, centerY)}
+            colors={[
+              'rgba(100,61,34,0.5)',
+              'rgba(129,82,46,0.12)',
+              'rgba(129,82,46,0)',
+              'rgba(129,82,46,0)',
+              'rgba(129,82,46,0.1)',
+              'rgba(111,66,34,0.42)',
+            ]}
+            positions={[0, 0.12, 0.25, 0.72, 0.88, 1]}
+          />
+        </Path>
+      </Group>
+
       <Group opacity={goldenLayerOpacity(layers, 'outerRim')}>
         <Path
           path={outline}
           style="stroke"
-          strokeWidth={1.1 * scale}
+          strokeWidth={1.3 * scale}
         >
           <LinearGradient
             start={vec(centerX, centerY - scaledGeometry.height / 2)}
             end={vec(centerX, centerY + scaledGeometry.height / 2)}
             colors={[
-              'rgba(103,67,39,0.05)',
-              'rgba(116,75,43,0.26)',
-              'rgba(103,61,31,0.82)',
+              'rgba(103,67,39,0.08)',
+              'rgba(116,75,43,0.46)',
+              'rgba(103,61,31,0.98)',
             ]}
-            positions={[0, 0.5, 1]}
+            positions={[0, 0.52, 1]}
           />
         </Path>
         <Path
           path={outline}
           style="stroke"
-          strokeWidth={0.9 * scale}
+          strokeWidth={1.05 * scale}
         >
           <LinearGradient
             start={vec(centerX, centerY - scaledGeometry.height / 2)}
             end={vec(centerX, centerY + scaledGeometry.height / 2)}
             colors={[
-              'rgba(255,255,252,0.98)',
-              'rgba(255,247,232,0.8)',
-              'rgba(255,252,245,0.28)',
-              'rgba(255,250,240,0.06)',
+              'rgba(255,255,252,1)',
+              'rgba(255,247,232,0.92)',
+              'rgba(255,252,245,0.36)',
+              'rgba(255,250,240,0.03)',
             ]}
-            positions={[0, 0.28, 0.66, 1]}
+            positions={[0, 0.3, 0.68, 1]}
           />
         </Path>
       </Group>
@@ -245,17 +263,17 @@ export function GoldenCrystalMaterialLayers({
         <Path
           path={innerOutline}
           style="stroke"
-          strokeWidth={0.58 * scale}
+          strokeWidth={0.66 * scale}
         >
           <LinearGradient
             start={vec(centerX, centerY - scaledGeometry.height / 2)}
             end={vec(centerX, centerY + scaledGeometry.height / 2)}
             colors={[
-              'rgba(255,252,245,0.8)',
-              'rgba(229,201,169,0.48)',
-              'rgba(126,82,49,0.52)',
+              'rgba(255,252,245,0.88)',
+              'rgba(229,201,169,0.56)',
+              'rgba(126,82,49,0.68)',
             ]}
-            positions={[0, 0.56, 1]}
+            positions={[0, 0.54, 1]}
           />
         </Path>
       </Group>
@@ -275,9 +293,9 @@ export function GoldenCrystalMaterialLayers({
       <Group opacity={goldenLayerOpacity(layers, 'specularHighlight')} clip={outline}>
         <Path
           path={specularHighlight}
-          color="rgba(255,255,255,0.94)"
+          color="rgba(255,255,255,0.99)"
           style="stroke"
-          strokeWidth={0.78 * scale}
+          strokeWidth={0.96 * scale}
           strokeCap="round"
         />
       </Group>
@@ -285,12 +303,12 @@ export function GoldenCrystalMaterialLayers({
       <Group opacity={goldenLayerOpacity(layers, 'lowerShade')} clip={outline}>
         <Path
           path={lowerShade}
-          color="rgba(154,91,31,0.5)"
+          color="rgba(135,77,29,0.82)"
           style="stroke"
           strokeWidth={1.8 * scale}
           strokeCap="round"
         >
-          <BlurMask blur={lighting.lowerShadeBlur * scale} style="normal" />
+          <BlurMask blur={lighting.lowerShadeBlur * scale * 0.55} style="normal" />
         </Path>
       </Group>
     </>

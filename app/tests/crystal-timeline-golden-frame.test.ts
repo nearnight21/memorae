@@ -46,11 +46,12 @@ test('Golden Frame 冻结静态 2021 基准、轻量轨道和独立材质层', (
     ticks: { enabled: true, opacity: 0.68 },
     years: { enabled: true, opacity: 0.72 },
     body: { enabled: true, opacity: 0.34 },
-    outerRim: { enabled: true, opacity: 0.76 },
-    innerRim: { enabled: true, opacity: 0.48 },
+    innerVolume: { enabled: true, opacity: 0.16 },
+    outerRim: { enabled: true, opacity: 0.9 },
+    innerRim: { enabled: true, opacity: 0.62 },
     softHighlight: { enabled: true, opacity: 0.44 },
-    specularHighlight: { enabled: true, opacity: 0.7 },
-    lowerShade: { enabled: true, opacity: 0.38 },
+    specularHighlight: { enabled: true, opacity: 0.84 },
+    lowerShade: { enabled: true, opacity: 0.58 },
     label: { enabled: true, opacity: 0.92 },
   });
   assert.deepEqual(GOLDEN_LAYER_ORDER, [
@@ -58,6 +59,7 @@ test('Golden Frame 冻结静态 2021 基准、轻量轨道和独立材质层', (
     'ticks',
     'years',
     'body',
+    'innerVolume',
     'outerRim',
     'innerRim',
     'softHighlight',
@@ -133,6 +135,7 @@ test('Golden Renderer 由测试页与正式 Timeline 共用，正式手势不驱
 
   assert.match(sharedVisual, /<Path path=\{outline\}>/);
   assert.match(sharedVisual, /goldenLayerOpacity\(layers, 'body'\)/);
+  assert.match(sharedVisual, /goldenLayerOpacity\(layers, 'innerVolume'\)/);
   assert.match(sharedVisual, /goldenLayerOpacity\(layers, 'outerRim'\)/);
   assert.match(sharedVisual, /goldenLayerOpacity\(layers, 'innerRim'\)/);
   assert.match(sharedVisual, /goldenLayerOpacity\(layers, 'softHighlight'\)/);
@@ -144,11 +147,25 @@ test('Golden Renderer 由测试页与正式 Timeline 共用，正式手势不驱
   const innerRimBlock = sharedVisual.match(
     /<Group opacity=\{goldenLayerOpacity\(layers, 'innerRim'\)\}>([\s\S]*?)<\/Group>/,
   )?.[1] ?? '';
+  const innerVolumeBlock = sharedVisual.match(
+    /<Group opacity=\{goldenLayerOpacity\(layers, 'innerVolume'\)\} clip=\{outline\}>([\s\S]*?)<\/Group>/,
+  )?.[1] ?? '';
+  const specularBlock = sharedVisual.match(
+    /<Group opacity=\{goldenLayerOpacity\(layers, 'specularHighlight'\)\} clip=\{outline\}>([\s\S]*?)<\/Group>/,
+  )?.[1] ?? '';
+  const lowerRefractionBlock = sharedVisual.match(
+    /<Group opacity=\{goldenLayerOpacity\(layers, 'lowerShade'\)\} clip=\{outline\}>([\s\S]*?)<\/Group>/,
+  )?.[1] ?? '';
   assert.equal(outerRimBlock.match(/<Path/g)?.length, 2);
   assert.equal(innerRimBlock.match(/<Path/g)?.length, 1);
-  assert.match(outerRimBlock, /rgba\(255,255,252,0\.98\)/);
-  assert.match(outerRimBlock, /rgba\(103,61,31,0\.82\)/);
-  assert.match(innerRimBlock, /rgba\(255,252,245,0\.8\)/);
-  assert.match(innerRimBlock, /rgba\(126,82,49,0\.52\)/);
+  assert.equal(innerVolumeBlock.match(/<Path/g)?.length, 1);
+  assert.match(outerRimBlock, /rgba\(255,255,252,1\)/);
+  assert.match(outerRimBlock, /rgba\(103,61,31,0\.98\)/);
+  assert.match(innerRimBlock, /rgba\(255,252,245,0\.88\)/);
+  assert.match(innerRimBlock, /rgba\(126,82,49,0\.68\)/);
+  assert.match(innerVolumeBlock, /rgba\(100,61,34,0\.5\)/);
+  assert.doesNotMatch(innerVolumeBlock, /rgba\(255,255,255/);
+  assert.match(specularBlock, /rgba\(255,255,255,0\.99\)/);
+  assert.match(lowerRefractionBlock, /rgba\(135,77,29,0\.82\)/);
   assert.doesNotMatch(sharedVisual, /useSharedValue|useDerivedValue|usePathValue|withSpring|Gesture\./);
 });

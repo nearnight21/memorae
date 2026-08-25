@@ -5,6 +5,7 @@ export type GoldenLayerKey =
   | 'ticks'
   | 'years'
   | 'body'
+  | 'innerVolume'
   | 'outerRim'
   | 'innerRim'
   | 'softHighlight'
@@ -62,6 +63,7 @@ export const GOLDEN_LAYER_ORDER: readonly GoldenLayerKey[] = [
   'ticks',
   'years',
   'body',
+  'innerVolume',
   'outerRim',
   'innerRim',
   'softHighlight',
@@ -75,6 +77,7 @@ export const GOLDEN_LAYER_LABELS: Record<GoldenLayerKey, string> = {
   ticks: 'Ticks',
   years: 'Years',
   body: 'Body',
+  innerVolume: 'Inner Volume',
   outerRim: 'Outer Rim',
   innerRim: 'Inner Rim',
   softHighlight: 'Soft Highlight',
@@ -117,11 +120,12 @@ export const GOLDEN_CRYSTAL_PRESET: GoldenCrystalPreset = {
     ticks: { enabled: true, opacity: 0.68 },
     years: { enabled: true, opacity: 0.72 },
     body: { enabled: true, opacity: 0.34 },
-    outerRim: { enabled: true, opacity: 0.76 },
-    innerRim: { enabled: true, opacity: 0.48 },
+    innerVolume: { enabled: true, opacity: 0.16 },
+    outerRim: { enabled: true, opacity: 0.9 },
+    innerRim: { enabled: true, opacity: 0.62 },
     softHighlight: { enabled: true, opacity: 0.44 },
-    specularHighlight: { enabled: true, opacity: 0.7 },
-    lowerShade: { enabled: true, opacity: 0.38 },
+    specularHighlight: { enabled: true, opacity: 0.84 },
+    lowerShade: { enabled: true, opacity: 0.58 },
     label: { enabled: true, opacity: 0.92 },
   },
 };
