@@ -23,21 +23,21 @@
 | `未实现` | 代码中不存在相应产品能力。 |
 | `待验证` | 代码或文档不足以确认，或必须依赖真实数据、真机、线上配置才能确认。 |
 
-证据规则：路径与行号均指本基线日期的固定分支内容；部署事实以
-`codex/deployment-pilot-design` 固定 worktree 为准。凡无法从代码、测试、部署记录或本次只读线上观察确认的内容，明确写“无法确认”。生产数据是端到端密文，本报告不记录真实记忆标题、精确地点、照片、账号、令牌或密钥。
+证据规则：路径与行号均指本基线日期的规范分支内容；历史部署事实以
+`archive/deployment-pilot-2026-08-22` 归档 Tag 为证据。凡无法从代码、测试、部署记录或本次只读线上观察确认的内容，明确写“无法确认”。生产数据是端到端密文，本报告不记录真实记忆标题、精确地点、照片、账号、令牌或密钥。
 
 # 当前系统真实状态一页摘要
 
 | 范围 | 状态 | 当前真实状态 | 主要证据 |
 | --- | --- | --- | --- |
-| 生产 Web | `已实现` | `https://memorae.cn/` 已提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认正式页面可打开、解锁后由 Leaflet 渲染，`/health` 返回 `200 {"ok":true}`。 | `memory-recall-web/src/main.tsx:4-25`；`memory-recall-web/src/product/ProductGate.tsx:90-213`；`codex/deployment-pilot-design:DEVELOPMENT.md:63-68` |
+| 生产 Web | `已实现` | `https://memorae.cn/` 已提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认正式页面可打开、解锁后由 Leaflet 渲染，`/health` 返回 `200 {"ok":true}`。 | `memory-recall-web/src/main.tsx:4-25`；`memory-recall-web/src/product/ProductGate.tsx:90-213`；`archive/deployment-pilot-2026-08-22:DEVELOPMENT.md:63-68` |
 | Mobile App | `部分实现` | Expo/RN 加密、SQLite、照片分级、设备解锁和手动同步链路可运行；正式首页、导航、详情、新建/编辑/选点尚未整合成产品 App。 | `memory-recall-mobile/App.tsx:18-58,90-180`；`memory-recall-mobile/app.json:2-49`；`DEVELOPMENT.md:67-102` |
 | Mobile 地图 | `Prototype` | 高德 Native SDK 垂直切片和 A/B/C/D 裸图测试包存在；它与正式私密数据和产品 UI 尚未整合。 | `memory-recall-mobile/docs/AMAP-VERTICAL-SLICE.md:1-17`；`memory-recall-mobile/src/map/MapVerticalSliceApp.tsx:47-98`；`DEVELOPMENT.md:44-57` |
-| API | `已实现` | Fastify 提供账号会话、钥匙信封、记忆密文、照片授权/直传、地点搜索/反查/转换；生产 API 与 Web 同源。 | `memory-recall-server/src/app.ts:189-311,313-408`；`codex/deployment-pilot-design:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
+| API | `已实现` | Fastify 提供账号会话、钥匙信封、记忆密文、照片授权/直传、地点搜索/反查/转换；生产 API 与 Web 同源。 | `memory-recall-server/src/app.ts:189-311,313-408`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
 | PostgreSQL | `已实现` | 保存账号、会话、钥匙信封、记忆密文和照片对象元数据；不保存明文 MemoryV2。 | `memory-recall-server/migrations/001_initial.sql:1-54`；`memory-recall-server/src/postgres.ts:243-309` |
-| 腾讯云 COS | `已实现` | 私有桶保存三档客户端密文照片；客户端经五分钟签名 URL 直传直下，API 不中转照片字节。 | `memory-recall-server/src/postgres.ts:503-527,569-656`；`codex/deployment-pilot-design:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:86-109` |
-| 公网部署 | `已实现` | 阿里云轻量服务器运行 Compose PostgreSQL/API；API 仅绑定 `127.0.0.1:8788`；宿主机 Caddy 提供域名、HTTPS、静态 Web 和同源反代。 | `codex/deployment-pilot-design:DEVELOPMENT.md:15-28`；`codex/deployment-pilot-design:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
-| 备份与监控 | `部分实现` | 首份受保护 PostgreSQL 备份已验收；定时备份安装、加密异地备份、外部告警和隔离恢复演练尚未完整关闭。 | `codex/deployment-pilot-design:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:192-247` |
+| 腾讯云 COS | `已实现` | 私有桶保存三档客户端密文照片；客户端经五分钟签名 URL 直传直下，API 不中转照片字节。 | `memory-recall-server/src/postgres.ts:503-527,569-656`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:86-109` |
+| 公网部署 | `已实现` | 阿里云轻量服务器运行 Compose PostgreSQL/API；API 仅绑定 `127.0.0.1:8788`；宿主机 Caddy 提供域名、HTTPS、静态 Web 和同源反代。 | `archive/deployment-pilot-2026-08-22:DEVELOPMENT.md:15-28`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
+| 备份与监控 | `部分实现` | 首份受保护 PostgreSQL 备份已验收；定时备份安装、加密异地备份、外部告警和隔离恢复演练尚未完整关闭。 | `archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:192-247` |
 | 坐标正确性 | `部分实现` | 2026-08-21 已从用户解锁后的生产 Web 运行时只读审计全部 17 条记忆：16 条中国地点均为 `provider=amap` 且有高德 `adcode`，按 GCJ-02 使用；1 条日本地点为 `provider=bigdatacloud` 且无 `adcode`，按 WGS-84 使用。当前数据没有发现坐标体系混杂。结构风险仍存在：MemoryV2 没有 `coordinateSystem` 或写入来源字段。 | 运行时审计；`memory-recall-mobile/docs/COORDINATE-CONTRACT.md:12-40`；`memory-recall-web/src/memory/memoryV2.ts:8-33,97-116` |
 | 同步 | `部分实现` | Web 已后台自动同步；Mobile 是手动验证壳。协议使用全量密文列表与逐条 revision，不是 cursor 增量同步；删除使用 tombstone。 | `memory-recall-web/README.md:21-27`；`memory-recall-web/src/sync/syncActions.ts:59-172`；`memory-recall-mobile/src/sync/syncActions.ts:45-136` |
 | 地图路线决策 | `待验证` | Web 继续使用 Leaflet；App 高德 Native 路线存在拖动卡顿和海外底图不足。MapLibre 仅是候选，尚未采用。是否保留高德为国内渲染、海外改用其他渲染器仍是开放决策。 | `memory-recall-web/src/components/MapView.tsx:445-476`；`DEVELOPMENT.md:44-57`；`memory-recall-mobile/docs/AMAP-VERTICAL-SLICE.md:118-122` |
@@ -77,7 +77,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 
 `旧代码`：根目录 `src/`、`camp-memories/`、Supabase/R2 与 ThinkPad 产品代码是另一套历史产品，不属于上述生产链路；不得据此推断 Memory Recall 的存储或部署。证据：`camp-memories/src/supabase.ts:1-31`、`camp-memories/src/App.tsx:1-40`。
 
-`部分实现`：集成分支 `memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:7-24` 仍描述腾讯云 Lighthouse 和“公网待完成”，与部署分支的阿里云/Caddy生产事实冲突。这是明确的文档债务；生产操作必须以 `codex/deployment-pilot-design` 的 runbook 为准。
+`部分实现`：规范分支 `memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:7-24` 仍描述腾讯云 Lighthouse 和“公网待完成”，与归档部署记录中的阿里云/Caddy 生产事实冲突。这是明确的文档债务；生产拓扑证据暂以 `archive/deployment-pilot-2026-08-22` 的 runbook 为准，实际操作前必须将其核对并整理为规范分支中的唯一权威 runbook。
 
 ## 2. 项目当前状态
 
