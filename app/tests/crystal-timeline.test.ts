@@ -9,7 +9,9 @@ import {
   resistedTimelineOffset,
   timelineIndexForOffset,
   timelineIndexForSelection,
+  timelineLogicalOffsetFromVisual,
   timelineOffsetForIndex,
+  timelineVisualOffsetAroundLens,
   TIMELINE_EDGE_RESISTANCE,
   TIMELINE_ITEM_WIDTH,
   TIMELINE_VELOCITY_PROJECTION_SECONDS,
@@ -22,12 +24,13 @@ import {
   CRYSTAL_RAIL_HEIGHT,
   crystalRailBottomDistance,
 } from '../src/home/timeline/crystalTimelineGeometry';
+import { GOLDEN_CRYSTAL_PRESET } from '../src/home/timeline/goldenCrystalPreset';
 
 test('水晶时间轴冻结 390×844 验收几何，不回退为过大滑块或细线导轨', () => {
-  assert.equal(CRYSTAL_LENS_WIDTH, 52);
-  assert.equal(CRYSTAL_LENS_HEIGHT, 38);
-  assert.equal(CRYSTAL_RAIL_HEIGHT, 8);
-  assert.equal(CRYSTAL_RAIL_CORE_HEIGHT, 1.25);
+  assert.equal(CRYSTAL_LENS_WIDTH, 88);
+  assert.equal(CRYSTAL_LENS_HEIGHT, 58);
+  assert.equal(CRYSTAL_RAIL_HEIGHT, 44);
+  assert.equal(CRYSTAL_RAIL_CORE_HEIGHT, 0.78);
   assert.equal(CRYSTAL_HOME_BOTTOM_PADDING, 48);
   assert.equal(crystalRailBottomDistance(), 97);
 });
@@ -53,6 +56,32 @@ test('年份索引和时间轴 offset 可以双向换算', () => {
   assert.equal(timelineIndexForOffset(-3 * TIMELINE_ITEM_WIDTH, 8, TIMELINE_ITEM_WIDTH), 3);
   assert.equal(timelineIndexForSelection(buildTimelineItems(['2022'], 2026), '2024'), 5);
   assert.equal(timelineIndexForSelection(buildTimelineItems(['2022'], 2026), null), 0);
+});
+
+test('正式手势保留 82dp 逻辑吸附，静态年份坐标映射到 Golden 基准', () => {
+  assert.equal(TIMELINE_ITEM_WIDTH, 82);
+  const leftNeighbor = GOLDEN_CRYSTAL_PRESET.yearOffsets[2];
+  const rightNeighbor = GOLDEN_CRYSTAL_PRESET.yearOffsets[4];
+  const outerStep = GOLDEN_CRYSTAL_PRESET.yearOffsets[1]
+    - GOLDEN_CRYSTAL_PRESET.yearOffsets[0];
+  const logicalOffsets = [-3, -2, -1, 0, 1, 2, 3]
+    .map((index) => index * TIMELINE_ITEM_WIDTH);
+  const visualOffsets = logicalOffsets.map((offset) => timelineVisualOffsetAroundLens(
+    offset,
+    TIMELINE_ITEM_WIDTH,
+    leftNeighbor,
+    rightNeighbor,
+    outerStep,
+  ));
+
+  assert.deepEqual(visualOffsets, GOLDEN_CRYSTAL_PRESET.yearOffsets);
+  assert.deepEqual(visualOffsets.map((offset) => timelineLogicalOffsetFromVisual(
+    offset,
+    TIMELINE_ITEM_WIDTH,
+    leftNeighbor,
+    rightNeighbor,
+    outerStep,
+  )), logicalOffsets);
 });
 
 test('松手时结合速度预测吸附年份并限制最早最晚边界', () => {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -8,11 +8,8 @@ import Animated, {
   interpolate,
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
-  withSequence,
   withSpring,
-  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -23,6 +20,7 @@ import {
   CRYSTAL_RAIL_CENTER_Y,
   CRYSTAL_TIMELINE_HEIGHT,
 } from './crystalTimelineGeometry';
+import { GOLDEN_CRYSTAL_PRESET } from './goldenCrystalPreset';
 import {
   buildTimelineItems,
   clampTimelineIndex,
@@ -30,7 +28,9 @@ import {
   projectedTimelineIndex,
   resistedTimelineOffset,
   timelineIndexForSelection,
+  timelineLogicalOffsetFromVisual,
   timelineOffsetForIndex,
+  timelineVisualOffsetAroundLens,
   TIMELINE_EDGE_RESISTANCE,
   TIMELINE_ITEM_WIDTH,
   TIMELINE_VELOCITY_PROJECTION_SECONDS,
@@ -58,7 +58,29 @@ const SPRING_CONFIG = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
+const GOLDEN_LEFT_NEIGHBOR_OFFSET = GOLDEN_CRYSTAL_PRESET.yearOffsets[2];
+const GOLDEN_RIGHT_NEIGHBOR_OFFSET = GOLDEN_CRYSTAL_PRESET.yearOffsets[4];
+const GOLDEN_OUTER_YEAR_STEP = GOLDEN_CRYSTAL_PRESET.yearOffsets[1]
+  - GOLDEN_CRYSTAL_PRESET.yearOffsets[0];
+
+function useGoldenAxisTransform(index: number, translateX: SharedValue<number>) {
+  return useAnimatedStyle(() => {
+    const logicalOffset = index * TIMELINE_ITEM_WIDTH + translateX.value;
+    const visualOffset = timelineVisualOffsetAroundLens(
+      logicalOffset,
+      TIMELINE_ITEM_WIDTH,
+      GOLDEN_LEFT_NEIGHBOR_OFFSET,
+      GOLDEN_RIGHT_NEIGHBOR_OFFSET,
+      GOLDEN_OUTER_YEAR_STEP,
+    );
+    return {
+      transform: [{ translateX: visualOffset - logicalOffset }],
+    };
+  }, [index]);
+}
+
 function MovingYear({ item, index, width, translateX }: MovingYearProps) {
+  const animatedAxis = useGoldenAxisTransform(index, translateX);
   const animatedLabel = useAnimatedStyle(() => {
     const distance = Math.abs(index * TIMELINE_ITEM_WIDTH + translateX.value);
     const edge = Math.max(TIMELINE_ITEM_WIDTH * 2.5, width / 2);
@@ -66,17 +88,9 @@ function MovingYear({ item, index, width, translateX }: MovingYearProps) {
       opacity: interpolate(
         distance,
         [0, TIMELINE_ITEM_WIDTH * 0.36, TIMELINE_ITEM_WIDTH, TIMELINE_ITEM_WIDTH * 2, edge],
-        [0, 0, 0.72, 0.44, 0.12],
+        [0, 0, GOLDEN_CRYSTAL_PRESET.layers.years.opacity, 0.44, 0.12],
         Extrapolation.CLAMP,
       ),
-      transform: [{
-        scale: interpolate(
-          distance,
-          [0, TIMELINE_ITEM_WIDTH, TIMELINE_ITEM_WIDTH * 2, edge],
-          [1.04, 1, 0.9, 0.8],
-          Extrapolation.CLAMP,
-        ),
-      }],
     };
   }, [index, width]);
   const animatedTick = useAnimatedStyle(() => {
@@ -85,70 +99,51 @@ function MovingYear({ item, index, width, translateX }: MovingYearProps) {
       opacity: interpolate(
         distance,
         [0, TIMELINE_ITEM_WIDTH * 0.38, TIMELINE_ITEM_WIDTH, width / 2],
-        [0, 0.12, 0.82, 0.16],
+        [0, 0.12, GOLDEN_CRYSTAL_PRESET.layers.ticks.opacity, 0.16],
         Extrapolation.CLAMP,
       ),
-      transform: [{
-        scaleY: interpolate(
-          distance,
-          [0, TIMELINE_ITEM_WIDTH, width / 2],
-          [0.82, 1, 0.72],
-          Extrapolation.CLAMP,
-        ),
-      }],
     };
   }, [index, width]);
 
   return (
-    <View style={styles.yearCell}>
+    <Animated.View style={[styles.yearCell, animatedAxis]}>
       <Animated.View style={[styles.tick, animatedTick]} />
       <Animated.Text numberOfLines={1} style={[styles.yearLabel, animatedLabel]}>
         {item.label}
       </Animated.Text>
-    </View>
+    </Animated.View>
   );
 }
 
 function LensYear({ item, index, translateX }: Omit<MovingYearProps, 'width'>) {
+  const animatedAxis = useGoldenAxisTransform(index, translateX);
   const animatedLabel = useAnimatedStyle(() => {
     const distance = Math.abs(index * TIMELINE_ITEM_WIDTH + translateX.value);
     return {
       opacity: interpolate(
         distance,
         [0, TIMELINE_ITEM_WIDTH * 0.38, TIMELINE_ITEM_WIDTH * 0.72],
-        [1, 0.46, 0],
+        [GOLDEN_CRYSTAL_PRESET.layers.label.opacity, 0.46, 0],
         Extrapolation.CLAMP,
       ),
-      transform: [{
-        scale: interpolate(
-          distance,
-          [0, TIMELINE_ITEM_WIDTH * 0.7],
-          [1, 0.86],
-          Extrapolation.CLAMP,
-        ),
-      }],
     };
   }, [index]);
 
   return (
-    <View style={styles.lensYearCell}>
+    <Animated.View style={[styles.lensYearCell, animatedAxis]}>
       <Animated.Text numberOfLines={1} style={[styles.lensYear, animatedLabel]}>
         {item.label}
       </Animated.Text>
-    </View>
+    </Animated.View>
   );
 }
 
 export default function CrystalTimeline({ years, selectedYear, onSelect }: Props) {
   const { width } = useWindowDimensions();
-  const reduceMotion = useReducedMotion();
   const items = useMemo(() => buildTimelineItems(years), [years]);
   const selectedIndex = timelineIndexForSelection(items, selectedYear);
   const translateX = useSharedValue(timelineOffsetForIndex(selectedIndex, TIMELINE_ITEM_WIDTH));
   const gestureStartOffset = useSharedValue(translateX.value);
-  const pressProgress = useSharedValue(0);
-  const snapProgress = useSharedValue(0);
-  const highlightOffsetX = useSharedValue(0);
   const currentValueRef = useRef<string | null>(selectedYear);
   const pendingSelectionIndex = useRef<number | null>(null);
 
@@ -192,16 +187,12 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
   }, [commitIndex, fireSelectionHaptic, items.length, translateX]);
 
   const gesture = useMemo(() => {
-    const resetDuration = reduceMotion ? 0 : 190;
-    const pressDuration = reduceMotion ? 0 : 85;
-    const snapDuration = reduceMotion ? 0 : 65;
     const pan = Gesture.Pan()
       .activeOffsetX([-8, 8])
       .failOffsetY([-13, 13])
       .onBegin(() => {
         cancelAnimation(translateX);
         gestureStartOffset.value = translateX.value;
-        pressProgress.value = withTiming(1, { duration: pressDuration, reduceMotion: ReduceMotion.System });
       })
       .onUpdate((event) => {
         translateX.value = resistedTimelineOffset(
@@ -210,7 +201,6 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
           TIMELINE_ITEM_WIDTH,
           TIMELINE_EDGE_RESISTANCE,
         );
-        highlightOffsetX.value = Math.max(-3, Math.min(3, event.velocityX / 420));
       })
       .onEnd((event) => {
         const nextIndex = projectedTimelineIndex(
@@ -220,11 +210,6 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
           TIMELINE_ITEM_WIDTH,
           TIMELINE_VELOCITY_PROJECTION_SECONDS,
         );
-        snapProgress.value = withSequence(
-          ReduceMotion.System,
-          withTiming(1, { duration: snapDuration, reduceMotion: ReduceMotion.System }),
-          withSpring(0, SPRING_CONFIG),
-        );
         translateX.value = withSpring(
           timelineOffsetForIndex(nextIndex, TIMELINE_ITEM_WIDTH),
           { ...SPRING_CONFIG, velocity: event.velocityX },
@@ -233,24 +218,22 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
           },
         );
         scheduleOnRN(commitIndex, nextIndex);
-      })
-      .onFinalize(() => {
-        pressProgress.value = withTiming(0, { duration: resetDuration, reduceMotion: ReduceMotion.System });
-        highlightOffsetX.value = withTiming(0, { duration: resetDuration, reduceMotion: ReduceMotion.System });
       });
 
     const tap = Gesture.Tap()
       .maxDistance(8)
       .onEnd((event, success) => {
         if (!success) return;
-        const tappedIndex = clampTimelineIndex(
-          (event.x - width / 2 - translateX.value) / TIMELINE_ITEM_WIDTH,
-          items.length,
+        const logicalTapOffset = timelineLogicalOffsetFromVisual(
+          event.x - width / 2,
+          TIMELINE_ITEM_WIDTH,
+          GOLDEN_LEFT_NEIGHBOR_OFFSET,
+          GOLDEN_RIGHT_NEIGHBOR_OFFSET,
+          GOLDEN_OUTER_YEAR_STEP,
         );
-        snapProgress.value = withSequence(
-          ReduceMotion.System,
-          withTiming(1, { duration: snapDuration, reduceMotion: ReduceMotion.System }),
-          withSpring(0, SPRING_CONFIG),
+        const tappedIndex = clampTimelineIndex(
+          (logicalTapOffset - translateX.value) / TIMELINE_ITEM_WIDTH,
+          items.length,
         );
         translateX.value = withSpring(
           timelineOffsetForIndex(tappedIndex, TIMELINE_ITEM_WIDTH),
@@ -267,11 +250,7 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
     commitIndex,
     fireSelectionHaptic,
     gestureStartOffset,
-    highlightOffsetX,
     items.length,
-    pressProgress,
-    reduceMotion,
-    snapProgress,
     translateX,
     width,
   ]);
@@ -303,13 +282,7 @@ export default function CrystalTimeline({ years, selectedYear, onSelect }: Props
         }}
         style={styles.root}
       >
-        <CrystalRailCanvas
-          width={width}
-          centerX={centerX}
-          pressProgress={pressProgress}
-          snapProgress={snapProgress}
-          highlightOffsetX={highlightOffsetX}
-        />
+        <CrystalRailCanvas width={width} centerX={centerX} />
 
         <Animated.View
           pointerEvents="none"
@@ -377,19 +350,19 @@ const styles = StyleSheet.create({
   },
   tick: {
     position: 'absolute',
-    top: 27,
-    width: 1.2,
-    height: 16,
+    top: CRYSTAL_RAIL_CENTER_Y - GOLDEN_CRYSTAL_PRESET.track.tickHeight / 2,
+    width: GOLDEN_CRYSTAL_PRESET.track.tickWidth,
+    height: GOLDEN_CRYSTAL_PRESET.track.tickHeight,
     borderRadius: 1,
-    backgroundColor: '#9f6228',
+    backgroundColor: 'rgba(143, 77, 17, 0.86)',
   },
   yearLabel: {
     position: 'absolute',
-    top: 50,
-    minWidth: 58,
-    color: '#745f4e',
-    fontSize: 13,
-    lineHeight: 18,
+    top: CRYSTAL_RAIL_CENTER_Y + 10.5,
+    minWidth: 56,
+    color: '#745e49',
+    fontSize: 9,
+    lineHeight: 14,
     fontWeight: '400',
     textAlign: 'center',
   },
@@ -417,8 +390,8 @@ const styles = StyleSheet.create({
   lensYear: {
     minWidth: TIMELINE_ITEM_WIDTH,
     color: '#35291f',
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 13.5,
+    lineHeight: 20,
     fontWeight: '500',
     letterSpacing: 0.2,
     textAlign: 'center',

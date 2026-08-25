@@ -105,3 +105,47 @@ export function commitTimelineSelection(
   commit(nextValue);
   return true;
 }
+
+export function timelineVisualOffsetAroundLens(
+  logicalOffset: number,
+  itemWidth: number,
+  leftNeighborOffset: number,
+  rightNeighborOffset: number,
+  outerStep: number,
+): number {
+  'worklet';
+  if (logicalOffset <= -itemWidth) {
+    return leftNeighborOffset
+      + (logicalOffset + itemWidth) * (outerStep / itemWidth);
+  }
+  if (logicalOffset < 0) {
+    return logicalOffset * (Math.abs(leftNeighborOffset) / itemWidth);
+  }
+  if (logicalOffset < itemWidth) {
+    return logicalOffset * (rightNeighborOffset / itemWidth);
+  }
+  return rightNeighborOffset
+    + (logicalOffset - itemWidth) * (outerStep / itemWidth);
+}
+
+export function timelineLogicalOffsetFromVisual(
+  visualOffset: number,
+  itemWidth: number,
+  leftNeighborOffset: number,
+  rightNeighborOffset: number,
+  outerStep: number,
+): number {
+  'worklet';
+  if (visualOffset <= leftNeighborOffset) {
+    return -itemWidth
+      + (visualOffset - leftNeighborOffset) * (itemWidth / outerStep);
+  }
+  if (visualOffset < 0) {
+    return visualOffset * (itemWidth / Math.abs(leftNeighborOffset));
+  }
+  if (visualOffset < rightNeighborOffset) {
+    return visualOffset * (itemWidth / rightNeighborOffset);
+  }
+  return itemWidth
+    + (visualOffset - rightNeighborOffset) * (itemWidth / outerStep);
+}
