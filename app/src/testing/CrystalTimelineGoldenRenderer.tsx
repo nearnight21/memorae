@@ -12,6 +12,13 @@ import type {
   GoldenCrystalPreset,
   GoldenLayerState,
 } from './crystalTimelineGoldenPreset';
+import {
+  CrystalThumbShaderPrototype,
+  type CrystalShaderDebugMode,
+  type CrystalThumbShaderParameters,
+} from './CrystalThumbShaderPrototype';
+
+export type GoldenCrystalRendererKind = 'legacy' | 'shaderPrototype';
 
 interface Props {
   width: number;
@@ -20,6 +27,9 @@ interface Props {
   geometry: GoldenCrystalGeometry;
   lighting: GoldenCrystalLighting;
   layers: GoldenLayerState;
+  renderer: GoldenCrystalRendererKind;
+  shaderDebugMode: CrystalShaderDebugMode;
+  shaderParameters: CrystalThumbShaderParameters;
 }
 
 export function CrystalTimelineGoldenRenderer({
@@ -29,6 +39,9 @@ export function CrystalTimelineGoldenRenderer({
   geometry,
   lighting,
   layers,
+  renderer,
+  shaderDebugMode,
+  shaderParameters,
 }: Props) {
   const scale = width / preset.referenceViewport.width;
   const centerX = width / 2;
@@ -53,16 +66,26 @@ export function CrystalTimelineGoldenRenderer({
           showStaticTicks
           width={width}
         />
-        <GoldenCrystalMaterialLayers
-          centerX={centerX}
-          centerY={centerY}
-          geometry={geometry}
-          layers={layers}
-          lighting={lighting}
-          preset={preset}
-          scale={scale}
-          width={width}
-        />
+        {renderer === 'legacy' ? (
+          <GoldenCrystalMaterialLayers
+            centerX={centerX}
+            centerY={centerY}
+            geometry={geometry}
+            layers={layers}
+            lighting={lighting}
+            preset={preset}
+            scale={scale}
+            width={width}
+          />
+        ) : (
+          <CrystalThumbShaderPrototype
+            centerX={centerX}
+            centerY={centerY}
+            debugMode={shaderDebugMode}
+            parameters={shaderParameters}
+            scale={scale}
+          />
+        )}
       </Canvas>
 
       {layers.years.enabled && (
