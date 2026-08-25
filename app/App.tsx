@@ -85,6 +85,7 @@ import LocationPicker from './src/location/LocationPicker';
 import { MobileLocationClient, normalizeLocationResult } from './src/location/locationClient';
 import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
+import type { EphemeralTestBootstrap } from './src/testing/ephemeralTestRuntime';
 import { firstPhotoCoordinates, type PhotoCoordinates } from './src/photos/photoMetadata';
 import {
   clearEncryptedContent,
@@ -182,7 +183,11 @@ function logPhotoPerformance(metric: PhotoPerformanceMetric): void {
   logMemoryDiagnostics('photo-performance', sanitizePhotoPerformanceMetric(metric));
 }
 
-export default function App() {
+interface AppProps {
+  testBootstrap?: () => Promise<EphemeralTestBootstrap>;
+}
+
+export default function App({ testBootstrap }: AppProps = {}) {
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
@@ -238,6 +243,7 @@ export default function App() {
     onSuccess: (result: Awaited<ReturnType<typeof uploadCiphertext>>) => string;
     onFailure: (error: unknown) => string;
   }>>([]);
+  const testSyncClient = useRef<MemoryRecallSyncClient | null>(null);
   let latestLocalDiagnostics = '';
 
   function photoRefsForIds(ids: readonly string[]): Array<{ id: string; kind: PhotoKind }> {
@@ -317,6 +323,18 @@ export default function App() {
     void (async () => {
       try {
         await initializeStorage();
+        if (testBootstrap) {
+          const bootstrap = await testBootstrap();
+          await clearEncryptedContent();
+          await saveVaultEnvelope(bootstrap.envelope);
+          testSyncClient.current = bootstrap.client;
+          setVault(bootstrap.envelope);
+          await finishUnlock(
+            bootstrap.session,
+            `临时测试模式：已真实加密并上传 ${bootstrap.uploadedMemories} 条示例记忆、${bootstrap.uploadedPhotos} 份照片密文；`,
+          );
+          return;
+        }
         const [storedVault, storedAccount, storedUploadPlan] = await Promise.all([
           getVaultEnvelope(),
           getStoredAccountSession(),
@@ -362,7 +380,16 @@ export default function App() {
         setMode('account');
       }
     })();
-  }, []);
+  }, [testBootstrap]);
+
+  function currentAccountSyncClient(): MemoryRecallSyncClient | null {
+    if (testSyncClient.current) return testSyncClient.current;
+    if (!accountSession) return null;
+    return new MemoryRecallSyncClient({
+      baseUrl: AUTH_API_URL,
+      token: accountSession.accessToken,
+    });
+  }
 
   async function readRemoteVault(activeAccount: MobileAccountSession): Promise<VaultEnvelopeV1 | null> {
     try {
@@ -451,12 +478,10 @@ export default function App() {
     onDiagnostics?: (diagnostics: CipherSyncDiagnostics) => void,
     onMemoriesStored?: (count: number) => void | Promise<void>,
   ): Promise<{ count: number; conflictIds: string[] }> {
-    if (!accountSession) return { count: 0, conflictIds: [] };
+    const client = currentAccountSyncClient();
+    if (!client) return { count: 0, conflictIds: [] };
     const download = downloadCiphertext({
-      client: new MemoryRecallSyncClient({
-        baseUrl: AUTH_API_URL,
-        token: accountSession.accessToken,
-      }),
+      client,
       storage: cipherSyncStorage,
       onDiagnostics: (diagnostics: CipherSyncDiagnostics) => {
         logMemoryDiagnostics('remote-sync', diagnostics);
@@ -556,7 +581,7 @@ export default function App() {
         : `诊断：远端同步未返回数量；${latestLocalDiagnostics}`;
       setStatus(`${message}${details ? ` ${details}。` : ''}${syncWarning ? ` ${syncWarning}` : ' 同步完成。'} ${diagnosticSummary}`);
     });
-    if (accountSession && (pendingAccountUploadPlan.current.memoryIds.length > 0
+    if (currentAccountSyncClient() && (pendingAccountUploadPlan.current.memoryIds.length > 0
       || pendingAccountUploadPlan.current.photoRefs.length > 0)) {
       queueAccountUpload(
         { memoryIds: [], photoRefs: [] },
@@ -978,7 +1003,7 @@ export default function App() {
         setDraftVisible(false);
         setPhotoManageVisible(false);
         editPendingPhotoPool.current.clear();
-        if (!accountSession) {
+        if (!currentAccountSyncClient()) {
           setStatus('新记忆已加密保存到本机。');
           return;
         }
@@ -1016,7 +1041,7 @@ export default function App() {
       editPendingPhotoPool.current.clear();
       openMemory(nextMemory);
       void cleanupUnreferencedLocalPhotos(orphanedPhotoIds, nextMemory.id).catch(() => undefined);
-      if (!accountSession) {
+      if (!currentAccountSyncClient()) {
         setStatus('编辑已加密保存到本机。');
         return;
       }
@@ -1053,7 +1078,7 @@ export default function App() {
       return next;
     });
     void cleanupUnreferencedLocalPhotos(deletedPhotoIds, selectedMemory.id).catch(() => undefined);
-    if (!accountSession) {
+    if (!currentAccountSyncClient()) {
       setStatus('记忆已从本机删除，并生成删除标记。');
       return;
     }
@@ -1067,12 +1092,10 @@ export default function App() {
 
   async function readDetailPhotoVariant(photoId: string, kind: PhotoKind) {
     const local = await getEncryptedPhoto(photoId, kind);
-    if (local || !accountSession) return local;
+    const client = currentAccountSyncClient();
+    if (local || !client) return local;
     try {
-      const remote = await new MemoryRecallSyncClient({
-        baseUrl: AUTH_API_URL,
-        token: accountSession.accessToken,
-      }).getPhotoVariant(photoId, kind);
+      const remote = await client.getPhotoVariant(photoId, kind);
       await saveEncryptedPhoto(remote);
       return remote;
     } catch (error) {
@@ -1312,9 +1335,10 @@ export default function App() {
   async function uploadAccountCiphertext(
     plan?: UploadPlan,
   ): Promise<Awaited<ReturnType<typeof uploadCiphertext>>> {
-    if (!accountSession) throw new Error('请先登录账号。');
+    const client = currentAccountSyncClient();
+    if (!client) throw new Error('请先登录账号。');
     return uploadCiphertext(
-      new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }),
+      client,
       cipherSyncStorage,
       { onPhotoPerformance: logPhotoPerformance, plan },
     );
@@ -1325,7 +1349,7 @@ export default function App() {
     onSuccess: (result: Awaited<ReturnType<typeof uploadCiphertext>>) => string,
     onFailure: (error: unknown) => string,
   ): void {
-    if (!accountSession) return;
+    if (!currentAccountSyncClient()) return;
     pendingAccountUploadPlan.current = mergeUploadPlans(pendingAccountUploadPlan.current, plan);
     const durablePlan = activeAccountUploadPlan.current
       ? mergeUploadPlans(activeAccountUploadPlan.current, pendingAccountUploadPlan.current)

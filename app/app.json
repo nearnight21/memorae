@@ -39,6 +39,7 @@
       ],
       "expo-document-picker",
       "expo-sharing",
+      "./plugins/with-ephemeral-test-build",
       [
         "./plugins/with-amap-map",
         {
