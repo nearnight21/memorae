@@ -30,7 +30,7 @@ ImageManipulator 的 APK 已重建并通过模拟器加密/解锁冒烟测试，
 `src/sync/` 已接入验证界面。试运行模式使用独立的登录账号与登录密码换取短期访问令牌；本地开发
 仍可切换到固定令牌。登录密码和令牌只保存在当前进程内存，HTTP logout 会撤销服务端会话；它们与私密
 空间密码、VMK 完全分离。应用不会读取 ThinkPad 数据。运行方法见
-[`memory-recall-server/README.md`](../memory-recall-server/README.md)。
+[`projects/memorae/server/README.md`](../projects/memorae/server/README.md)。
 
 Android release 仅允许 `127.0.0.1`、`localhost` 和模拟器宿主地址 `10.0.2.2` 使用明文 HTTP；
 其他同步地址仍须使用 HTTPS。

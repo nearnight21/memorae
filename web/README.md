@@ -25,7 +25,7 @@ npm.cmd run dev
 
 开发环境可通过 `http://127.0.0.1:3000/?dev-vault=1` 打开手动密文验证工具；生产构建不显示此入口。
 验证工具仍可测试账号登录、固定令牌和手动双向密文传输，运行方法见
-[`memory-recall-server/README.md`](../memory-recall-server/README.md)。
+[`server/README.md`](../server/README.md)。
 
 高德 Web 服务 Key 只配置在服务端的 `deploy/.env` 中，由 API 代理地点搜索、中国反向地理编码和照片 GPS
 转换。高德未返回城市的海外落点会在服务端回退到 BigDataCloud；浏览器和 Web `.env.local` 都不应保存任何地点服务凭据。
@@ -58,7 +58,7 @@ npm.cmd run verify
 
 加密设计和当前边界见 [`docs/VMK-V1-PROTOTYPE.md`](docs/VMK-V1-PROTOTYPE.md)，
 项目目标、开发进度、验证结论和下一步任务统一记录在根目录
-[`DEVELOPMENT.md`](../DEVELOPMENT.md)。
+[`DEVELOPMENT.md`](../../../DEVELOPMENT.md)。
 
 正式记忆 JSON 字段、校验规则、旧原型迁移和双端兼容夹具见
-[MemoryV1 数据契约](../MEMORY-V1.md)。
+[MemoryV1 数据契约](../../../MEMORY-V1.md)。

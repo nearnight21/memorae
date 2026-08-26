@@ -374,7 +374,7 @@ test('未知 Memory schemaVersion 会明确失败', () => {
 });
 
 test('Android 与 Web 可以双向恢复同一份 MemoryV1 和照片字节', async () => {
-  const webCryptoModulePath = '../../memory-recall-web/src/crypto/index.ts';
+  const webCryptoModulePath = '../../projects/memorae/web/src/crypto/index.ts';
   const {
     createVault: createWebVault,
     decryptMemoryV1: decryptWebMemoryV1,
