@@ -2,9 +2,12 @@ function jsString(value: string): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
+export const AMAP_JS_MAP_STYLE = 'amap://styles/86c653c12a194bd61f7e37008e400725';
+
 export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): string {
   const key = jsString(apiKey.trim());
   const security = jsString(securityJsCode.trim());
+  const mapStyle = jsString(AMAP_JS_MAP_STYLE);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -235,7 +238,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       script.onload = () => {
         window.clearTimeout(scriptTimeout);
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 4, zooms: [4, 14], viewMode: '2D', features: ['bg', 'road', 'point'] });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 4, zooms: [4, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('moveend', postCameraIdle);
           map.on('zoomend', () => { render(); postCameraIdle(); });

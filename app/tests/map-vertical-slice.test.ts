@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { buildMapTestMarkers, TEST_CITIES } from '../src/map/mapTestMarkers';
-import { buildAmapRuntimeHtml } from '../src/map/amapRuntimeHtml';
+import { AMAP_JS_MAP_STYLE, buildAmapRuntimeHtml } from '../src/map/amapRuntimeHtml';
 import { findMemoryForMarker, memoriesToMapMarkers } from '../src/map/memoryMapAdapter';
 import {
   buildHomeRegionOptions,
@@ -322,11 +322,14 @@ test('Home 地区选择接通真实视野和相机导航，不再使用占位提
 
 test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {
   const source = await readFile(new URL('../src/map/amapRuntimeHtml.ts', import.meta.url), 'utf8');
+  const html = buildAmapRuntimeHtml('web-key', 'security-code');
   assert.match(source, /https:\/\/webapi\.amap\.com\/maps/);
   assert.match(source, /script-src 'unsafe-inline' 'unsafe-eval'/);
   assert.match(source, /https:\/\/\*\.autonavi\.com/);
   assert.doesNotMatch(source, /memorae\.cn\/\?amap-runtime/);
   assert.match(source, /clearSensitiveData/);
+  assert.equal(AMAP_JS_MAP_STYLE, 'amap://styles/86c653c12a194bd61f7e37008e400725');
+  assert.match(html, /mapStyle: "amap:\/\/styles\/86c653c12a194bd61f7e37008e400725"/);
 });
 
 test('海外城市标签只在语义上下文中显示中文名，中国大陆不注入自定义城市层', () => {
