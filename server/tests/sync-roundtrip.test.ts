@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Pool } from 'pg';
-import type { MemoryV1 } from '../../../../memory-recall-mobile/src/memory/memoryV1.ts';
+import type { MemoryV1 } from '../../app/src/memory/memoryV1.ts';
 import { buildApp } from '../src/app.ts';
 import { applyMigrations } from '../src/migrations.ts';
 import { PostgresCipherStore, PostgresPasswordAuthStore } from '../src/postgres.ts';
@@ -56,9 +56,9 @@ const webMemory: MemoryV1 = {
 test('Android and Web exchange ciphertext through the server in both directions', async (context) => {
   // Keep client imports runtime-dynamic so each project remains typechecked by
   // its own TypeScript setup while this integration test still runs both.
-  const androidCryptoModulePath = '../../../../memory-recall-mobile/src/crypto/index.ts';
-  const androidSyncModulePath = '../../../../memory-recall-mobile/src/sync/syncClient.ts';
-  const nodePrimitivesModulePath = '../../../../memory-recall-mobile/tests/support/nodePrimitives.ts';
+  const androidCryptoModulePath = '../../app/src/crypto/index.ts';
+  const androidSyncModulePath = '../../app/src/sync/syncClient.ts';
+  const nodePrimitivesModulePath = '../../app/tests/support/nodePrimitives.ts';
   const webCryptoModulePath = '../../web/src/crypto/index.ts';
   const webSyncModulePath = '../../web/src/sync/syncClient.ts';
   const androidCryptoNamespace = await import(androidCryptoModulePath);

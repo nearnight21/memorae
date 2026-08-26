@@ -78,7 +78,7 @@
 
 ## 自动检查
 
-在 `memory-recall-mobile` 目录执行：
+在 `projects/memorae/app` 目录执行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ..\scripts\sync-fixed-worktrees.ps1

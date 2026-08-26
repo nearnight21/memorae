@@ -341,7 +341,7 @@ test('Android and Web clients exchange photo variants without sending bearer tok
     await rm(directory, { recursive: true, force: true });
   });
 
-  const androidClientPath = '../../../../memory-recall-mobile/src/sync/syncClient.ts';
+  const androidClientPath = '../../app/src/sync/syncClient.ts';
   const webClientPath = '../../web/src/sync/syncClient.ts';
   const androidModule = await import(androidClientPath);
   const webModule = await import(webClientPath);

@@ -24,7 +24,7 @@ App 会在 Metro/Android 日志中输出脱敏的 `[memory-diagnostics]` `photo-
 在 App 运行并执行一轮单图或多图操作时，可另开 PowerShell 采样 Android 进程 PSS：
 
 ```powershell
-cd memory-recall-mobile
+cd projects/memorae/app
 .\scripts\sample-android-memory.ps1 -PackageName com.memorae.cn -IntervalSeconds 5 -Samples 60 -OutputPath .\android-memory.csv
 ```
 
