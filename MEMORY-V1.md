@@ -78,7 +78,7 @@ JSON 属性顺序不属于协议语义。两端只要求解密后字段值一致
 
 ## 兼容夹具
 
-- Web 生成、Android 解密：`memory-recall-mobile/tests/fixtures/web-memory-v1-bundle.json`
-- Android 生成、Web 解密：`memory-recall-web/tests/fixtures/android-memory-v1-bundle.json`
+- Web 生成、Android 解密：`projects/memorae/app/tests/fixtures/web-memory-v1-bundle.json`
+- Android 生成、Web 解密：`projects/memorae/web/tests/fixtures/android-memory-v1-bundle.json`
 - 两端夹具均包含一条完整 MemoryV1 和一张有效的 1×1 PNG。
 - 夹具生成器分别位于两个项目的 `tests/generate-memory-v1-fixture.ts`。
