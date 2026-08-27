@@ -17,9 +17,14 @@ function Invoke-Checked {
     [Parameter(Mandatory)] [string[]]$ArgumentList,
     [Parameter(Mandatory)] [string]$WorkingDirectory
   )
-  & $FilePath @ArgumentList
-  if ($LASTEXITCODE -ne 0) {
-    throw "Command failed ($LASTEXITCODE): $FilePath $($ArgumentList -join ' ')"
+  Push-Location -LiteralPath $WorkingDirectory
+  try {
+    & $FilePath @ArgumentList
+    if ($LASTEXITCODE -ne 0) {
+      throw "Command failed ($LASTEXITCODE): $FilePath $($ArgumentList -join ' ')"
+    }
+  } finally {
+    Pop-Location
   }
 }
 
@@ -49,6 +54,7 @@ try {
   Invoke-Checked -FilePath 'npm.cmd' -ArgumentList @('run', 'verify') -WorkingDirectory (Join-Path $clone 'app')
 
   Invoke-Checked -FilePath 'npm.cmd' -ArgumentList @('ci') -WorkingDirectory (Join-Path $clone 'server')
+  Invoke-Checked -FilePath 'npm.cmd' -ArgumentList @('run', 'verify') -WorkingDirectory (Join-Path $clone 'server')
   Invoke-Checked -FilePath 'powershell.exe' -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $clone 'scripts/check-runtime-boundaries.ps1')) -WorkingDirectory $clone
   foreach ($name in @(
     'MEMORY_RECALL_DATABASE_URL', 'MEMORY_RECALL_SESSION_TOKEN_PEPPER',
