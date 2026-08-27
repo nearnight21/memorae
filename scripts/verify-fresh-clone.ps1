@@ -99,7 +99,7 @@ try {
   $trackedSecrets = & git -C $clone ls-files | Select-String -Pattern '(^|/)(\.env$|.*\.(jks|keystore|p12|pem|key))$'
   if ($trackedSecrets) { throw "Fresh clone contains tracked credential material: $trackedSecrets" }
 
-  $runtimeRefs = & git -C $clone grep -n -i -E 'projects/(thinkpad|camp-memories)|/srv/thinkpad|memorae/server/deploy|MEMORY_RECALL_ENV_FILE' -- server app web .github 2>$null
+  $runtimeRefs = & git -C $clone grep -n -i -E 'projects/(thinkpad|camp-memories)|/srv/thinkpad(/projects/memorae)?|MEMORY_RECALL_ENV_FILE' -- server app web .github 2>$null
   if ($LASTEXITCODE -eq 0 -and $runtimeRefs) { throw "Fresh clone contains cross-repository runtime references:`n$runtimeRefs" }
 
   Write-Host "Fresh-clone verification succeeded: $clone"

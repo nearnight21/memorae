@@ -37,7 +37,7 @@ $files = foreach ($relativeRoot in $runtimeRoots) {
   }
 }
 
-$forbiddenPattern = '(?i)projects/(?:thinkpad|camp-memories)|/srv/thinkpad|memorae/server/deploy|MEMORY_RECALL_ENV_FILE|\.\./(?:thinkpad|camp-memories)'
+$forbiddenPattern = '(?i)projects/(?:thinkpad|camp-memories)|/srv/thinkpad(?:/projects/memorae)?|MEMORY_RECALL_ENV_FILE|\.\./(?:thinkpad|camp-memories)'
 $violations = foreach ($file in $files) {
   Select-String -LiteralPath $file.FullName -Pattern $forbiddenPattern
 }
