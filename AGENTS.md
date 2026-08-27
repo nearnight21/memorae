@@ -14,7 +14,7 @@
 - 加密、Memory schema、同步、照片和坐标规则继续遵守仓库根目录 `docs/SYNC-CRYPTO-FREEZE.md` 与 `TECHNICAL-BASELINE.md`。新仓可开发化不得改变这些规则。
 - App 的包名、签名、Keystore、EAS 配置和现有 Android 工程保持不变。
 - 路径、部署和治理调整只修复 import、测试夹具、构建、部署、CI 和文档路径；保持生产 URL、API、数据库和密文行为不变。
-- Memorae Product Reset 与常规文档治理继续暂停，直到三仓均可独立同步、构建和交接。
+- 三仓已完成独立同步、构建和交接基线；后续工作进入 Memorae Product Reset，常规文档治理随产品工作按需进行。
 
 ## 完成标准
 

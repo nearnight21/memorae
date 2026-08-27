@@ -29,4 +29,4 @@ npm run verify
 powershell -ExecutionPolicy Bypass -File .\scripts\sync-canonical-worktree.ps1
 ```
 
-当前阶段只处理新仓可开发化；Memorae Product Reset 与普通文档治理继续暂停。
+当前阶段已恢复 Memorae Product Reset；独立仓环境、CI 与交付基线已完成。
