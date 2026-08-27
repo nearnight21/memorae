@@ -10,7 +10,7 @@ JSONB 列中；配置私有腾讯云 COS 后，只有已加密的照片 `content
 ## 本地运行
 
 ```powershell
-cd projects/memorae/server
+cd server
 npm.cmd ci
 $env:MEMORY_RECALL_LOCAL_TOKEN = '请换成至少16个字符的本地测试令牌'
 npm.cmd run dev
@@ -18,7 +18,7 @@ npm.cmd run dev
 
 默认地址是 `http://127.0.0.1:8788`。服务只监听本机地址，其他设备无法直接访问。
 
-密文默认保存在 `projects/memorae/server/.local-data/store.json`。该目录已被 Git 忽略，不会提交。
+密文默认保存在 `server/.local-data/store.json`。该目录已被 Git 忽略，不会提交。
 
 还可设置 `MEMORY_RECALL_PORT`、`MEMORY_RECALL_DATA_FILE`。如果网页临时运行在 3000 以外
 的端口，可用英文逗号分隔 `MEMORY_RECALL_ALLOWED_ORIGINS`。程序不会自动读取 `.env`；
@@ -45,7 +45,7 @@ $env:MEMORY_RECALL_AMAP_WEB_SERVICE_KEY = '部署机密钥管理中的高德 Web
 改变生产数据库结构：
 
 ```powershell
-cd projects/memorae/server
+cd server
 npm.cmd ci
 $env:MEMORY_RECALL_DATABASE_URL = 'postgresql://memory_recall:请替换密码@127.0.0.1:5432/memory_recall'
 npm.cmd run migrate

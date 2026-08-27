@@ -1,6 +1,6 @@
 # Memorae
 
-Memorae 的三个运行面集中在本目录，并继续各自维护依赖与 lockfile：
+这是 Memorae 的独立仓库。三个运行面继续各自维护依赖与 lockfile：
 
 - `web/`：React/Vite 正式 Web 客户端。
 - `app/`：Expo/React Native App。
@@ -11,7 +11,7 @@ Memorae 的三个运行面集中在本目录，并继续各自维护依赖与 lo
 验证：
 
 ```powershell
-cd projects/memorae/web
+cd web
 npm run verify
 
 cd ../app
@@ -20,3 +20,12 @@ npm run verify
 cd ../server
 npm run verify
 ```
+
+跨电脑交接前运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\sync-canonical-worktree.ps1 `
+  -CanonicalBranch codex/cos-direct-transfer
+```
+
+当前阶段只处理新仓可开发化；Memorae Product Reset 与普通文档治理继续暂停。

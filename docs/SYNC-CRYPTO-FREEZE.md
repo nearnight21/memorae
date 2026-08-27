@@ -2,8 +2,8 @@
 
 状态：冻结（V1）  
 生效提交：`ab73e29`（照片同步增量计划修复）  
-客户端范围：`projects/memorae/web`、`projects/memorae/app`
-服务端范围：`projects/memorae/server`、PostgreSQL、腾讯云 COS
+客户端范围：`web`、`app`
+服务端范围：`server`、PostgreSQL、腾讯云 COS
 
 这份规范是跨端兼容边界。后续 UI、地图、照片展示和性能优化不得改变下列协议行为。
 

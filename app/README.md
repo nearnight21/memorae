@@ -3,7 +3,7 @@
 这是独立的 React Native / Expo Android 加密验证项目。当前前端只是测试壳，正式界面与交互明确安排在加密协议和真机验证之后重写。
 
 > 开始开发或评估前，请先阅读
-> [根目录开发交接文档](../../../DEVELOPMENT.md)。该文档是跨设备、跨 Agent 交接时的唯一事实来源。
+> [根目录开发交接文档](../DEVELOPMENT.md)。该文档是跨设备、跨 Agent 交接时的唯一事实来源。
 
 如果不清楚当前 App 做到了哪一步，先看
 [功能状态与验收](docs/APP-STATUS-AND-ACCEPTANCE.md)。它把“代码已实现”和“真机已验收”分开记录。
@@ -81,4 +81,4 @@ npx eas-cli build --platform android --profile preview
 完整真机步骤见 [docs/ANDROID-TESTING.md](docs/ANDROID-TESTING.md)。
 
 正式记忆 JSON 字段、校验规则、旧原型迁移和双端兼容夹具见
-[MemoryV1 数据契约](../../../MEMORY-V1.md)。
+[MemoryV1 数据契约](../MEMORY-V1.md)。

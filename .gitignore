@@ -1,0 +1,42 @@
+# 依赖与构建产物
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/test-results/
+**/*.tsbuildinfo
+
+# Expo / React Native 生成目录
+app/.expo/
+app/.eas/
+app/.metro-health-check*
+app/expo-env.d.ts
+app/ios/
+app/android/
+app/.kotlin/
+
+# 本地数据、日志与环境文件
+.local-data/
+**/.local-data/
+*.log
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# 签名、证书与移动端凭据
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+
+# 本机与编辑器文件
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
