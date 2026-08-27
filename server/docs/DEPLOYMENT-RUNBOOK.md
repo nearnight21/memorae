@@ -21,10 +21,10 @@
 
 ## 首次启动
 
-以下命令在 Linux 云主机的项目目录执行。示例假设仓库位于 `/srv/thinkpad`：
+以下命令在 Linux 云主机的 Memorae checkout 中执行。示例假设仓库位于 `/srv/memorae`：
 
 ```bash
-cd /srv/thinkpad/projects/memorae/server/deploy
+cd /srv/memorae/server/deploy
 cp .env.example .env
 chmod 600 .env
 ```
@@ -92,7 +92,7 @@ GET 和 SHA-256 校验；完成以下真实照片验收后才可用于受邀测�
 
 ```bash
 git pull --ff-only
-cd /srv/thinkpad/projects/memorae/server/deploy
+cd /srv/memorae/server/deploy
 docker compose build
 docker compose run --rm --no-deps migrate
 docker compose --profile public up -d --no-deps api caddy

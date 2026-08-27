@@ -2,15 +2,14 @@
 
 > 最后更新：2026-08-27
 >
-> 当前阶段：Phase 5「新仓可开发化」。Memorae Product Reset 和常规文档治理继续暂停，
-> 直到 ThinkPad、Camp Memories、Memorae 三仓均能独立同步、构建和交接。
+> 当前阶段：Memorae 独立交付基线。三端环境契约、CI 和 fresh-clone 验收已纳入本阶段。
 
 ## 当前状态
 
 - 规范分支：`main`；`origin` 为 `https://github.com/nearnight21/memorae.git`。
 - 源码与 Git 历史拆分已完成，独立仓及产品专属归档 Tag 已推送到新的 GitHub 远端。
 - 本阶段已建立仓库治理文件、环境变量清单、根忽略规则和同步脚本。
-- 独立 CI 与运行面边界检查尚未完成，按 Phase 5 后续步骤处理。
+- 单仓 CI 与运行面边界检查由 `.github/workflows/ci.yml` 和 `scripts/verify-fresh-clone.ps1` 维护。
 - Memorae 保持现有 Web、App、Server 部署体系，不引入 ThinkPad/Camp 的 Vercel 或 Worker 配置。
 
 ## 必须保持
@@ -54,8 +53,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\sync-canonical-worktree.ps1
 本机忽略文件、部署机密钥管理、EAS Secret 或 CI Secret。跨电脑交接只记录变量是否配置、
 来源类别和验证结果，不记录真实值或可恢复的凭据片段。
 
-## Phase 5 后续
+## 独立交付基线
 
-1. 建立单仓 CI 与 Web/App/Server 运行面边界检查。
-2. 核对现有 Memorae Compose/Caddy/EAS 配置在独立路径下可运行。
-3. 完成三端独立安装、验证和生产构建检查。
+1. Web、App、Server 的 `verify` 门禁在单仓 CI 中分别执行。
+2. `scripts/verify-fresh-clone.ps1` 检查新 clone 的模板、部署配置和仓外凭据边界。
+3. Product Reset 从下一阶段开始；本文件不再保留跨产品治理前置条件。

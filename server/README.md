@@ -1,4 +1,4 @@
-# Memory Recall 密文服务器
+# Memorae 密文服务器
 
 这是 Android 与 Web 的密文同步后端。它有两种启动模式：本地开发使用 JSON 文件和固定测试令牌；
 试运行使用 PostgreSQL、受邀请账号和短期会话令牌。两种模式的密文 API 协议相同。

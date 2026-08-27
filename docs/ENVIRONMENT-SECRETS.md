@@ -11,7 +11,8 @@
 - Web、App、Server 都只使用 Memorae 自己的变量前缀；业务源码没有读取 ThinkPad 或 Camp 的环境文件。
 - Web 与 Server 已有脱敏模板；App 模板补充在 [`app/.env.example`](../app/.env.example)。
 - Android release 的唯一正式凭据继续只保存在 `D:\hermes\secure\memorae\`，仓库只保存变量名和插件接线。
-- 本地、CI、生产的注入实现仍未完全建立：仓库没有 GitHub Actions workflow，EAS 项目标识/Secret 来源也尚未在仓内形成可验收配置。
+- 本仓已建立单仓 GitHub Actions workflow；CI 只运行 Web、App、Server 各自的无生产凭据门禁。
+- EAS/生产发布仍由平台凭据管理；正式 Android 凭据只允许来自 `D:\hermes\secure\memorae\` 或受控 EAS credential store。
 
 ## Web
 
@@ -24,7 +25,8 @@
 | `VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE` | 与上项成对 | 客户端凭据 | `web/.env.local` | 同上 | Web 构建变量 | 高德 securityJsCode，会进入产物。 |
 | `DISABLE_HMR` | 可选，默认不关闭 | 本地配置 | 启动 Vite 前的 shell 环境 | 不需要 | 不需要 | 关闭 HMR 和文件监听；不是浏览器变量。 |
 
-`import.meta.env.DEV` 是 Vite 内建构建标志，不是需要注入的产品变量。
+`import.meta.env.DEV` 是 Vite 内建构建标志，不是需要注入的产品变量。Web CI 使用空值模板，
+不会把服务端密钥或 Android 凭据注入构建。
 
 ## App / Android / EAS
 
@@ -43,13 +45,14 @@
 | `MEMORY_RECALL_ANDROID_STORE_PASSWORD` | Release 必需 | Secret | 安全目录加载到进程环境 | EAS/CI Secret | 正式构建 Secret | keystore 密码。 |
 | `MEMORY_RECALL_ANDROID_KEY_ALIAS` | Release 必需 | Secret 元数据 | 安全目录加载到进程环境 | EAS/CI Secret | 正式构建 Secret | 正式签名 alias。 |
 | `MEMORY_RECALL_ANDROID_KEY_PASSWORD` | Release 必需 | Secret | 安全目录加载到进程环境 | EAS/CI Secret | 正式构建 Secret | key 密码。 |
-| `EXPO_TOKEN` | 仅非交互 EAS 操作需要 | Secret | 不长期保存于仓库工作区 | CI Secret | EAS/发布会话 | EAS CLI 认证。 |
+| `EXPO_TOKEN` | 仅非交互 EAS 操作需要 | Secret | 不长期保存于仓库工作区 | CI Secret（发布 job，不参与普通 verify） | EAS/发布会话 | EAS CLI 认证。 |
 
 发布规则：四项 `MEMORY_RECALL_ANDROID_*` 只在明确的 Release 构建中同时注入；普通 typecheck、测试、Expo Doctor 和 debug 构建不应读取正式签名密码。不得生成第二份“临时正式证书”绕过缺失配置。
 
 ## Server 本地模式
 
-Server 不会自动读取 `.env`；本地值必须在启动它的 PowerShell 进程中显式设置。JSON 本地模式与 PostgreSQL 模式二选一。
+Server 不会自动读取 `.env`；本地值必须在启动它的 PowerShell 进程中显式设置。模板见
+[`server/.env.example`](../server/.env.example)，JSON 本地模式与 PostgreSQL 模式二选一。
 
 | 变量 | 必需性 / 默认值 | 敏感级别 | 来源 | 用途 |
 | --- | --- | --- | --- | --- |
@@ -98,16 +101,15 @@ JSON 模式固定监听 `127.0.0.1`；`MEMORY_RECALL_LISTEN_HOST` 只影响 Post
 | 环境 | 允许来源 | 禁止项 | 当前状态 |
 | --- | --- | --- | --- |
 | Local | Web/App 的未跟踪 `.env.local`；Server 启动进程环境；Android 正式凭据只从 `D:\hermes\secure\memorae\` 加载 | 把安全目录复制回仓库；使用 ThinkPad/Camp env | 模板已覆盖三端；加载流程尚未统一。 |
-| CI | GitHub Variables/Secrets；PostgreSQL 使用 job 专属 service；普通门禁不注入生产凭据 | 生产数据库、生产 COS、正式签名密码参与普通验证 | 本仓没有 workflow，远端 Secret/Variable 集尚未建立。 |
-| Production | Web/App 构建平台变量、EAS credentials、Server 密钥管理或权限受限 `server/deploy/.env` | 客户端持有 Server Secret；跨产品复用数据库/COS 身份 | Server Compose 模板存在；完整平台接线未验收。 |
+| CI | GitHub Actions workflow；Web/App 使用空值公开配置，Server 使用本地 JSON 门禁；PostgreSQL 集成测试需单独临时 Secret | 生产数据库、生产 COS、正式签名密码参与普通验证 | 三端 verify 已接线；发布 Secret 不参与普通 CI。 |
+| Production | Web/App 构建平台公开变量、EAS credentials、Server 密钥管理或权限受限 `server/deploy/.env` | 客户端持有 Server Secret；复用其他产品数据库/COS/地图身份；签名材料进入 Git | Memorae Compose/Caddy/EAS 配置已在本仓，真实平台凭据仍由平台管理。 |
 
-## 已确认的收尾项
+## 独立交付验收
 
-1. 本仓没有 GitHub Actions workflow；CI 变量与 Secret 的最小集合尚未落地。
-2. `app/eas.json` 定义了 build profile，但仓内没有可核对的 EAS project linkage 或 Secret 来源说明。
-3. Android 正式凭据已有唯一仓库外位置，但还需要受控加载/验收流程，确保日志只报告存在性与证书指纹，不输出密码。
-4. `server/docs/DEPLOYMENT-RUNBOOK.md` 仍包含旧 monorepo 风格的服务器目录示例，部署治理阶段必须改为 Memorae 独立 checkout。
-5. Web 与 App 都默认/示例指向 `memorae.cn`；真实验收时必须证明该域名只路由到 Memorae 自己的 Server 与存储。
+1. `.github/workflows/ci.yml` 在 Web、App、Server 三个 job 中分别执行现有 `npm run verify`。
+2. `scripts/verify-fresh-clone.ps1` 从当前 `main` 创建临时 clone，注入模板值后验证三端安装/构建、Server `/health` 和 Compose 解析。
+3. `D:\hermes\secure\memorae\` 只作为正式 Android 凭据的仓外来源；本仓不跟踪证书、密码或 EAS token。
+4. `server/deploy/compose.yaml`、`server/deploy/Caddyfile`、`app/app.json` 与 `app/eas.json` 都只描述 Memorae 自己的 API、PostgreSQL、COS、地图和 Android 构建边界。
 
 隔离完成的验收标准是：fresh clone 分别注入 Web、App、Server 的本仓变量即可构建并启动；三端只访问 Memorae 的数据库、COS、地点服务和域名；任何进程都不读取另外两个仓的文件或变量。
 
