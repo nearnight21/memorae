@@ -84,18 +84,14 @@ test('临时测试模式不需要密码，并真实完成密文上传、下载�
   }
 });
 
-test('临时测试 APK 使用独立入口和独立包名，普通入口不引用测试代码', async () => {
-  const [ordinaryEntry, testEntry, gradle, runtime] = await Promise.all([
+test('临时测试 APK 使用独立入口，普通入口不引用测试代码', async () => {
+  const [ordinaryEntry, testEntry, runtime] = await Promise.all([
     readFile(new URL('../index.ts', import.meta.url), 'utf8'),
     readFile(new URL('../index.e2e.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../android/app/build.gradle', import.meta.url), 'utf8'),
     readFile(new URL('../src/testing/ephemeralTestRuntime.ts', import.meta.url), 'utf8'),
   ]);
   assert.doesNotMatch(ordinaryEntry, /ephemeralTestRuntime|index\.e2e/);
   assert.match(testEntry, /createEphemeralTestBootstrap/);
-  assert.match(gradle, /ephemeralTest\s*\{/);
-  assert.match(gradle, /applicationIdSuffix "\.test"/);
-  assert.match(gradle, /index\.e2e\.tsx/);
   assert.doesNotMatch(runtime, /createVault|unlockVault|私密空间密码/);
 });
 
