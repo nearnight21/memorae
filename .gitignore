@@ -18,6 +18,7 @@ app/.kotlin/
 # 本地数据、日志与环境文件
 .local-data/
 **/.local-data/
+.local-dev-token.txt
 *.log
 .env
 .env.*
