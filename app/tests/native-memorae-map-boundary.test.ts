@@ -27,10 +27,15 @@ const marker: MemoryMapMarker = {
   region: { country: '中国', province: '上海市', city: '上海市' },
 };
 
-test('Renderer flag 只在 Android 显式选择 Native，其他情况保留 WebView', () => {
+test('Android 默认 Native 且可显式回滚 WebView，其他平台保持 WebView', () => {
+  assert.equal(selectMemoraeMapRenderer('android', undefined), 'native-amap');
+  assert.equal(selectMemoraeMapRenderer('android', ''), 'native-amap');
+  assert.equal(selectMemoraeMapRenderer('android', 'native'), 'native-amap');
   assert.equal(selectMemoraeMapRenderer('android', 'native-amap'), 'native-amap');
-  assert.equal(selectMemoraeMapRenderer('android', undefined), 'webview');
+  assert.equal(selectMemoraeMapRenderer('android', 'webview'), 'webview');
+  assert.equal(selectMemoraeMapRenderer('android', ' WEBVIEW '), 'webview');
   assert.equal(selectMemoraeMapRenderer('ios', 'native-amap'), 'webview');
+  assert.equal(selectMemoraeMapRenderer('ios', 'webview'), 'webview');
   assert.equal(nativeAmapPrivacyConsentEnabled('1'), true);
   assert.equal(nativeAmapPrivacyConsentEnabled('true'), false);
 });
