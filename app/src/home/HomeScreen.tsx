@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AmapJsWebViewMap, {
-  type AmapMapCamera,
-  type AmapMapClusterPress,
-  type AmapWebViewMarker,
-} from '../map/AmapJsWebViewMap';
+import MemoraeMap, {
+  type CameraState,
+  type MapCameraIdleEvent,
+  type MapClusterPressEvent,
+  type MapMarkerPressEvent,
+  type MemoryMapMarker,
+} from '../map/MemoraeMap';
 import type { HomeRegionOption } from '../map/homeMapModel';
 import type { MemoryV2 } from '../memory/memoryV2';
 import MobileTimeline from './MobileTimeline';
@@ -14,7 +16,7 @@ import { androidTopInset } from '../ui/layout';
 import { CRYSTAL_HOME_BOTTOM_PADDING } from './timeline/crystalTimelineGeometry';
 
 interface Props {
-  markers: AmapWebViewMarker[];
+  markers: readonly MemoryMapMarker[];
   memories: readonly MemoryV2[];
   selectedYear: string | null;
   regionLabel: string;
@@ -23,13 +25,12 @@ interface Props {
   status?: string;
   onYearChange: (year: string | null) => void;
   onRegionSelect: (region: HomeRegionOption) => void;
-  onMarkerPressed?: (id: string) => void;
-  onClusterPressed?: (cluster: AmapMapClusterPress) => void;
-  onMapPressed?: (coordinates: { lat: number; lng: number }) => void;
-  onCameraIdle?: (coordinates: AmapMapCamera) => void;
-  initialCamera?: AmapMapCamera;
-  cameraTarget?: AmapMapCamera | null;
-  markerUpdatesPaused?: boolean;
+  onMarkerPress?: (event: MapMarkerPressEvent) => void;
+  onClusterPress?: (event: MapClusterPressEvent) => void;
+  onCameraIdle?: (event: MapCameraIdleEvent) => void;
+  initialCamera?: CameraState;
+  camera?: CameraState | null;
+  mapUpdatesPaused?: boolean;
   locationMode?: boolean;
   locationOverlay?: ReactNode;
   onCreateMemory?: () => void;
@@ -46,13 +47,12 @@ export default function HomeScreen({
   status,
   onYearChange,
   onRegionSelect,
-  onMarkerPressed,
-  onClusterPressed,
-  onMapPressed,
+  onMarkerPress,
+  onClusterPress,
   onCameraIdle,
   initialCamera,
-  cameraTarget,
-  markerUpdatesPaused = false,
+  camera,
+  mapUpdatesPaused = false,
   locationMode = false,
   locationOverlay,
   onCreateMemory,
@@ -76,15 +76,14 @@ export default function HomeScreen({
   return (
     <View style={styles.root}>
       <View style={styles.map}>
-        <AmapJsWebViewMap
+        <MemoraeMap
           markers={markers}
-          onMarkerPressed={onMarkerPressed}
-          onClusterPressed={onClusterPressed}
-          onMapPressed={onMapPressed}
+          onMarkerPress={onMarkerPress}
+          onClusterPress={onClusterPress}
           onCameraIdle={onCameraIdle}
           initialCamera={initialCamera}
-          cameraTarget={cameraTarget}
-          markerUpdatesPaused={markerUpdatesPaused}
+          camera={camera}
+          updatesPaused={mapUpdatesPaused}
           showStatus={!locationMode && chromeVisible}
         />
       </View>

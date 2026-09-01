@@ -59,8 +59,18 @@ import {
   saveStoredAccountSession,
   type MobileAccountSession,
 } from './src/auth/accountSession';
-import AmapJsWebViewMap, { type AmapMapCamera } from './src/map/AmapJsWebViewMap';
-import { findMemoryForMarker, memoriesToMapMarkers, type MemoryThumbnailRefs } from './src/map/memoryMapAdapter';
+import type {
+  CameraState,
+  MapCameraIdleEvent,
+  MapMarkerPressEvent,
+  MemoryMapThumbnail,
+} from './src/map/MemoraeMap';
+import {
+  findMemoryForMarker,
+  memoriesToMapMarkers,
+  type MemoryThumbnailSources,
+} from './src/map/memoryMapAdapter';
+import { registerMapThumbnail, resetMapThumbnailCache } from './src/map/mapThumbnailCache';
 import {
   buildHomeRegionOptions,
   currentHomeRegionLabel,
@@ -192,7 +202,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
   const [memories, setMemories] = useState<MemoryV2[]>([]);
-  const [thumbnailRefs, setThumbnailRefs] = useState<MemoryThumbnailRefs>({});
+  const [thumbnailSources, setThumbnailSources] = useState<MemoryThumbnailSources>({});
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
@@ -221,10 +231,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [showPrivatePassword, setShowPrivatePassword] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [homeCamera, setHomeCamera] = useState<AmapMapCamera>({ ...HOME_CHINA_CAMERA });
-  const [homeCameraTarget, setHomeCameraTarget] = useState<AmapMapCamera | null>(null);
-  const [locationCameraTarget, setLocationCameraTarget] = useState<AmapMapCamera | null>(null);
-  const locationPickerOriginCamera = useRef<AmapMapCamera | null>(null);
+  const [homeViewport, setHomeViewport] = useState<MapCameraIdleEvent>({
+    camera: { ...HOME_CHINA_CAMERA },
+  });
+  const [homeCameraTarget, setHomeCameraTarget] = useState<CameraState | null>(null);
+  const [locationCameraTarget, setLocationCameraTarget] = useState<CameraState | null>(null);
+  const locationPickerOriginCamera = useRef<CameraState | null>(null);
   const detailLoadId = useRef(0);
   const detailPhotoPerformance = useRef(new Map<number, {
     startedAt: number;
@@ -270,16 +282,16 @@ export default function App({ testBootstrap }: AppProps = {}) {
     [memories, selectedYear],
   );
   const mapMarkers = useMemo(
-    () => memoriesToMapMarkers(visibleMemories, thumbnailRefs),
-    [thumbnailRefs, visibleMemories],
+    () => memoriesToMapMarkers(visibleMemories, thumbnailSources),
+    [thumbnailSources, visibleMemories],
   );
   const homeRegionOptions = useMemo(
     () => buildHomeRegionOptions(visibleMemories),
     [visibleMemories],
   );
   const homeRegionLabel = useMemo(
-    () => currentHomeRegionLabel(homeCamera, visibleMemories),
-    [homeCamera, visibleMemories],
+    () => currentHomeRegionLabel(homeViewport, visibleMemories),
+    [homeViewport, visibleMemories],
   );
   const mobileLocationClient = useMemo(
     () => accountSession
@@ -322,6 +334,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   useEffect(() => {
     void (async () => {
       try {
+        resetMapThumbnailCache();
         await initializeStorage();
         if (testBootstrap) {
           const bootstrap = await testBootstrap();
@@ -381,6 +394,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
       }
     })();
   }, [testBootstrap]);
+
+  useEffect(() => () => resetMapThumbnailCache(), []);
 
   function currentAccountSyncClient(): MemoryRecallSyncClient | null {
     if (testSyncClient.current) return testSyncClient.current;
@@ -447,10 +462,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     memoriesRef.current = snapshot.memories;
     setMemories(snapshot.memories);
     const thumbnailRequestId = ++thumbnailLoadId.current;
-    setThumbnailRefs({});
+    setThumbnailSources({});
     if (options.loadThumbnails !== false) {
       void loadThumbnailRefs(snapshot.memories, activeSession).then((refs) => {
-        if (thumbnailRequestId === thumbnailLoadId.current) setThumbnailRefs(refs);
+        if (thumbnailRequestId === thumbnailLoadId.current) setThumbnailSources(refs);
       }).catch(() => undefined);
     }
     const withLocationCount = snapshot.memories.filter((memory) => memory.location !== null).length;
@@ -505,21 +520,24 @@ export default function App({ testBootstrap }: AppProps = {}) {
   async function loadThumbnailRefs(
     values: readonly MemoryV2[],
     activeSession: VaultSessionV1,
-  ): Promise<MemoryThumbnailRefs> {
+  ): Promise<MemoryThumbnailSources> {
     const entries = await Promise.all(values.map(async (memory) => {
-      const refs: string[] = [];
+      const sources: MemoryMapThumbnail[] = [];
       for (const photoRef of memory.photos.slice(0, 3)) {
         try {
           const encrypted = await getEncryptedPhoto(photoRef.id, 'thumbnail');
           if (!encrypted) continue;
           const photo = await decryptPhoto(nativeCryptoPrimitives, activeSession, encrypted);
-          refs.push(`data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`);
-          photo.bytes.fill(0);
+          try {
+            sources.push(registerMapThumbnail(`thumbnail:${photoRef.id}`, photo.bytes));
+          } finally {
+            photo.bytes.fill(0);
+          }
         } catch {
           // A missing thumbnail is rendered as a location anchor; the memory remains usable.
         }
       }
-      return [memory.id, refs] as const;
+      return [memory.id, sources] as const;
     }));
     return Object.fromEntries(entries);
   }
@@ -534,7 +552,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setMemories(next);
     if (!session) return;
     void loadThumbnailRefs([memory], session).then((refs) => {
-      setThumbnailRefs((current) => ({ ...current, ...refs }));
+      setThumbnailSources((current) => ({ ...current, ...refs }));
     }).catch(() => undefined);
   }
 
@@ -596,7 +614,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
     if (session) destroyVaultSession(session);
     setSession(null);
     setMemories([]);
-    setThumbnailRefs({});
+    setThumbnailSources({});
+    resetMapThumbnailCache();
     setSelectedYear(null);
     setSelectedMemory(null);
     setEditDraft(null);
@@ -741,7 +760,13 @@ export default function App({ testBootstrap }: AppProps = {}) {
     );
     setDraftVisible(true);
     if (photoLocation && Number.isFinite(photoLocation.lat) && Number.isFinite(photoLocation.lng)) {
-      setHomeCamera((current) => ({ lat: photoLocation.lat!, lng: photoLocation.lng!, zoom: current?.zoom }));
+      setHomeViewport((current) => ({
+        camera: {
+          latitude: photoLocation.lat!,
+          longitude: photoLocation.lng!,
+          zoom: current.camera.zoom,
+        },
+      }));
     }
     setStatus(photoLocation
       ? `已从照片读取地点：${photoLocation.name}。`
@@ -952,7 +977,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   function openEditLocation(): void {
-    locationPickerOriginCamera.current = homeCamera;
+    locationPickerOriginCamera.current = homeViewport.camera;
     setHomeCameraTarget(null);
     setLocationPickerVisible(true);
   }
@@ -1072,8 +1097,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setMoreActionsVisible(false);
     setDeleteConfirmVisible(false);
     setMemories((currentMemories) => currentMemories.filter((memory) => memory.id !== selectedMemory.id));
-    setThumbnailRefs((currentRefs) => {
-      const next = { ...currentRefs };
+    setThumbnailSources((currentSources) => {
+      const next = { ...currentSources };
       delete next[selectedMemory.id];
       return next;
     });
@@ -1195,7 +1220,13 @@ export default function App({ testBootstrap }: AppProps = {}) {
     locationPickerOriginCamera.current = null;
     setEditDraft((current) => current ? { ...current, location: next } : current);
     if (Number.isFinite(next.lat) && Number.isFinite(next.lng)) {
-      setHomeCamera((current) => ({ lat: next.lat!, lng: next.lng!, zoom: current?.zoom }));
+      setHomeViewport((current) => ({
+        camera: {
+          latitude: next.lat!,
+          longitude: next.lng!,
+          zoom: current.camera.zoom,
+        },
+      }));
     }
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
@@ -1204,7 +1235,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function cancelLocationPicker(): void {
     const origin = locationPickerOriginCamera.current;
-    if (origin) setHomeCamera(origin);
+    if (origin) setHomeViewport({ camera: origin });
     locationPickerOriginCamera.current = null;
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
@@ -1223,10 +1254,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     }
   }
 
-  function handleMarkerPressed(id: string): void {
-    const memory = findMemoryForMarker(memories, id);
+  function handleMarkerPress({ markerId }: MapMarkerPressEvent): void {
+    const memory = findMemoryForMarker(memories, markerId);
     if (!memory) {
-      setStatus(`地图返回了未知地点：${id}`);
+      setStatus(`地图返回了未知地点：${markerId}`);
       return;
     }
     const memoryLocation = memory.location;
@@ -1237,8 +1268,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
     void runTask(async () => { openMemory(memory); });
   }
 
-  function handleHomeCameraIdle(camera: AmapMapCamera): void {
-    setHomeCamera(camera);
+  function handleHomeCameraIdle(event: MapCameraIdleEvent): void {
+    setHomeViewport(event);
     setHomeCameraTarget(null);
   }
 
@@ -1263,7 +1294,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setVault(bundle.vault);
     setSession(null);
     setMemories([]);
-    setThumbnailRefs({});
+    setThumbnailSources({});
+    resetMapThumbnailCache();
     setSelectedYear(null);
     setSelectedMemory(null);
     setDetailPhotoUris([]);
@@ -1442,7 +1474,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
             setVault(null);
             setSession(null);
             setMemories([]);
-            setThumbnailRefs({});
+            setThumbnailSources({});
+            resetMapThumbnailCache();
             setSelectedYear(null);
             setSelectedMemory(null);
             setDetailPhotoUris([]);
@@ -1504,29 +1537,29 @@ export default function App({ testBootstrap }: AppProps = {}) {
         status={status}
         onYearChange={setSelectedYear}
         onRegionSelect={selectHomeRegion}
-        onMarkerPressed={handleMarkerPressed}
-        onClusterPressed={({ count, label, lat, lng }) => setStatus(
+        onMarkerPress={handleMarkerPress}
+        onClusterPress={({ count, label, coordinate }) => setStatus(
           label
             ? `${label}有 ${count} 段记忆，已展开该区域。`
-            : `已展开 ${count} 段记忆：${lat.toFixed(3)}, ${lng.toFixed(3)}。`,
+            : `已展开 ${count} 段记忆：${coordinate.latitude.toFixed(3)}, ${coordinate.longitude.toFixed(3)}。`,
         )}
         onCameraIdle={handleHomeCameraIdle}
         onCreateMemory={() => void runTask(beginCreateMemory)}
         chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible}
         initialCamera={HOME_CHINA_CAMERA}
-        cameraTarget={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
-        markerUpdatesPaused={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
+        camera={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
+        mapUpdatesPaused={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
         locationMode={locationPickerVisible}
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
             mapAlreadyMounted
             active={locationPickerVisible}
             initialLocation={editDraft?.location ?? null}
-            initialCamera={homeCamera}
-            cameraIdle={homeCamera}
-            cameraTarget={locationCameraTarget}
+            initialCamera={homeViewport.camera}
+            cameraIdle={homeViewport.camera}
+            camera={locationCameraTarget}
             locationClient={mobileLocationClient}
-            onCameraTargetChange={setLocationCameraTarget}
+            onCameraChange={setLocationCameraTarget}
             onCancel={cancelLocationPicker}
             onConfirm={confirmLocation}
           />

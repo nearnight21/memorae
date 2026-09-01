@@ -1,8 +1,8 @@
 # Memorae 开发交接
 
-> 最后更新：2026-08-28
+> 最后更新：2026-09-01
 >
-> 当前阶段：Memorae Product Reset。独立环境契约、CI 和 fresh-clone 验收已完成。
+> 当前阶段：Memorae Mobile 跨平台迁移 Phase 1。RN 地图业务边界已建立，正式 Renderer 仍为 WebView。
 
 ## 当前状态
 
@@ -12,6 +12,8 @@
 - 环境变量清单见 `docs/ENVIRONMENT-SECRETS.md`；边界与 fresh-clone 检查由 `.github/workflows/ci.yml`、
   `scripts/check-runtime-boundaries.ps1` 和 `scripts/verify-fresh-clone.ps1` 维护。
 - Memorae 保持现有 Web、App、Server 部署体系，不引入 ThinkPad/Camp 的 Vercel 或 Worker 配置。
+- Mobile 的 Home、LocationPicker 和业务编排只依赖中立 `MemoraeMap`；WebView/高德专有 DTO
+  已收口到 `app/src/map/WebViewMemoraeMapAdapter.tsx`。本阶段未修改 Android Native Module。
 
 ## 必须保持
 
@@ -62,3 +64,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\sync-canonical-worktree.ps1
    不进入仓库、普通 CI job 或 fresh clone。
 4. Product Reset 已恢复；后续按 `PRODUCT-BASELINE`、V1 当前状态、Android 全链验收、
    历史冲突、导出/恢复、发布准备和 Polish 顺序推进。
+
+## Mobile 跨平台地图边界
+
+Phase 1 已完成以下边界收口：
+
+1. `app/src/map/MemoraeMap.types.ts` 定义中立 Coordinate、Camera、Bounds、Marker 和事件类型；
+   不包含 WebView、Android Bundle、AMap SDK 对象、Memory 正文、密文、VMK 或 token。
+2. `app/src/map/MemoraeMap.tsx` 是 Home 与 LocationPicker 的唯一地图组件入口；当前只选择
+   `WebViewMemoraeMapAdapter`，现有 AMap JS Runtime、地图样式和交互没有重写。
+3. `memoryMapAdapter` 输出 `MemoryMapMarker`。缩略图公开为 `uri + cacheKey`，解密图片只在
+   当前进程的可清理内存缓存中保留；WebView 所需 Data URI 只存在于 Renderer 私有兼容层。
+4. Camera idle 使用中立 Camera/Bounds，WebView Adapter 通过坐标 `1e-6`、zoom `1e-3` 的
+   epsilon 判断阻断 RN Camera 回写形成的重复移动命令。
+5. 当前产品没有消费者的 imperative map commands、selected marker、map ready/error 和屏幕投影
+   未进入 Phase 1 接口；现有聚类、地区筛选、中心点选址和暂停 Marker 更新行为继续保留。
+
+Phase 2 只能替换 `MemoraeMap` 内部 Renderer，并补齐 Android `TextureMapView` 生命周期与状态恢复；
+不得要求 Home、LocationPicker、Memory 数据层改回依赖高德或 Android 类型。iOS 仍只冻结同一 TypeScript
+业务接口，本阶段没有 Swift/Objective-C 地图实现。

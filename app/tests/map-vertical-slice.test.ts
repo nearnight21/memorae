@@ -190,7 +190,7 @@ test('地点选择模式复用 Home 的唯一地图实例', async () => {
   assert.match(appSource, /mapAlreadyMounted/);
   assert.doesNotMatch(appSource, /!locationPickerVisible && <HomeScreen/);
   assert.match(appSource, /locationPickerOriginCamera/);
-  assert.match(appSource, /setHomeCamera\(origin\)/);
+  assert.match(appSource, /setHomeViewport\(\{ camera: origin \}\)/);
   assert.match(homeSource, /locationOverlay/);
   assert.match(homeSource, /showStatus=\{!locationMode && chromeVisible\}/);
 });
@@ -206,13 +206,13 @@ test('远端照片同步完成后批量刷新缩略图，不逐张重建地图 M
 test('正式 App 只把有效地点坐标送入本地地图，不把正文或照片传入 Marker', async () => {
   const source = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
   assert.match(source, /memory\.location/);
-  assert.match(source, /AmapJsWebViewMap/);
+  assert.match(source, /MemoryMapThumbnail/);
   assert.match(source, /memoriesToMapMarkers/);
   assert.match(source, /firstPhotoCoordinates/);
   assert.match(source, /mobileLocationClient\.convertGps/);
   assert.match(source, /provider: 'amap'/);
-  assert.match(source, /handleMarkerPressed/);
-  assert.doesNotMatch(source, /pastSelf.*AmapJsWebViewMap|photos.*AmapJsWebViewMap/);
+  assert.match(source, /handleMarkerPress/);
+  assert.doesNotMatch(source, /AmapJsWebViewMap|AmapWebViewMarker|AmapMapCamera/);
 });
 
 test('真实 MemoryV2 到地图 Marker 的适配只暴露坐标，并能反查详情', () => {
@@ -247,7 +247,7 @@ test('真实 MemoryV2 到地图 Marker 的适配只暴露坐标，并能反查�
   });
 
   assert.deepEqual(memoriesToMapMarkers([withCoordinates, withoutCoordinates]), [
-    { id: 'with-coordinates', lat: 44.1412, lng: 115.71314 },
+    { id: 'with-coordinates', latitude: 44.1412, longitude: 115.71314 },
   ]);
   assert.equal(findMemoryForMarker([withCoordinates], 'with-coordinates'), withCoordinates);
   assert.equal(findMemoryForMarker([withCoordinates], 'missing'), null);
@@ -285,16 +285,22 @@ test('地图缩略图尺寸不再由照片数量决定，同省多段记忆按�
     memory('memory-c', 29.88, 121.56, 6),
   ];
   const markers = memoriesToMapMarkers(memories, {
-    'memory-a': ['data:image/jpeg;base64,YQ=='],
-    'memory-b': ['data:image/jpeg;base64,Yg==', 'data:image/jpeg;base64,Yw=='],
-    'memory-c': ['data:image/jpeg;base64,ZA==', 'data:image/jpeg;base64,ZQ=='],
+    'memory-a': [{ uri: 'memorae-thumbnail:///thumb-a', cacheKey: 'thumb-a' }],
+    'memory-b': [
+      { uri: 'memorae-thumbnail:///thumb-b', cacheKey: 'thumb-b' },
+      { uri: 'memorae-thumbnail:///thumb-c', cacheKey: 'thumb-c' },
+    ],
+    'memory-c': [
+      { uri: 'memorae-thumbnail:///thumb-d', cacheKey: 'thumb-d' },
+      { uri: 'memorae-thumbnail:///thumb-e', cacheKey: 'thumb-e' },
+    ],
   });
 
   assert.equal(markers.length, 3);
-  assert.deepEqual(markers.map((marker) => marker.thumbnailRef), [
-    'data:image/jpeg;base64,YQ==',
-    'data:image/jpeg;base64,Yg==',
-    'data:image/jpeg;base64,ZA==',
+  assert.deepEqual(markers.map((marker) => marker.thumbnail), [
+    { uri: 'memorae-thumbnail:///thumb-a', cacheKey: 'thumb-a' },
+    { uri: 'memorae-thumbnail:///thumb-b', cacheKey: 'thumb-b' },
+    { uri: 'memorae-thumbnail:///thumb-d', cacheKey: 'thumb-d' },
   ]);
   assert.ok(markers.every((marker) => !('scale' in marker) && !('photoCount' in marker) && !('thumbnailRefs' in marker)));
 
@@ -302,10 +308,13 @@ test('地图缩略图尺寸不再由照片数量决定，同省多段记忆按�
   assert.deepEqual(options.find((option) => option.key === 'country:中国')?.camera, HOME_CHINA_CAMERA);
   assert.equal(options.find((option) => option.key === 'province:中国:浙江省')?.memoryCount, 3);
   assert.equal(options.find((option) => option.key === 'city:中国:浙江省:宁波市')?.memoryCount, 3);
-  const bounds = { north: 31, south: 28, east: 123, west: 120 };
-  assert.equal(currentHomeRegionLabel({ ...HOME_CHINA_CAMERA, bounds }, memories), '中国');
-  assert.equal(currentHomeRegionLabel({ lat: 30, lng: 121.5, zoom: 6, bounds }, memories), '浙江');
-  assert.equal(currentHomeRegionLabel({ lat: 30, lng: 121.5, zoom: 9, bounds }, memories), '浙江 · 宁波');
+  const bounds = {
+    northEast: { latitude: 31, longitude: 123 },
+    southWest: { latitude: 28, longitude: 120 },
+  };
+  assert.equal(currentHomeRegionLabel({ camera: HOME_CHINA_CAMERA, bounds }, memories), '中国');
+  assert.equal(currentHomeRegionLabel({ camera: { latitude: 30, longitude: 121.5, zoom: 6 }, bounds }, memories), '浙江');
+  assert.equal(currentHomeRegionLabel({ camera: { latitude: 30, longitude: 121.5, zoom: 9 }, bounds }, memories), '浙江 · 宁波');
 });
 
 test('Home 地区选择接通真实视野和相机导航，不再使用占位提示', async () => {

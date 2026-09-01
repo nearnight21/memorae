@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { androidTopInset } from '../ui/layout';
-import AmapJsWebViewMap, { type AmapMapCamera } from '../map/AmapJsWebViewMap';
+import MemoraeMap, { type CameraState } from '../map/MemoraeMap';
 import type { MemoryLocationV2 } from '../memory/memoryV2';
 import {
   locationPlaceLabel,
@@ -25,12 +25,12 @@ import {
 
 interface Props {
   initialLocation?: MemoryLocationV2 | null;
-  initialCamera?: AmapMapCamera;
+  initialCamera?: CameraState;
   mapAlreadyMounted?: boolean;
   active?: boolean;
-  cameraIdle?: AmapMapCamera | null;
-  cameraTarget?: AmapMapCamera | null;
-  onCameraTargetChange?: (camera: AmapMapCamera) => void;
+  cameraIdle?: CameraState | null;
+  camera?: CameraState | null;
+  onCameraChange?: (camera: CameraState) => void;
   locationClient?: MobileLocationClient;
   onCancel: () => void;
   onConfirm: (location: MemoryLocationV2) => void;
@@ -38,18 +38,18 @@ interface Props {
 
 const CENTER_ZOOM = 15;
 
-function finiteCoordinates(value: MemoryLocationV2 | null | undefined): AmapMapCamera | null {
+function finiteCoordinates(value: MemoryLocationV2 | null | undefined): CameraState | null {
   if (!value || !Number.isFinite(value.lat) || !Number.isFinite(value.lng)) return null;
-  return { lat: value.lat!, lng: value.lng!, zoom: CENTER_ZOOM };
+  return { latitude: value.lat!, longitude: value.lng!, zoom: CENTER_ZOOM };
 }
 
-function locationFallback(coordinates: AmapMapCamera): SelectedLocation {
+function locationFallback(coordinates: CameraState): SelectedLocation {
   return {
     name: '地图选点',
     mx: 50,
     my: 50,
-    lat: coordinates.lat,
-    lng: coordinates.lng,
+    lat: coordinates.latitude,
+    lng: coordinates.longitude,
     provider: 'amap',
   };
 }
@@ -60,15 +60,15 @@ export default function LocationPicker({
   mapAlreadyMounted = false,
   active = true,
   cameraIdle,
-  cameraTarget: controlledCameraTarget,
-  onCameraTargetChange,
+  camera: controlledCamera,
+  onCameraChange,
   locationClient,
   onCancel,
   onConfirm,
 }: Props) {
   const initialCamera = useMemo(() => finiteCoordinates(initialLocation) ?? initialCameraProp ?? null, [initialLocation, initialCameraProp]);
-  const [cameraTarget, setCameraTarget] = useState<AmapMapCamera | null>(initialCamera);
-  const [center, setCenter] = useState<AmapMapCamera | null>(initialCamera);
+  const [camera, setCamera] = useState<CameraState | null>(initialCamera);
+  const [center, setCenter] = useState<CameraState | null>(initialCamera);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(initialLocation ? {
     ...initialLocation,
   } : null);
@@ -82,28 +82,28 @@ export default function LocationPicker({
   const searchRequestId = useRef(0);
   const reverseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const effectiveCameraTarget = controlledCameraTarget ?? cameraTarget;
+  const effectiveCamera = controlledCamera ?? camera;
 
   useEffect(() => {
     if (!active || !cameraIdle) return;
     resolveCenter(cameraIdle);
-  }, [active, cameraIdle?.lat, cameraIdle?.lng, cameraIdle?.zoom]);
+  }, [active, cameraIdle?.latitude, cameraIdle?.longitude, cameraIdle?.zoom]);
 
   useEffect(() => {
-    if (cameraTarget) onCameraTargetChange?.(cameraTarget);
-  }, [cameraTarget?.lat, cameraTarget?.lng, cameraTarget?.zoom]);
+    if (camera) onCameraChange?.(camera);
+  }, [camera?.latitude, camera?.longitude, camera?.zoom]);
 
   useEffect(() => () => {
     if (reverseTimer.current) clearTimeout(reverseTimer.current);
     if (searchTimer.current) clearTimeout(searchTimer.current);
   }, []);
 
-  function resolveCenter(next: AmapMapCamera): void {
+  function resolveCenter(next: CameraState): void {
     setCenter(next);
     setError('');
     setReverseResult(null);
     setSelectedLocation((current) => (
-      current && current.lat === next.lat && current.lng === next.lng ? current : null
+      current && current.lat === next.latitude && current.lng === next.longitude ? current : null
     ));
     if (reverseTimer.current) clearTimeout(reverseTimer.current);
     reverseTimer.current = setTimeout(() => {
@@ -115,7 +115,7 @@ export default function LocationPicker({
         return;
       }
       setResolving(true);
-      void locationClient.reverse(next).then((result) => {
+      void locationClient.reverse({ lat: next.latitude, lng: next.longitude }).then((result) => {
         if (id !== requestId.current) return;
         setResolving(false);
         setReverseResult(result);
@@ -133,9 +133,8 @@ export default function LocationPicker({
   function selectSuggestion(candidate: LocationSuggestion): void {
     setQuery('');
     setSuggestions([]);
-    const target = { lat: candidate.lat, lng: candidate.lng, zoom: CENTER_ZOOM };
-    setCameraTarget(target);
-    onCameraTargetChange?.(target);
+    const target = { latitude: candidate.lat, longitude: candidate.lng, zoom: CENTER_ZOOM };
+    setCamera(target);
     resolveCenter(target);
   }
 
@@ -169,11 +168,11 @@ export default function LocationPicker({
 
   return (
     <KeyboardAvoidingView pointerEvents="box-none" style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {!mapAlreadyMounted && <AmapJsWebViewMap
+      {!mapAlreadyMounted && <MemoraeMap
         markers={[]}
         initialCamera={initialCamera ?? undefined}
-        cameraTarget={effectiveCameraTarget}
-        onCameraIdle={resolveCenter}
+        camera={effectiveCamera}
+        onCameraIdle={(event) => resolveCenter(event.camera)}
         showStatus={false}
       />}
       <View pointerEvents="none" style={styles.mapDim} />
@@ -216,7 +215,7 @@ export default function LocationPicker({
             accessibilityLabel="确定地点"
             disabled={!center || resolving}
             onPress={() => onConfirm(selectedLocation && center
-              ? { ...selectedLocation, lat: center.lat, lng: center.lng }
+              ? { ...selectedLocation, lat: center.latitude, lng: center.longitude }
               : center ? locationFallback(center) : { name: '地图选点', mx: 50, my: 50 })}
             style={({ pressed }) => [styles.confirmButton, (!center || resolving) && styles.disabled, pressed && styles.pressed]}
           >

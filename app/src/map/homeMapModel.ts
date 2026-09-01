@@ -1,26 +1,13 @@
 import type { MemoryV2 } from '../memory/memoryV2';
+import type { CameraState, MapBounds, MapCameraIdleEvent } from './MemoraeMap.types';
 
-export const HOME_CHINA_CAMERA = { lat: 35.8617, lng: 104.1954, zoom: 4 } as const;
+export const HOME_CHINA_CAMERA = { latitude: 35.8617, longitude: 104.1954, zoom: 4 } as const;
 export const HOME_MAP_MIN_ZOOM = 4;
 export const HOME_MAP_MAX_ZOOM = 14;
 export const HOME_PROVINCE_ZOOM = 6;
 export const HOME_POINT_ZOOM = 9;
 
 export type HomeRegionScope = 'country' | 'province' | 'city';
-
-export interface HomeMapBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-}
-
-export interface HomeMapViewport {
-  lat: number;
-  lng: number;
-  zoom?: number;
-  bounds?: HomeMapBounds;
-}
 
 export interface HomeRegionOption {
   key: string;
@@ -30,7 +17,7 @@ export interface HomeRegionOption {
   province?: string;
   city?: string;
   memoryCount: number;
-  camera: { lat: number; lng: number; zoom: number };
+  camera: CameraState;
 }
 
 interface LocatedMemory {
@@ -77,8 +64,8 @@ function shortAdministrativeName(value: string): string {
 function averageCamera(items: readonly LocatedMemory[], zoom: number): HomeRegionOption['camera'] {
   if (items.length === 0) return { ...HOME_CHINA_CAMERA, zoom };
   return {
-    lat: items.reduce((sum, item) => sum + item.lat, 0) / items.length,
-    lng: items.reduce((sum, item) => sum + item.lng, 0) / items.length,
+    latitude: items.reduce((sum, item) => sum + item.lat, 0) / items.length,
+    longitude: items.reduce((sum, item) => sum + item.lng, 0) / items.length,
     zoom,
   };
 }
@@ -155,12 +142,13 @@ export function buildHomeRegionOptions(memories: readonly MemoryV2[]): HomeRegio
   });
 }
 
-function withinBounds(item: LocatedMemory, bounds: HomeMapBounds | undefined): boolean {
+function withinBounds(item: LocatedMemory, bounds: MapBounds | undefined): boolean {
   if (!bounds) return true;
-  const withinLatitude = item.lat >= bounds.south && item.lat <= bounds.north;
-  const withinLongitude = bounds.west <= bounds.east
-    ? item.lng >= bounds.west && item.lng <= bounds.east
-    : item.lng >= bounds.west || item.lng <= bounds.east;
+  const withinLatitude = item.lat >= bounds.southWest.latitude
+    && item.lat <= bounds.northEast.latitude;
+  const withinLongitude = bounds.southWest.longitude <= bounds.northEast.longitude
+    ? item.lng >= bounds.southWest.longitude && item.lng <= bounds.northEast.longitude
+    : item.lng >= bounds.southWest.longitude || item.lng <= bounds.northEast.longitude;
   return withinLatitude && withinLongitude;
 }
 
@@ -169,10 +157,10 @@ function unique(items: readonly string[]): string[] {
 }
 
 export function currentHomeRegionLabel(
-  viewport: HomeMapViewport,
+  viewport: MapCameraIdleEvent,
   memories: readonly MemoryV2[],
 ): string {
-  const zoom = viewport.zoom ?? HOME_CHINA_CAMERA.zoom;
+  const zoom = viewport.camera.zoom;
   if (!viewport.bounds && zoom <= HOME_CHINA_CAMERA.zoom) return '中国';
   const visible = locatedMemories(memories).filter((item) => withinBounds(item, viewport.bounds));
   if (visible.length === 0) return '中国';
