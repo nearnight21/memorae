@@ -2,7 +2,7 @@
 
 > 最后更新：2026-09-01
 >
-> 当前阶段：Memorae Mobile 跨平台迁移 Phase 1。RN 地图业务边界已建立，正式 Renderer 仍为 WebView。
+> 当前阶段：Memorae Mobile 跨平台迁移 Phase 2。Android Native Renderer 已实现并保留 WebView 回滚，正式默认切换仍待真机在线地图与隐私状态验收。
 
 ## 当前状态
 
@@ -13,7 +13,8 @@
   `scripts/check-runtime-boundaries.ps1` 和 `scripts/verify-fresh-clone.ps1` 维护。
 - Memorae 保持现有 Web、App、Server 部署体系，不引入 ThinkPad/Camp 的 Vercel 或 Worker 配置。
 - Mobile 的 Home、LocationPicker 和业务编排只依赖中立 `MemoraeMap`；WebView/高德专有 DTO
-  已收口到 `app/src/map/WebViewMemoraeMapAdapter.tsx`。本阶段未修改 Android Native Module。
+  已收口到 Renderer adapter。Android 新增 Local Expo Module + Kotlin `TextureMapView` 路径，
+  但默认仍使用 WebView；Phase 2 状态见 `app/docs/AMAP-NATIVE-RENDERER-PHASE-2.md`。
 
 ## 必须保持
 
@@ -80,6 +81,8 @@ Phase 1 已完成以下边界收口：
 5. 当前产品没有消费者的 imperative map commands、selected marker、map ready/error 和屏幕投影
    未进入 Phase 1 接口；现有聚类、地区筛选、中心点选址和暂停 Marker 更新行为继续保留。
 
-Phase 2 只能替换 `MemoraeMap` 内部 Renderer，并补齐 Android `TextureMapView` 生命周期与状态恢复；
-不得要求 Home、LocationPicker、Memory 数据层改回依赖高德或 Android 类型。iOS 仍只冻结同一 TypeScript
-业务接口，本阶段没有 Swift/Objective-C 地图实现。
+Phase 2 已在 `MemoraeMap` 内部加入显式 Android Native renderer 开关，并补齐 `TextureMapView`
+生命周期、Native saved state、Marker diff、Native 聚类、Camera epsilon 和短生命周期 thumbnail 文件边界；
+没有扩张 Phase 1 公开接口。正式切换前仍须注入与 `com.memorae.cn`/当前签名匹配的高德 Native Key，
+完成本次新路径真机矩阵，并接入真实运行时隐私同意状态。iOS 仍只冻结同一 TypeScript 业务接口，
+本阶段没有 Swift/Objective-C 地图实现。

@@ -40,7 +40,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/crypto-v1.test.ts tests/map-vertical-slice.test.ts tests/memorae-map-boundary.test.ts tests/sync-actions.test.ts tests/edit-delete-flow.test.ts tests/performance-diagnostics.test.ts tests/memory-overlay-layout.test.ts tests/crystal-timeline.test.ts tests/ephemeral-test-mode.test.ts tests/crystal-timeline-golden-frame.test.ts tests/crystal-thumb-shader-prototype.test.ts",
+    "test": "tsx --test tests/crypto-v1.test.ts tests/map-vertical-slice.test.ts tests/memorae-map-boundary.test.ts tests/native-memorae-map-boundary.test.ts tests/sync-actions.test.ts tests/edit-delete-flow.test.ts tests/performance-diagnostics.test.ts tests/memory-overlay-layout.test.ts tests/crystal-timeline.test.ts tests/ephemeral-test-mode.test.ts tests/crystal-timeline-golden-frame.test.ts tests/crystal-thumb-shader-prototype.test.ts",
     "verify": "npm run typecheck && npm run test && node scripts/run-expo-doctor.mjs"
   },
   "private": true

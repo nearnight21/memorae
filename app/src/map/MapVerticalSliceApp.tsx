@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { File, Paths } from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -18,7 +19,6 @@ import type {
   MapDiagnostics,
   NativeErrorPayload,
 } from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
-import { bytesToBase64 } from '../crypto';
 import {
   createJpegPhotoVariant,
   PHOTO_VARIANT_SPECS,
@@ -67,6 +67,17 @@ export default function MapVerticalSliceApp() {
     [markerCount, thumbnailSources, selectedMarkerId],
   );
   const selectedMarker = markers.find((marker) => marker.id === selectedMarkerId) ?? null;
+
+  useEffect(() => () => {
+    thumbnailSources.forEach((source) => {
+      try {
+        const file = new File(source.uri);
+        if (file.exists) file.delete();
+      } catch {
+        // Diagnostic cache cleanup is best-effort.
+      }
+    });
+  }, [thumbnailSources]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -134,10 +145,11 @@ export default function MapVerticalSliceApp() {
         THUMBNAIL_SPEC,
       );
       try {
-        generated.push({
-          key: `${asset.assetId ?? asset.fileName ?? 'picked'}-${index}-${Date.now()}`,
-          dataUri: `data:image/jpeg;base64,${bytesToBase64(bytes)}`,
-        });
+        const key = `${asset.assetId ?? asset.fileName ?? 'picked'}-${index}-${Date.now()}`;
+        const file = new File(Paths.cache, `amap-slice-${Date.now()}-${index}.jpg`);
+        file.create({ overwrite: true, intermediates: true });
+        file.write(bytes);
+        generated.push({ key, uri: file.uri });
       } finally {
         bytes.fill(0);
       }
@@ -168,7 +180,7 @@ export default function MapVerticalSliceApp() {
   function openMemoryDetail(markerId: string): void {
     const marker = markers.find((candidate) => candidate.id === markerId);
     setSelectedMarkerId(markerId);
-    if (!marker || marker.title?.startsWith('北京')) {
+    if (!marker || activeTestCity === '北京') {
       setCityLabelContext(null);
       return;
     }
@@ -360,7 +372,7 @@ export default function MapVerticalSliceApp() {
         {selectedMarker && (
           <View style={styles.detailCard}>
             <Text style={styles.detailEyebrow}>RN TEST DETAIL</Text>
-            <Text style={styles.detailTitle}>{selectedMarker.title}</Text>
+            <Text style={styles.detailTitle}>{selectedMarker.id}</Text>
             <Text style={styles.detailText}>
               地图组件保持挂载；关闭后 Camera 不会重建。照片点只使用 thumbnail。
             </Text>

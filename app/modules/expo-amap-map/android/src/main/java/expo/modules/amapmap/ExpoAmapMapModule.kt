@@ -14,15 +14,15 @@ class ExpoAmapMapModule : Module() {
     Name("ExpoAmapMap")
 
     OnActivityEntersForeground {
-      activeViews.toList().forEach { it.onActivityForeground() }
+      activeViews.toList().forEach { it.onHostResume() }
     }
 
     OnActivityEntersBackground {
-      activeViews.toList().forEach { it.onActivityBackground() }
+      activeViews.toList().forEach { it.onHostPause() }
     }
 
     OnActivityDestroys {
-      disposeActiveViews()
+      destroyActiveViews()
     }
 
     OnDestroy {
@@ -41,6 +41,7 @@ class ExpoAmapMapModule : Module() {
 
       OnViewDidUpdateProps { view ->
         activeViews.add(view)
+        view.onPropsCommitted()
       }
 
       OnViewDestroys { view ->
@@ -56,6 +57,26 @@ class ExpoAmapMapModule : Module() {
         view.setWorldMapEnabled(enabled)
       }
 
+      Prop("statePersistenceKey") { view: ExpoAmapMapView, key: String? ->
+        view.setStatePersistenceKey(key)
+      }
+
+      Prop("initialCamera") { view: ExpoAmapMapView, camera: Map<String, Any?>? ->
+        view.setInitialCamera(camera)
+      }
+
+      Prop("camera") { view: ExpoAmapMapView, camera: Map<String, Any?>? ->
+        view.setRequestedCamera(camera)
+      }
+
+      Prop("markers") { view: ExpoAmapMapView, markers: List<Map<String, Any?>>? ->
+        view.setMarkers(markers ?: emptyList())
+      }
+
+      Prop("markerUpdatesPaused") { view: ExpoAmapMapView, paused: Boolean ->
+        view.setMarkerUpdatesPaused(paused)
+      }
+
       AsyncFunction("moveCamera") {
         view: ExpoAmapMapView, camera: Map<String, Any?> ->
         view.updateCamera(camera, animated = false)
@@ -69,6 +90,11 @@ class ExpoAmapMapModule : Module() {
       AsyncFunction("setMarkers") {
         view: ExpoAmapMapView, markers: List<Map<String, Any?>> ->
         view.setMarkers(markers)
+      }
+
+      AsyncFunction("setMarkerUpdatesPaused") {
+        view: ExpoAmapMapView, paused: Boolean ->
+        view.setMarkerUpdatesPaused(paused)
       }
 
       AsyncFunction("setCityLabels") {
@@ -99,6 +125,11 @@ class ExpoAmapMapModule : Module() {
 
   private fun disposeActiveViews() {
     activeViews.toList().forEach { it.dispose() }
+    activeViews.clear()
+  }
+
+  private fun destroyActiveViews() {
+    activeViews.toList().forEach { it.onHostDestroy() }
     activeViews.clear()
   }
 }

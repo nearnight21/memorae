@@ -32,8 +32,8 @@ const { patchReleaseSigning } = require('../plugins/with-android-release-signing
 };
 
 const thumbnails = [
-  { key: 'thumb-a', dataUri: 'data:image/jpeg;base64,YQ==' },
-  { key: 'thumb-b', dataUri: 'data:image/jpeg;base64,Yg==' },
+  { key: 'thumb-a', uri: 'file:///cache/thumb-a.jpg' },
+  { key: 'thumb-b', uri: 'file:///cache/thumb-b.jpg' },
 ] as const;
 
 test('地图垂直切片生成确定性的 20/100 个原生照片点', () => {

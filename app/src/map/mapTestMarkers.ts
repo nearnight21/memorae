@@ -2,7 +2,7 @@ import type { PhotoMapMarker } from '../../modules/expo-amap-map/src/ExpoAmapMap
 
 export interface ThumbnailSource {
   key: string;
-  dataUri: string;
+  uri: string;
 }
 
 export const TEST_CITIES = {
@@ -30,11 +30,10 @@ export function buildMapTestMarkers(
     const id = `map-slice-${count}-${index}`;
     return {
       id,
-      title: `${city}测试记忆 ${ring + 1}`,
       latitude: center.latitude + Math.sin(angle) * radius,
       longitude: center.longitude + Math.cos(angle) * radius,
       thumbnailKey: thumbnail?.key,
-      thumbnailDataUri: thumbnail?.dataUri,
+      thumbnailUri: thumbnail?.uri,
       selected: selectedId === id,
     };
   });

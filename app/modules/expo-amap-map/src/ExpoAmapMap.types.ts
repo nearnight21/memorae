@@ -21,9 +21,11 @@ export interface MapBounds {
 
 export interface PhotoMapMarker extends LatLng {
   id: string;
-  title?: string;
   thumbnailKey?: string;
-  thumbnailDataUri?: string;
+  thumbnailUri?: string;
+  country?: string;
+  province?: string;
+  city?: string;
   selected?: boolean;
 }
 
@@ -49,7 +51,14 @@ export interface MapDiagnostics {
   nativeHeapBytes: number;
   runtimeUsedMemoryBytes: number;
   cameraIdleCount: number;
+  userGestureCameraIdleCount: number;
+  programmaticCameraIdleCount: number;
   renderedCityLabelCount: number;
+  invalidThumbnailCount: number;
+  mapViewCreateMs: number;
+  mapReadyMs: number;
+  firstVisibleFrameMs: number;
+  firstMarkerRenderMs: number;
 }
 
 export interface FrameMetrics {
@@ -69,6 +78,9 @@ export interface MapReadyPayload {
   sdkVersion: string;
   worldMapRequested: boolean;
   architecture: string;
+  mapViewCreateMs: number;
+  mapReadyMs: number;
+  firstVisibleFrameMs: number;
 }
 
 export interface MarkerPressPayload {
@@ -78,6 +90,7 @@ export interface MarkerPressPayload {
 export interface ClusterPressPayload extends LatLng {
   ids: string[];
   count: number;
+  label?: string;
 }
 
 export interface NativeErrorPayload {
@@ -89,6 +102,7 @@ export interface ExpoAmapMapViewRef {
   moveCamera(camera: MapCamera): Promise<void>;
   animateCamera(camera: MapCamera): Promise<void>;
   setMarkers(markers: PhotoMapMarker[]): Promise<void>;
+  setMarkerUpdatesPaused(paused: boolean): Promise<void>;
   setCityLabels(labels: CityMapLabel[]): Promise<void>;
   setClusters(config: ClusterConfig): Promise<void>;
   latLngToScreen(coordinate: LatLng): Promise<ScreenPoint>;
@@ -101,6 +115,11 @@ type NativeEvent<T> = { nativeEvent: T };
 export interface ExpoAmapMapViewProps {
   privacyConsentGranted: boolean;
   worldMapEnabled?: boolean;
+  statePersistenceKey?: string;
+  initialCamera?: MapCamera;
+  camera?: MapCamera | null;
+  markers?: PhotoMapMarker[];
+  markerUpdatesPaused?: boolean;
   onMapReady?: (event: NativeEvent<MapReadyPayload>) => void;
   onMapPress?: (event: NativeEvent<LatLng>) => void;
   onMarkerPress?: (event: NativeEvent<MarkerPressPayload>) => void;

@@ -24,4 +24,6 @@ android {
 dependencies {
   // 固定官方文档给出的版本，避免 latest.integration 在不同电脑上漂移。
   implementation 'com.amap.api:3dmap-location-search:10.1.200_loc6.4.9_sea9.7.4'
+  implementation 'androidx.savedstate:savedstate:1.3.3'
+  testImplementation 'junit:junit:4.13.2'
 }
