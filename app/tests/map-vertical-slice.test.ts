@@ -36,8 +36,8 @@ const thumbnails = [
   { key: 'thumb-b', uri: 'file:///cache/thumb-b.jpg' },
 ] as const;
 
-test('地图垂直切片生成确定性的 20/100 个原生照片点', () => {
-  for (const count of [20, 100] as const) {
+test('地图垂直切片生成确定性的 0/20/100 个原生照片点', () => {
+  for (const count of [0, 20, 100] as const) {
     const first = buildMapTestMarkers(count, thumbnails, null);
     const second = buildMapTestMarkers(count, thumbnails, null);
     assert.equal(first.length, count);

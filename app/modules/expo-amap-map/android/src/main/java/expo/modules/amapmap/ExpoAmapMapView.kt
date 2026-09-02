@@ -39,6 +39,7 @@ import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.ceil
 import kotlin.math.max
 
@@ -152,6 +153,12 @@ class ExpoAmapMapView(
   context: Context,
   private val expoAppContext: AppContext,
 ) : ExpoView(context, expoAppContext) {
+  companion object {
+    private val nextNativeMapViewInstanceId = AtomicInteger(0)
+    private val textureMapViewCreateCount = AtomicInteger(0)
+    private val textureMapViewDestroyCount = AtomicInteger(0)
+  }
+
   override val shouldUseAndroidLayout = true
 
   private val onMapReady by EventDispatcher<Map<String, Any>>()
@@ -163,6 +170,7 @@ class ExpoAmapMapView(
 
   private var mapView: TextureMapView? = null
   private var map: AMap? = null
+  private val nativeMapViewInstanceId = nextNativeMapViewInstanceId.incrementAndGet()
   private var lifecycleState = MapLifecycleState.NOT_CREATED
   private var permanentlyDisposed = false
   private var privacyConsentGranted = false
@@ -197,11 +205,16 @@ class ExpoAmapMapView(
   private val frameSampler = UiFrameSampler()
   private var mapCreateStartedAt = 0L
   private var mapViewCreateMs = 0L
+  private var amapAvailableMs = 0L
   private var mapReadyMs = 0L
   private var firstVisibleFrameMs = 0L
   private var firstMarkerRenderMs = 0L
+  private var initialCameraSetCount = 0
+  private var initialCameraMoveCount = 0
+  private var requestedCameraMoveCount = 0
 
   init {
+    Log.i(TAG, "perf event=native_map_view_created instance=$nativeMapViewInstanceId")
     layoutParams = ViewGroup.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
       ViewGroup.LayoutParams.MATCH_PARENT,
@@ -227,6 +240,7 @@ class ExpoAmapMapView(
   }
 
   fun setInitialCamera(rawCamera: Map<String, Any?>?) {
+    initialCameraSetCount += 1
     initialCamera = rawCamera?.toNativeCamera()
     applyInitialCameraIfNeeded()
   }
@@ -238,6 +252,11 @@ class ExpoAmapMapView(
     val actual = amap.cameraPosition.toNativeCamera()
     if (camerasEquivalent(requested, actual)) return
     programmaticCameraMove = true
+    requestedCameraMoveCount += 1
+    Log.i(
+      TAG,
+      "perf event=requested_camera_move instance=$nativeMapViewInstanceId count=$requestedCameraMoveCount",
+    )
     val position = amap.cameraPosition
     amap.moveCamera(
       CameraUpdateFactory.newCameraPosition(
@@ -281,16 +300,27 @@ class ExpoAmapMapView(
       val nativeMapView = TextureMapView(context).apply {
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
       }
+      val textureCreateCount = textureMapViewCreateCount.incrementAndGet()
+      Log.i(
+        TAG,
+        "perf event=texture_map_view_created instance=$nativeMapViewInstanceId total=$textureCreateCount",
+      )
       restoredNativeState = restoredMapBundle != null
       nativeMapView.onCreate(restoredMapBundle)
       restoredMapBundle = null
       mapViewCreateMs = elapsedSinceMapCreate()
+      Log.i(
+        TAG,
+        "perf event=texture_map_view_on_create instance=$nativeMapViewInstanceId ms=$mapViewCreateMs",
+      )
       addView(nativeMapView)
       mapView = nativeMapView
       lifecycleState = MapLifecycleState.CREATED
       installFirstFrameObserver(nativeMapView)
 
       map = nativeMapView.map.also(::configureMap)
+      amapAvailableMs = elapsedSinceMapCreate()
+      Log.i(TAG, "perf event=amap_available instance=$nativeMapViewInstanceId ms=$amapAvailableMs")
       applyInitialCameraIfNeeded()
       applyMarkers(markerUpdateGate.applied)
       syncHostLifecycleFromActivity()
@@ -324,6 +354,7 @@ class ExpoAmapMapView(
   private fun configureMapListeners(amap: AMap) {
     amap.setOnMapLoadedListener {
       mapReadyMs = elapsedSinceMapCreate()
+      Log.i(TAG, "perf event=amap_loaded instance=$nativeMapViewInstanceId ms=$mapReadyMs")
       mapView?.postInvalidateOnAnimation()
       refreshRenderedMarkers()
       onMapReady(
@@ -406,6 +437,11 @@ class ExpoAmapMapView(
     val requested = initialCamera ?: NativeMapCamera(31.23540, 121.47475, 14.4)
     initialCameraApplied = true
     programmaticCameraMove = true
+    initialCameraMoveCount += 1
+    Log.i(
+      TAG,
+      "perf event=initial_camera_move instance=$nativeMapViewInstanceId count=$initialCameraMoveCount",
+    )
     amap.moveCamera(
       CameraUpdateFactory.newCameraPosition(
         CameraPosition(
@@ -532,7 +568,13 @@ class ExpoAmapMapView(
         updateRenderedNode(existing, specification)
       }
     }
-    if (desired.isNotEmpty() && firstMarkerRenderMs == 0L) firstMarkerRenderMs = elapsedSinceMapCreate()
+    if (desired.isNotEmpty() && firstMarkerRenderMs == 0L) {
+      firstMarkerRenderMs = elapsedSinceMapCreate()
+      Log.i(
+        TAG,
+        "perf event=first_marker_rendered instance=$nativeMapViewInstanceId ms=$firstMarkerRenderMs rendered_markers=${renderedNodes.size}",
+      )
+    }
   }
 
   private fun desiredMarkerNodes(amap: AMap): LinkedHashMap<String, MarkerNode> {
@@ -859,10 +901,17 @@ class ExpoAmapMapView(
     "programmaticCameraIdleCount" to programmaticCameraIdleCount,
     "renderedCityLabelCount" to renderedCityLabels.size,
     "invalidThumbnailCount" to invalidThumbnailCount,
+    "nativeMapViewInstanceId" to nativeMapViewInstanceId,
+    "textureMapViewCreateCount" to textureMapViewCreateCount.get(),
+    "textureMapViewDestroyCount" to textureMapViewDestroyCount.get(),
     "mapViewCreateMs" to mapViewCreateMs,
+    "amapAvailableMs" to amapAvailableMs,
     "mapReadyMs" to mapReadyMs,
     "firstVisibleFrameMs" to firstVisibleFrameMs,
     "firstMarkerRenderMs" to firstMarkerRenderMs,
+    "initialCameraSetCount" to initialCameraSetCount,
+    "initialCameraMoveCount" to initialCameraMoveCount,
+    "requestedCameraMoveCount" to requestedCameraMoveCount,
   )
 
   private fun installFirstFrameObserver(nativeMapView: TextureMapView) {
@@ -870,6 +919,10 @@ class ExpoAmapMapView(
       override fun onDraw() {
         if (mapReadyMs > 0L && firstVisibleFrameMs == 0L) {
           firstVisibleFrameMs = elapsedSinceMapCreate()
+          Log.i(
+            TAG,
+            "perf event=first_visible_frame instance=$nativeMapViewInstanceId ms=$firstVisibleFrameMs rendered_markers=${renderedNodes.size}",
+          )
         }
         if (firstVisibleFrameMs > 0L && nativeMapView.viewTreeObserver.isAlive) {
           nativeMapView.post { nativeMapView.viewTreeObserver.removeOnDrawListener(this) }
@@ -918,6 +971,10 @@ class ExpoAmapMapView(
 
   fun onHostResume() {
     hostResumed = true
+    Log.i(
+      TAG,
+      "perf event=host_resume instance=$nativeMapViewInstanceId creates=${textureMapViewCreateCount.get()} destroys=${textureMapViewDestroyCount.get()}",
+    )
     resumeMapIfNeeded()
   }
 
@@ -929,6 +986,10 @@ class ExpoAmapMapView(
 
   fun onHostPause() {
     hostResumed = false
+    Log.i(
+      TAG,
+      "perf event=host_pause instance=$nativeMapViewInstanceId creates=${textureMapViewCreateCount.get()} destroys=${textureMapViewDestroyCount.get()}",
+    )
     if (lifecycleState != MapLifecycleState.RESUMED) return
     mapView?.onPause()
     lifecycleState = MapLifecycleState.PAUSED
@@ -981,8 +1042,15 @@ class ExpoAmapMapView(
     map?.setOnMapTouchListener(null)
     map?.clear()
     map = null
-    mapView?.onDestroy()
-    mapView?.let { removeView(it) }
+    mapView?.let { nativeMapView ->
+      nativeMapView.onDestroy()
+      val textureDestroyCount = textureMapViewDestroyCount.incrementAndGet()
+      Log.i(
+        TAG,
+        "perf event=texture_map_view_destroyed instance=$nativeMapViewInstanceId total=$textureDestroyCount permanent=$permanent",
+      )
+      removeView(nativeMapView)
+    }
     mapView = null
     unregisterSavedStateProvider()
     lifecycleState = if (permanent) MapLifecycleState.DESTROYED else MapLifecycleState.NOT_CREATED

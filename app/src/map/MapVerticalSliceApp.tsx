@@ -35,6 +35,12 @@ import {
 } from './overseasCityData';
 
 const THUMBNAIL_SPEC = PHOTO_VARIANT_SPECS.find((spec) => spec.kind === 'thumbnail');
+type MapMarkerCount = 0 | 20 | 100;
+
+function initialMarkerCount(): MapMarkerCount {
+  const configured = Number(process.env.EXPO_PUBLIC_AMAP_PERF_MARKER_COUNT);
+  return configured === 0 || configured === 20 || configured === 100 ? configured : 20;
+}
 
 function formatMiB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
@@ -49,7 +55,8 @@ export default function MapVerticalSliceApp() {
   const mapProvider = useMemo(() => createNativeMapProvider(nativeMapRef), []);
   const [privacyConsentGranted, setPrivacyConsentGranted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [markerCount, setMarkerCount] = useState<20 | 100>(20);
+  const [mapTestRun, setMapTestRun] = useState(0);
+  const [markerCount, setMarkerCount] = useState<MapMarkerCount>(initialMarkerCount);
   const [thumbnailSources, setThumbnailSources] = useState<ThumbnailSource[]>([]);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [filterEnabled, setFilterEnabled] = useState(false);
@@ -263,10 +270,12 @@ export default function MapVerticalSliceApp() {
     <View style={styles.root}>
       <StatusBar style="dark" />
       <ExpoAmapMapView
+        key={mapTestRun}
         ref={nativeMapRef}
         style={StyleSheet.absoluteFill}
         privacyConsentGranted={privacyConsentGranted}
         worldMapEnabled
+        initialCamera={TEST_CITIES.北京}
         onMapReady={({ nativeEvent }) => {
           setMapReady(true);
           setStatus(`地图已就绪：SDK ${nativeEvent.sdkVersion} · ${nativeEvent.architecture}`);
@@ -301,6 +310,10 @@ export default function MapVerticalSliceApp() {
           <Text numberOfLines={2} style={styles.status}>{status}</Text>
           <View style={styles.buttonRow}>
             <Pressable
+              style={[styles.chip, markerCount === 0 && styles.chipActive]}
+              onPress={() => setMarkerCount(0)}
+            ><Text style={styles.chipText}>0 点</Text></Pressable>
+            <Pressable
               style={[styles.chip, markerCount === 20 && styles.chipActive]}
               onPress={() => setMarkerCount(20)}
             ><Text style={styles.chipText}>20 点</Text></Pressable>
@@ -308,6 +321,14 @@ export default function MapVerticalSliceApp() {
               style={[styles.chip, markerCount === 100 && styles.chipActive]}
               onPress={() => setMarkerCount(100)}
             ><Text style={styles.chipText}>100 点</Text></Pressable>
+            <Pressable
+              style={styles.chip}
+              onPress={() => {
+                setMapReady(false);
+                setDiagnostics(null);
+                setMapTestRun((run) => run + 1);
+              }}
+            ><Text style={styles.chipText}>重测加载</Text></Pressable>
             <Pressable style={styles.chip} onPress={() => runTask(chooseThumbnailPhotos)}>
               <Text style={styles.chipText}>选择缩略图</Text>
             </Pressable>

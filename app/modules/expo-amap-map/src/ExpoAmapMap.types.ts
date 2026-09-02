@@ -55,10 +55,17 @@ export interface MapDiagnostics {
   programmaticCameraIdleCount: number;
   renderedCityLabelCount: number;
   invalidThumbnailCount: number;
+  nativeMapViewInstanceId: number;
+  textureMapViewCreateCount: number;
+  textureMapViewDestroyCount: number;
   mapViewCreateMs: number;
+  amapAvailableMs: number;
   mapReadyMs: number;
   firstVisibleFrameMs: number;
   firstMarkerRenderMs: number;
+  initialCameraSetCount: number;
+  initialCameraMoveCount: number;
+  requestedCameraMoveCount: number;
 }
 
 export interface FrameMetrics {

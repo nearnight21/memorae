@@ -15,7 +15,7 @@ export const TEST_CITIES = {
 const CITY_ENTRIES = Object.entries(TEST_CITIES);
 
 export function buildMapTestMarkers(
-  count: 20 | 100,
+  count: 0 | 20 | 100,
   thumbnails: readonly ThumbnailSource[],
   selectedId: string | null,
 ): PhotoMapMarker[] {

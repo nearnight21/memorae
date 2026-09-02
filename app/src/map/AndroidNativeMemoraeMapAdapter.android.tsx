@@ -54,6 +54,11 @@ export default function AndroidNativeMemoraeMapAdapter({
   );
   const pendingMarkers = useRef<readonly MemoryMapMarker[] | null>(updatesPaused ? markers : null);
   const lastCamera = useRef<CameraState | null>(initialCamera ?? null);
+  const nativeMapMountStartedAt = useRef(performance.now());
+
+  useEffect(() => {
+    if (__DEV__) console.info('[memorae-map-performance]', JSON.stringify({ event: 'home_native_map_mounted' }));
+  }, []);
 
   useEffect(() => {
     if (updatesPaused) {
@@ -101,7 +106,18 @@ export default function AndroidNativeMemoraeMapAdapter({
         camera={cameraTarget}
         markers={nativeMarkers}
         markerUpdatesPaused={updatesPaused}
-        onMapReady={() => setStatus('原生地图已就绪')}
+        onMapReady={({ nativeEvent }) => {
+          if (__DEV__) {
+            console.info('[memorae-map-performance]', JSON.stringify({
+              event: 'home_amap_ready',
+              homeToReadyMs: Math.round(performance.now() - nativeMapMountStartedAt.current),
+              mapViewCreateMs: nativeEvent.mapViewCreateMs,
+              mapReadyMs: nativeEvent.mapReadyMs,
+              firstVisibleFrameMs: nativeEvent.firstVisibleFrameMs,
+            }));
+          }
+          setStatus('原生地图已就绪');
+        }}
         onMarkerPress={({ nativeEvent }) => onMarkerPress?.(fromNativeMarkerPress(nativeEvent.id))}
         onClusterPress={({ nativeEvent }) => handleClusterPress(nativeEvent)}
         onCameraIdle={({ nativeEvent }) => handleCameraIdle(nativeEvent)}
