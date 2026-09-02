@@ -1,5 +1,6 @@
 package expo.modules.amapmap
 
+import com.amap.api.maps.offlinemap.OfflineMapStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -77,5 +78,21 @@ class NativeMapModelsTest {
     assertFalse(safeThumbnailScheme("data:image/jpeg;base64,YQ=="))
     assertFalse(safeThumbnailScheme("https://example.com/full.jpg"))
     assertFalse(safeThumbnailScheme(null))
+  }
+
+  @Test
+  fun ningboOfflineCityUsesSdkNameOrPinyinWithoutHardcodedCityCode() {
+    assertTrue(isNingboOfflineCity("宁波市", null))
+    assertTrue(isNingboOfflineCity("Ningbo", "ningbo"))
+    assertFalse(isNingboOfflineCity("杭州市", "hangzhou"))
+  }
+
+  @Test
+  fun offlineDownloadStatusKeepsSuccessAndFailureDistinct() {
+    assertEquals("downloading", offlineStateForStatus(OfflineMapStatus.LOADING))
+    assertEquals("downloading", offlineStateForStatus(OfflineMapStatus.UNZIP))
+    assertEquals("downloaded", offlineStateForStatus(OfflineMapStatus.SUCCESS))
+    assertEquals("failed", offlineStateForStatus(OfflineMapStatus.EXCEPTION_NETWORK_LOADING))
+    assertEquals("failed", offlineStateForStatus(OfflineMapStatus.START_DOWNLOAD_FAILD))
   }
 }

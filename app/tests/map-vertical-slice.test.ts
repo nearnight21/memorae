@@ -74,6 +74,41 @@ test('地图测试入口只创建 thumbnail，不读取同步照片或生成更�
   assert.match(source, /function openClusterContext/);
 });
 
+test('宁波离线地图只存在于 Debug 垂直切片并使用高德官方管理器', async () => {
+  const appSource = await readFile(
+    new URL('../src/map/MapVerticalSliceApp.tsx', import.meta.url),
+    'utf8',
+  );
+  const controllerSource = await readFile(
+    new URL(
+      '../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/NingboOfflineMapController.kt',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const nativeViewSource = await readFile(
+    new URL(
+      '../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const indexSource = await readFile(new URL('../index.ts', import.meta.url), 'utf8');
+
+  assert.match(indexSource, /__DEV__ && process\.env\.EXPO_PUBLIC_AMAP_VERTICAL_SLICE === '1'/);
+  assert.match(appSource, /Download Ningbo Offline Map/);
+  assert.match(appSource, /Delete Ningbo Offline Map/);
+  assert.match(controllerSource, /OfflineMapManager/);
+  assert.match(controllerSource, /downloadByCityName\(city\.city\)/);
+  assert.match(controllerSource, /offlineMapCityList/);
+  assert.match(controllerSource, /downloadOfflineMapCityList/);
+  assert.match(controllerSource, /remove\(downloaded\.city\)/);
+  assert.doesNotMatch(controllerSource, /WorkManager|MemoryV2|cityCode\s*=\s*["']/);
+  assert.match(nativeViewSource, /ApplicationInfo\.FLAG_DEBUGGABLE/);
+  assert.match(nativeViewSource, /amap\.mapType = AMap\.MAP_TYPE_SATELLITE/);
+  assert.doesNotMatch(nativeViewSource, /MAP_TYPE_NORMAL/);
+});
+
 test('WebView 地图切片只通过消息发送地图数据，并接收低频事件', async () => {
   const source = await readFile(
     new URL('../src/map/AmapJsWebViewMap.tsx', import.meta.url),
