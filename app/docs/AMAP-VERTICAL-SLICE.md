@@ -61,28 +61,31 @@ $env:MEMORY_RECALL_ANDROID_KEY_PASSWORD = '<仅在本机设置>'
 
 没有设置 `EXPO_PUBLIC_AMAP_VERTICAL_SLICE=1` 时仍进入现有加密/同步验证 App，不改变既有正式能力。
 
-## 宁波离线地图开发验证
+## 宁波离线地图实验结论（2026-09-02）
 
-此能力只在 Android 可调试构建的 Native Map 垂直切片中启用，不进入正式 Home，也不改变
-`MemoraeMap` 接口、卫星地图类型、Camera、Marker、Cluster 或 WebView fallback。它直接使用高德
-`OfflineMapManager`，不会自行下载瓦片，也没有后台任务、自动城市识别或 Memory 流程接线。
+本实验曾在 development-only Native Map 垂直切片中直接接入高德官方 `OfflineMapManager`，没有
+自行下载瓦片，也没有修改 `MemoraeMap` 公共接口或正式产品流程。SDK 离线城市列表返回宁波官方条目
+`宁波市`、cityCode `0574`、包大小约 `32.3 MiB`。真机下载收到完整进度回调，并在
+`getDownloadOfflineMapCityList()` 中确认宁波已下载；重启 App 后仍能从该列表识别下载状态。
 
-1. 按上面的方式设置 `EXPO_PUBLIC_AMAP_VERTICAL_SLICE=1`，启动 Metro，并安装 Android Debug
-   Development Build。此入口同时受 `__DEV__` 与 Android `FLAG_DEBUGGABLE` 约束，standalone/release
-   包不会启用宁波离线测试。
-2. 打开“所忆 · 地图架构验证”，点击“同意并初始化地图”，等待地图就绪。
-3. 开发面板会从 `getOfflineMapCityList()` 查找宁波官方城市条目；点击
-   `Download Ningbo Offline Map` 后显示状态、0–100% 进度、SDK 返回的城市名、cityCode 和包大小。
-4. 只有 `OfflineMapDownloadListener` 返回成功，并且 `getDownloadOfflineMapCityList()` 确认宁波存在，
-   状态才会显示“已完成”。重复点击已下载城市不会重新下载。
-5. 高德 SDK 能可靠返回 map base storage 时，数据根目录会显示在同一面板的“存储”一行；
-   当前 SDK 10.1.200 使用该目录下的 `data_v6`，宁波相关下载和解包数据由 SDK 在其中的
-   `VMAP2`/`map` 子目录管理。若 SDK 未返回路径，面板不猜测目录；应用也不直接读写这些文件。
-6. 需要重新做下载前/下载后对比时，点击 `Delete Ningbo Offline Map`。删除通过
-   `OfflineMapManager.remove(SDK 返回的城市名)` 执行，并在已下载城市列表不再包含宁波后确认完成。
+在保持正式 Native Map 的 `AMap.MAP_TYPE_SATELLITE`、视觉配置和交互不变时，下载前后快速平移、
+zoom in、zoom out 到新区域仍需要等待卫星图像加载，体感没有改善。结论是：**高德城市离线包不改善
+`MAP_TYPE_SATELLITE` 新区域加载**。当前约一秒的补图延迟作为高德卫星底图的已知限制接受，不以自动
+下载城市离线包解决，也不因此切换地图类型或更换地图方案。
 
-下载完成后测试入口不会自动平移、缩放或运行性能 A/B。保留当前正式卫星地图视觉模式，由测试者
-手动进行快速平移、zoom in 和 zoom out 对比。
+实验用下载/删除入口及 Native 控制代码已在得出结论后移除；不要接入创建 Memory、后台下载、城市
+识别或正式离线地图管理。后续若再次讨论用高德离线包优化卫星底图，应直接引用本记录，避免重复实验。
+
+## Satellite / Normal 加载 A/B 结论（2026-09-03）
+
+在同一台真机、同一网络、同一 Debug 构建和同一 Camera 条件下，仅切换高德原生地图类型，对
+`MAP_TYPE_SATELLITE` 与 `MAP_TYPE_NORMAL` 执行快速平移、zoom in、zoom out 和拖动加缩放组合操作。
+Camera、Marker、Cluster、`TextureMapView`、RN/Kotlin bridge、生命周期、手势和其他显示配置均未改变，
+测试区域不使用宁波离线包。
+
+结果：`MAP_TYPE_NORMAL` 的矢量底图加载明显快于 `MAP_TYPE_SATELLITE`，快速 Camera 变化时更跟手，
+通过本轮速度优先的最小 A/B。结论采用 A：**Normal 明显改善快速平移 / zoom 的地图加载，值得进入
+下一步视觉样式适配。** 本轮不修改正式默认地图、不增加自定义样式，也不保留临时地图类型切换入口。
 
 ### RN WebView + AMap JS API 2.0
 

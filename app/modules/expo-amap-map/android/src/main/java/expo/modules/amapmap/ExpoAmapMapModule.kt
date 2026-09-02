@@ -36,8 +36,7 @@ class ExpoAmapMapModule : Module() {
         "onMarkerPress",
         "onClusterPress",
         "onCameraIdle",
-        "onNativeError",
-        "onOfflineMapStatus"
+        "onNativeError"
       )
 
       OnViewDidUpdateProps { view ->
@@ -120,18 +119,6 @@ class ExpoAmapMapModule : Module() {
 
       AsyncFunction("getDiagnostics") { view: ExpoAmapMapView ->
         view.getDiagnostics()
-      }
-
-      AsyncFunction("getNingboOfflineMapStatus") { view: ExpoAmapMapView ->
-        view.getNingboOfflineMapStatus()
-      }
-
-      AsyncFunction("downloadNingboOfflineMap") { view: ExpoAmapMapView ->
-        view.downloadNingboOfflineMap()
-      }
-
-      AsyncFunction("deleteNingboOfflineMap") { view: ExpoAmapMapView ->
-        view.deleteNingboOfflineMap()
       }
     }
   }

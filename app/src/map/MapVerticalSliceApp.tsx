@@ -18,7 +18,6 @@ import type {
   ExpoAmapMapViewRef,
   MapDiagnostics,
   NativeErrorPayload,
-  OfflineMapStatusPayload,
 } from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
 import {
   createJpegPhotoVariant,
@@ -63,7 +62,6 @@ export default function MapVerticalSliceApp() {
   const [filterEnabled, setFilterEnabled] = useState(false);
   const [timelineProgress, setTimelineProgress] = useState(0.72);
   const [status, setStatus] = useState('等待隐私确认后初始化高德地图。');
-  const [offlineMapStatus, setOfflineMapStatus] = useState<OfflineMapStatusPayload | null>(null);
   const [lastCamera, setLastCamera] = useState<CameraIdlePayload | null>(null);
   const [diagnostics, setDiagnostics] = useState<MapDiagnostics | null>(null);
   const [cameraEventCount, setCameraEventCount] = useState(0);
@@ -116,18 +114,6 @@ export default function MapVerticalSliceApp() {
         }
       });
   }, [cityLabelContext, lastCamera, mapProvider, mapReady]);
-
-  useEffect(() => {
-    if (!mapReady) {
-      setOfflineMapStatus(null);
-      return;
-    }
-    void nativeMapRef.current?.getNingboOfflineMapStatus()
-      .then(setOfflineMapStatus)
-      .catch((error: unknown) => {
-        setStatus(error instanceof Error ? error.message : '读取宁波离线地图状态失败。');
-      });
-  }, [mapReady, mapTestRun]);
 
   const timelinePanResponder = useMemo(
     () => PanResponder.create({
@@ -275,22 +261,6 @@ export default function MapVerticalSliceApp() {
     );
   }
 
-  async function downloadNingboOfflineMap(): Promise<void> {
-    const view = nativeMapRef.current;
-    if (!view) throw new Error('高德 Native Map 尚未就绪。');
-    const nextStatus = await view.downloadNingboOfflineMap();
-    setOfflineMapStatus(nextStatus);
-    setStatus(nextStatus.message ?? '已请求下载宁波离线地图。');
-  }
-
-  async function deleteNingboOfflineMap(): Promise<void> {
-    const view = nativeMapRef.current;
-    if (!view) throw new Error('高德 Native Map 尚未就绪。');
-    const nextStatus = await view.deleteNingboOfflineMap();
-    setOfflineMapStatus(nextStatus);
-    setStatus(nextStatus.message ?? '已请求删除宁波离线地图。');
-  }
-
   function onNativeError(error: NativeErrorPayload): void {
     setMapReady(false);
     setStatus(`${error.code}: ${error.message}`);
@@ -321,10 +291,6 @@ export default function MapVerticalSliceApp() {
         }}
         onCameraIdle={({ nativeEvent }) => onCameraIdle(nativeEvent)}
         onNativeError={({ nativeEvent }) => onNativeError(nativeEvent)}
-        onOfflineMapStatus={({ nativeEvent }) => {
-          setOfflineMapStatus(nativeEvent);
-          if (nativeEvent.message) setStatus(nativeEvent.message);
-        }}
       />
 
       <View pointerEvents="box-none" style={styles.overlay}>
@@ -342,54 +308,6 @@ export default function MapVerticalSliceApp() {
             </Pressable>
           </View>
           <Text numberOfLines={2} style={styles.status}>{status}</Text>
-          <View style={styles.offlineSection}>
-            <Text style={styles.offlineTitle}>宁波离线地图</Text>
-            <Text style={styles.offlineStatus}>
-              状态：{offlineMapStatus ? {
-                'not-downloaded': '未下载',
-                downloading: '下载中',
-                downloaded: '已完成',
-                failed: '失败',
-              }[offlineMapStatus.state] : '未下载'}
-              {' · '}进度：{offlineMapStatus?.progress ?? 0}%
-              {offlineMapStatus?.sizeBytes ? ` · ${formatMiB(offlineMapStatus.sizeBytes)}` : ''}
-            </Text>
-            <Text numberOfLines={1} style={styles.offlineMeta}>
-              城市：{offlineMapStatus?.city ?? '等待 SDK 城市列表'}
-              {' · '}cityCode：{offlineMapStatus?.cityCode ?? '等待 SDK 返回'}
-              {offlineMapStatus?.errorCode ? ` · error：${offlineMapStatus.errorCode}` : ''}
-            </Text>
-            {offlineMapStatus?.storagePath && (
-              <Text numberOfLines={1} selectable style={styles.offlineMeta}>
-                存储：{offlineMapStatus.storagePath}
-              </Text>
-            )}
-            <View style={styles.offlineActions}>
-              <Pressable
-                disabled={!mapReady || offlineMapStatus?.state === 'downloading' || offlineMapStatus?.state === 'downloaded'}
-                style={({ pressed }) => [
-                  styles.offlineButton,
-                  (!mapReady || offlineMapStatus?.state === 'downloading' || offlineMapStatus?.state === 'downloaded')
-                    && styles.offlineButtonDisabled,
-                  pressed && styles.offlineButtonPressed,
-                ]}
-                onPress={() => runTask(downloadNingboOfflineMap)}
-              >
-                <Text style={styles.offlineButtonText}>Download Ningbo Offline Map</Text>
-              </Pressable>
-              <Pressable
-                disabled={!mapReady || offlineMapStatus?.state !== 'downloaded'}
-                style={({ pressed }) => [
-                  styles.offlineButton,
-                  (!mapReady || offlineMapStatus?.state !== 'downloaded') && styles.offlineButtonDisabled,
-                  pressed && styles.offlineButtonPressed,
-                ]}
-                onPress={() => runTask(deleteNingboOfflineMap)}
-              >
-                <Text style={styles.offlineButtonText}>Delete Ningbo Offline Map</Text>
-              </Pressable>
-            </View>
-          </View>
           <View style={styles.buttonRow}>
             <Pressable
               style={[styles.chip, markerCount === 0 && styles.chipActive]}
@@ -518,18 +436,6 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 9, letterSpacing: 1.1, fontWeight: '700', color: '#726553' },
   title: { marginTop: 2, fontSize: 19, fontWeight: '800', color: '#27231e' },
   status: { color: '#5a5145', fontSize: 12, lineHeight: 17 },
-  offlineSection: { gap: 4, paddingVertical: 2 },
-  offlineTitle: { color: '#27231e', fontSize: 12, fontWeight: '800' },
-  offlineStatus: { color: '#4f473d', fontSize: 11, fontWeight: '700' },
-  offlineMeta: { color: '#756b5d', fontSize: 9 },
-  offlineActions: { flexDirection: 'row', gap: 6 },
-  offlineButton: {
-    flex: 1, minHeight: 34, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 8, paddingVertical: 6, borderRadius: 7, backgroundColor: '#d8dfd0',
-  },
-  offlineButtonDisabled: { opacity: 0.42 },
-  offlineButtonPressed: { opacity: 0.72 },
-  offlineButtonText: { color: '#342f28', fontSize: 9, fontWeight: '800', textAlign: 'center' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, backgroundColor: '#e8e2d6' },
   chipActive: { backgroundColor: '#b9c9ad' },

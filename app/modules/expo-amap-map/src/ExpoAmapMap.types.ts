@@ -105,22 +105,6 @@ export interface NativeErrorPayload {
   message: string;
 }
 
-export type OfflineMapState = 'not-downloaded' | 'downloading' | 'downloaded' | 'failed';
-
-export interface OfflineMapStatusPayload {
-  state: OfflineMapState;
-  progress: number;
-  confirmed: boolean;
-  city?: string;
-  cityCode?: string;
-  adCode?: string;
-  sizeBytes?: number;
-  storagePath?: string;
-  statusCode?: number;
-  errorCode?: string;
-  message?: string;
-}
-
 export interface ExpoAmapMapViewRef {
   moveCamera(camera: MapCamera): Promise<void>;
   animateCamera(camera: MapCamera): Promise<void>;
@@ -131,9 +115,6 @@ export interface ExpoAmapMapViewRef {
   latLngToScreen(coordinate: LatLng): Promise<ScreenPoint>;
   screenToLatLng(point: ScreenPoint): Promise<LatLng>;
   getDiagnostics(): Promise<MapDiagnostics>;
-  getNingboOfflineMapStatus(): Promise<OfflineMapStatusPayload>;
-  downloadNingboOfflineMap(): Promise<OfflineMapStatusPayload>;
-  deleteNingboOfflineMap(): Promise<OfflineMapStatusPayload>;
 }
 
 type NativeEvent<T> = { nativeEvent: T };
@@ -152,6 +133,5 @@ export interface ExpoAmapMapViewProps {
   onClusterPress?: (event: NativeEvent<ClusterPressPayload>) => void;
   onCameraIdle?: (event: NativeEvent<CameraIdlePayload>) => void;
   onNativeError?: (event: NativeEvent<NativeErrorPayload>) => void;
-  onOfflineMapStatus?: (event: NativeEvent<OfflineMapStatusPayload>) => void;
   style?: StyleProp<ViewStyle>;
 }

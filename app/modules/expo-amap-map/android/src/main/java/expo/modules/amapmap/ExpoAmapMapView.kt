@@ -1,7 +1,6 @@
 package expo.modules.amapmap
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -168,11 +167,9 @@ class ExpoAmapMapView(
   private val onClusterPress by EventDispatcher<Map<String, Any>>()
   private val onCameraIdle by EventDispatcher<Map<String, Any>>()
   private val onNativeError by EventDispatcher<Map<String, Any>>()
-  private val onOfflineMapStatus by EventDispatcher<Map<String, Any>>()
 
   private var mapView: TextureMapView? = null
   private var map: AMap? = null
-  private var ningboOfflineMapController: NingboOfflineMapController? = null
   private val nativeMapViewInstanceId = nextNativeMapViewInstanceId.incrementAndGet()
   private var lifecycleState = MapLifecycleState.NOT_CREATED
   private var permanentlyDisposed = false
@@ -545,15 +542,6 @@ class ExpoAmapMapView(
   }
 
   fun getDiagnostics(): Map<String, Any> = diagnosticsPayload()
-
-  fun getNingboOfflineMapStatus(): Map<String, Any> =
-    requireNingboOfflineMapController().getStatus()
-
-  fun downloadNingboOfflineMap(): Map<String, Any> =
-    requireNingboOfflineMapController().download()
-
-  fun deleteNingboOfflineMap(): Map<String, Any> =
-    requireNingboOfflineMapController().delete()
 
   private fun refreshRenderedMarkers() {
     val amap = map ?: return
@@ -1032,8 +1020,6 @@ class ExpoAmapMapView(
 
   private fun destroyMap(permanent: Boolean) {
     if (permanent) permanentlyDisposed = true
-    ningboOfflineMapController?.destroy()
-    ningboOfflineMapController = null
     if (lifecycleState == MapLifecycleState.RESUMED) mapView?.onPause()
     frameSampler.stop()
     cameraIsMoving = false
@@ -1087,16 +1073,6 @@ class ExpoAmapMapView(
   )
 
   private fun requireMap(): AMap = map ?: error("高德地图尚未初始化。")
-
-  private fun requireNingboOfflineMapController(): NingboOfflineMapController {
-    val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    check(debuggable) { "宁波离线地图测试仅允许在 Android Debug 构建中使用。" }
-    check(privacyConsentGranted && map != null) { "请先同意隐私条款并等待高德 Native Map 就绪。" }
-    return ningboOfflineMapController ?: NingboOfflineMapController(
-      context = context.applicationContext,
-      emitToJs = onOfflineMapStatus::invoke,
-    ).also { ningboOfflineMapController = it }
-  }
 
   private fun emitError(code: String, message: String) {
     onNativeError(mapOf("code" to code, "message" to message.take(160)))
