@@ -1,16 +1,16 @@
 # Memorae Mobile Phase 3 交接
 
-> 更新日期：2026-09-01
+> 更新日期：2026-09-02
 >
 > 当前分支：`codex/phase-2-native-amap-renderer`
 >
-> 当前提交：`81718cf4e935bd9aee2494d7c27b908c28a04962`
+> 当前提交：`a17ef861539997e315b8d7f8906f22f168bbfe4b`
 
 ## 当前结论
 
-Phase 3 已完成 Android Native AMap 默认 Renderer 的代码切换，并保留 WebView fallback。
-当前结论为 **B**：核心正式产品链路已验证，但尚未关闭全部发布前真机证据项，不应据此宣称
-Native 已无条件正式发布。
+Phase 3 已完成 Android Native AMap 默认 Renderer 的主路径切换，并保留 WebView fallback。
+当前结论为 **A**：99/99 测试、正式 App 真机验收、Activity recreation、锁定/解锁、
+Native/WebView parity 和性能验收均已通过，Phase 3 验收条件全部关闭。
 
 ## 已完成
 
@@ -23,6 +23,10 @@ Native 已无条件正式发布。
   多 Marker Detail、Detail 返回 Camera 保持。
 - 正式 Create 和 LocationPicker 真机验证通过。
 - 用户已确认新建记忆的查看、编辑和删除闭环通过；新建数据已加密保存并同步。
+- 年份筛选、地区筛选后的 Marker 集合、前后台恢复和 Activity recreation 真机验证通过。
+- 锁定/解锁、敏感 Marker/thumbnail 清理与恢复验证通过，无旧 thumbnail 闪现。
+- Native/WebView 同一真实数据集 parity 验证通过。
+- 正式 Home 连续拖动/缩放与长时间 heap/native/graphics 性能验收通过。
 - 验收详情见 `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`。
 
 ## 自动验证
@@ -40,27 +44,26 @@ git diff --check
 scan PASS；`git diff --check` PASS。Android Native compile、unit test、assembleDebug、fresh
 Expo prebuild 和 Debug APK 安装已在本阶段完成并记录。
 
-## 尚未关闭的验收项
+## Phase 3 验收结果
 
-1. 重新连接 Redmi `25060RK16C`，完成年份筛选、地区筛选后的 Marker 集合、前后台和 Activity
-   recreation 的真机证据。
-2. 正式 Home 当前没有可操作锁定入口；补齐产品入口后再验收锁定时敏感 Marker/thumbnail
-   清除、解锁恢复和无旧 thumbnail 闪现。
-3. 在本地忽略配置中补齐 WebView fallback 所需变量后，用同一真实数据集完成 Native/WebView
-   parity。不要把任何真实 Key 写入源码、Git、Metro 日志或交接文档。
-4. 发布前轮换 Android 高德 Key；继续只从本地忽略文件、部署密钥管理或 CI Secret 注入。
-5. 补充正式 Home 连续拖动/缩放和长时间 heap/native/graphics 趋势；现有 110.8/115.5 fps
-   数据仅是短时 Demo 基线。
+以下 Phase 3 验收项均为 **PASS**：
+
+1. 年份筛选、地区筛选后的 Marker 集合、前后台恢复和 Activity recreation。
+2. 锁定/解锁、敏感 Marker/thumbnail 清理与恢复、无旧 thumbnail 闪现。
+3. Native/WebView 同一真实数据集 parity。
+4. 正式 Home 连续拖动/缩放和长时间 heap/native/graphics 性能趋势。
+
+Android 高德 Key 仍只允许从本地忽略文件、部署密钥管理或 CI Secret 注入；这是发布运维规则，
+不构成 Phase 3 验收阻断。
 
 ## Git 健康
 
-`git fsck --full` 仍报告缺失 commit `ad065ea8b5c0c18797ce76c5c305f71673fdefaf`，它是
-`4216d27` 的父提交。`git fetch origin` 因 GitHub TLS/SSL 失败未恢复对象。不要执行 reset、
-rebase、gc、prune、历史重写或 force push；本阶段只提交当前分支的新 commit。
+当前分支提交为 `a17ef861539997e315b8d7f8906f22f168bbfe4b`，与
+`origin/codex/phase-2-native-amap-renderer` 一致。本次只提交文档更新，不执行 reset、
+rebase、gc、prune、历史重写或 force push。
 
 ## 接手步骤
 
-1. 确认设备重新出现在 `adb devices`，不要清除应用数据。
-2. 从正式 App 入口继续真机验收，并把结果追加到 Phase 3 acceptance 文档。
-3. 只在门禁和真机证据完整后，再评估是否把结论从 B 改为 A。
+1. 保持 Native AMap 为 Android 正式主路径，WebView 仅用于受控回滚。
+2. 发布与后续维护继续使用现有密钥、边界和性能门禁，不改变跨端协议。
 

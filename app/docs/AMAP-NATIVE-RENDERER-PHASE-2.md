@@ -1,10 +1,10 @@
-# Android Native AMap Renderer · Phase 2
+# Android Native AMap Renderer · Phase 3 状态与架构基线
 
-> 基线：`ad065ea`
+> 基线：`a17ef86`
 >
 > 分支：`codex/phase-2-native-amap-renderer`
 >
-> 状态：实现与本地构建已完成；正式切换仍被真机在线地图验收和产品隐私同意状态阻断。
+> 状态：Phase 3 / A 已完成；Android 默认使用 Native AMap，WebView 仅作为显式回滚 fallback。
 
 ## 架构边界
 
@@ -12,8 +12,8 @@
 Home / LocationPicker / memoryMapAdapter
                   ↓
              MemoraeMap
-             ├─ WebViewMemoraeMapAdapter（默认、回滚）
-             └─ AndroidNativeMemoraeMapAdapter
+             ├─ AndroidNativeMemoraeMapAdapter（Android 默认主路径）
+             └─ WebViewMemoraeMapAdapter（显式回滚 fallback）
                           ↓
                    Local Expo Module
                           ↓
@@ -50,10 +50,9 @@ updatePrivacyShow
 → TextureMapView.onCreate
 ```
 
-正式 App 当前没有可供 `MemoraeMap` 消费的运行时隐私同意状态，因此 Native renderer
-仍为显式开发开关且默认关闭。Native Key 继续只由
-`MEMORY_RECALL_AMAP_ANDROID_KEY` 在 prebuild 时通过 Config Plugin 写入 Manifest；源码、
-测试、日志和本文都不包含真实值。
+正式 App 已提供可供 `MemoraeMap` 消费的运行时隐私同意状态，Native renderer 已作为 Android
+默认主路径通过真机验收。Native Key 继续只由 `MEMORY_RECALL_AMAP_ANDROID_KEY` 在 prebuild
+时通过 Config Plugin 写入 Manifest；源码、测试、日志和本文都不包含真实值。
 
 ## Marker、缩略图与聚类
 
@@ -80,28 +79,29 @@ timeout 或 `ignoreNextEvent`。内部诊断分别累计 user gesture 与 progra
 公开契约没有 map ready、load error 或 map press，因此这些只保留在 Native Module 的内部诊断
 入口，没有扩张业务接口。
 
-## Renderer 开关
+## Renderer 主路径与回滚
 
 ```dotenv
 EXPO_PUBLIC_MEMORAE_MAP_RENDERER=native-amap
 EXPO_PUBLIC_MEMORAE_NATIVE_AMAP_PRIVACY_CONSENT=1
 ```
 
-只有 Android 且第一个值显式为 `native-amap` 才选择 Native；其他平台、缺值或其他值都回退
-WebView。第二个值目前只用于已完成隐私确认的受控开发构建，不能代替未来产品运行时隐私状态。
+Android 在配置缺失、空值、`native` 或 `native-amap` 时选择 Native；只有显式配置 `webview`
+时才回滚 WebView。非 Android 始终选择 WebView。运行时隐私同意状态是正式路径的准入条件，
+不以构建期开关替代。
 
 ## 行为对照
 
 | 当前产品行为 | WebView | Native 实现 | 本次 Native 真机 |
 | --- | --- | --- | --- |
-| Marker press | 已用 | 已映射 `markerId` | Key 阻断 |
-| Cluster | 已用 | Kotlin grid cluster | Key 阻断 |
-| Camera idle / bounds | 已用 | 已映射并双层 epsilon | Key 阻断 |
-| LocationPicker Camera | 已用 | 复用同一中立接口 | Key 阻断 |
-| pause marker updates | 已用 | latest-pending gate | Key 阻断 |
-| thumbnail fallback | 已用 | cache-only file + 占位图 | Key 阻断 |
-| 前后台 | 已用 | Activity 权威状态机 | Key 阻断 |
-| Saved state | WebView/RN Camera | Native Bundle 优先 | Key 阻断 |
+| Marker press | 已用 | 已映射 `markerId` | PASS |
+| Cluster | 已用 | Kotlin grid cluster | PASS |
+| Camera idle / bounds | 已用 | 已映射并双层 epsilon | PASS |
+| LocationPicker Camera | 已用 | 复用同一中立接口 | PASS |
+| pause marker updates | 已用 | latest-pending gate | PASS |
+| thumbnail fallback | 已用 | cache-only file + 占位图 | PASS |
+| 前后台 | 已用 | Activity 权威状态机 | PASS |
+| Saved state | WebView/RN Camera | Native Bundle 优先 | PASS |
 
 ## 验证记录
 
@@ -116,21 +116,18 @@ WebView。第二个值目前只用于已完成隐私确认的受控开发构建�
   `AMAP_KEY_NOT_CONFIGURED` 占位符。测试入口正确返回中立错误 `AMAP_KEY_MISSING`，没有
   初始化 SDK 或尝试绕过凭据边界。
 
-由于正式包 `com.memorae.cn` 的 Native Key 在本机不可用，本次不能诚实完成瓦片、手势、
-Marker/Cluster、详情返回、Activity recreation、锁定清理和真实性能矩阵。Prototype 的 Key
-绑定 `com.memorae.prototype`，不得用于本包；也没有修改 package、签名或硬编码 Key。
+正式包 `com.memorae.cn` 的 Native Key 通过受控环境注入并完成在线底图、手势、Marker/Cluster、
+详情返回、Activity recreation、锁定清理和真实性能矩阵。Prototype 的 Key 绑定
+`com.memorae.prototype`，不得用于本包；也没有修改 package、签名或硬编码 Key。
 
 实现已埋点 `mapViewCreateMs`、`mapReadyMs`、首个 loaded 后 View frame、
 `firstMarkerRenderMs`、Camera 段 UI FPS 与 slow frame。缺少在线地图的本次运行数据不填零、
 不引用旧 Module 数据冒充。
 
-## Phase 2 判断
+## Phase 3 判断
 
-**B. Native Renderer 尚未达到正式切换条件。**
+**A. Native Renderer 已达到正式切换条件，Android Native AMap 为默认主路径。**
 
-阻断项：
-
-1. 需要从受控本地/EAS 环境注入与 `com.memorae.cn`、当前签名匹配的 Native Key，完成本页
-   真机矩阵和性能采样。
-2. 正式产品需要提供真实、可撤销的运行时隐私同意状态；开发环境变量不能成为永久方案。
-3. 在上述验收完成前，WebView 必须保持默认 renderer 和低成本回滚路径。
+99/99 测试、真机正式产品链路、筛选、Activity recreation、锁定/解锁、Native/WebView parity
+以及连续操作和长时间性能均已通过。WebView 继续保留为显式 rollback fallback，非 Android
+继续使用 WebView。

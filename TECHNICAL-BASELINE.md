@@ -2,13 +2,24 @@
 
 > 加密、照片传输与同步规则已按 [`docs/SYNC-CRYPTO-FREEZE.md`](docs/SYNC-CRYPTO-FREEZE.md) 冻结；除非明确升级协议版本，否则不得修改。
 
-> 基线日期：2026-08-21
+> 基线日期：2026-09-02（含 Phase 3 / A 更新）
 >
 > 基线分支：`codex/cos-direct-transfer`
 >
 > 用途：架构决策、开发交接、风险排查和后续重大改动的事实底稿。
 >
 > 范围：`projects/memorae/web`、`projects/memorae/app`、`projects/memorae/server` 及当前生产部署。仓库根目录的旧 ThinkPad / Camp Memories 产品不属于 Memory Recall 正式链路。
+
+## Phase 3 / A 更新
+
+本文件较早的 Android Native AMap 原型和未验收状态描述，均由本节及
+[`DEVELOPMENT.md`](DEVELOPMENT.md)、[`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`](app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md)
+中的最新事实覆盖。当前 Android 正式 App 默认使用 Native AMap Renderer；WebView 仅保留为
+显式回滚 fallback，不再是主路径。
+
+Phase 3 / A 验收已完成：99/99 App tests、Expo Doctor 21/21、Android Native 编译/单测/
+Debug APK、正式 App 真机 Home/Create/Edit/Delete/LocationPicker、筛选、Activity recreation、
+前后台恢复、锁定/解锁与敏感资源清理、Native/WebView parity，以及连续操作和长时间性能均通过。
 
 ## 阅读规则
 
@@ -31,8 +42,8 @@
 | 范围 | 状态 | 当前真实状态 | 主要证据 |
 | --- | --- | --- | --- |
 | 生产 Web | `已实现` | `https://memorae.cn/` 已提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认正式页面可打开、解锁后由 Leaflet 渲染，`/health` 返回 `200 {"ok":true}`。 | `projects/memorae/web/src/main.tsx:4-25`；`projects/memorae/web/src/product/ProductGate.tsx:90-213`；`archive/deployment-pilot-2026-08-22:DEVELOPMENT.md:63-68` |
-| Mobile App | `部分实现` | Expo/RN 加密、SQLite、照片分级、设备解锁和手动同步链路可运行；正式首页、导航、详情、新建/编辑/选点尚未整合成产品 App。 | `projects/memorae/app/App.tsx:18-58,90-180`；`projects/memorae/app/app.json:2-49`；`DEVELOPMENT.md:67-102` |
-| Mobile 地图 | `Prototype` | 高德 Native SDK 垂直切片和 A/B/C/D 裸图测试包存在；它与正式私密数据和产品 UI 尚未整合。 | `projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:1-17`；`projects/memorae/app/src/map/MapVerticalSliceApp.tsx:47-98`；`DEVELOPMENT.md:44-57` |
+| Mobile App | `部分实现` | Expo/RN 加密、SQLite、照片分级、设备解锁和手动同步链路可运行；正式 Home、Detail、Create/Edit/Delete、LocationPicker 与 Native AMap 已完成真实数据和真机验收，完整产品导航仍按独立路线维护。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
+| Mobile 地图 | `已实现` | Android 正式 App 默认使用 Native AMap Renderer，已接入真实解密 Memory、thumbnail、Native clustering、筛选、生命周期、锁定/解锁和性能验收；WebView 仅为显式回滚 fallback。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | API | `已实现` | Fastify 提供账号会话、钥匙信封、记忆密文、照片授权/直传、地点搜索/反查/转换；生产 API 与 Web 同源。 | `projects/memorae/server/src/app.ts:189-311,313-408`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
 | PostgreSQL | `已实现` | 保存账号、会话、钥匙信封、记忆密文和照片对象元数据；不保存明文 MemoryV2。 | `projects/memorae/server/migrations/001_initial.sql:1-54`；`projects/memorae/server/src/postgres.ts:243-309` |
 | 腾讯云 COS | `已实现` | 私有桶保存三档客户端密文照片；客户端经五分钟签名 URL 直传直下，API 不中转照片字节。 | `projects/memorae/server/src/postgres.ts:503-527,569-656`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:86-109` |
@@ -40,8 +51,8 @@
 | 备份与监控 | `部分实现` | 首份受保护 PostgreSQL 备份已验收；定时备份安装、加密异地备份、外部告警和隔离恢复演练尚未完整关闭。 | `archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:192-247` |
 | 坐标正确性 | `部分实现` | 2026-08-21 已从用户解锁后的生产 Web 运行时只读审计全部 17 条记忆：16 条中国地点均为 `provider=amap` 且有高德 `adcode`，按 GCJ-02 使用；1 条日本地点为 `provider=bigdatacloud` 且无 `adcode`，按 WGS-84 使用。当前数据没有发现坐标体系混杂。结构风险仍存在：MemoryV2 没有 `coordinateSystem` 或写入来源字段。 | 运行时审计；`projects/memorae/app/docs/COORDINATE-CONTRACT.md:12-40`；`projects/memorae/web/src/memory/memoryV2.ts:8-33,97-116` |
 | 同步 | `部分实现` | Web 已后台自动同步；Mobile 是手动验证壳。协议使用全量密文列表与逐条 revision，不是 cursor 增量同步；删除使用 tombstone。 | `projects/memorae/web/README.md:21-27`；`projects/memorae/web/src/sync/syncActions.ts:59-172`；`projects/memorae/app/src/sync/syncActions.ts:45-136` |
-| 地图路线决策 | `待验证` | Web 继续使用 Leaflet；App 高德 Native 路线存在拖动卡顿和海外底图不足。MapLibre 仅是候选，尚未采用。是否保留高德为国内渲染、海外改用其他渲染器仍是开放决策。 | `projects/memorae/web/src/components/MapView.tsx:445-476`；`DEVELOPMENT.md:44-57`；`projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:118-122` |
-| 当前首要阻塞 | `部分实现` | P0 是坐标来源可追溯性、生产恢复/备份闭环和同步删除残留；App 产品化及地图渲染路线是后续主要工程项。 | 本报告“风险”和“下一阶段建议”章节 |
+| 地图路线决策 | `已实现` | Web 继续使用 Leaflet；Android 正式 App 以 Native AMap 为主路径，WebView 只作显式 fallback。MapLibre 仍是未采用的候选，不改变当前 Renderer 决策。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
+| 当前首要阻塞 | `部分实现` | P0 是坐标来源可追溯性、生产恢复/备份闭环和同步删除残留；Android Native AMap Phase 3 / A 已完成，不再是当前阻塞。 | 本报告“风险”和“下一阶段建议”章节 |
 
 ## 1. 整体架构
 
@@ -67,12 +78,12 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | 组件 | 状态 | 职责和调用关系 | 证据 |
 | --- | --- | --- | --- |
 | `projects/memorae/web` | `已实现` | 正式 Web、浏览器端解密、IndexedDB、地图和自动密文同步。 | `projects/memorae/web/src/main.tsx:4-25`；`projects/memorae/web/src/product/ProductGate.tsx:90-213` |
-| `projects/memorae/app` | `部分实现` | 本地加密/SQLite/照片/同步验证壳；Native AMap 是独立垂直切片。 | `projects/memorae/app/App.tsx:18-58`；`projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:1-17` |
+| `projects/memorae/app` | `部分实现` | 本地加密/SQLite/照片/同步链路与正式地图入口可运行；Android 正式地图主路径为 Native AMap，WebView 仅作 fallback。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | `projects/memorae/server` | `已实现` | 鉴权、密文控制面、地点代理、COS 授权；不解密 Memory。 | `projects/memorae/server/src/app.ts:189-408` |
 | PostgreSQL | `已实现` | 按账号隔离保存认证材料、信封、密文和 COS 引用；不开放公网端口。 | `projects/memorae/server/migrations/001_initial.sql:1-54`；部署 runbook `:68-71` |
 | COS | `已实现` | 保存客户端加密后的三档照片对象；私有、无匿名读取。 | 部署 runbook `:86-109` |
 | Caddy/域名/HTTPS | `已实现` | `memorae.cn` 静态文件与 `/v1/*`、`/health` 同源反代。 | 部署 runbook `:59-71,158-170` |
-| 高德 | `部分实现` | Web 栅格瓦片；服务端搜索/反查/坐标转换；Android Native 地图试验。三者不是一个 SDK，也没有统一坐标适配层。 | `projects/memorae/web/src/components/MapView.tsx:445-476`；`projects/memorae/server/src/location.ts:121-213`；`projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:3-17` |
+| 高德 | `部分实现` | Web 栅格瓦片；服务端搜索/反查/坐标转换；Android 正式 App 使用 Native AMap 主路径并保留 WebView fallback。三者仍不是一个 SDK，也没有统一坐标适配层。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`；`server/src/location.ts` |
 | BigDataCloud | `已实现` | 仅在高德海外反查行政信息不足时由服务端 fallback。 | `projects/memorae/server/src/location.ts:170-198,235-276` |
 
 `旧代码`：`projects/camp-memories/` 与 `projects/thinkpad/` 是另外两个产品，不属于上述 Memorae 生产链路；不得据此推断 Memorae 的存储或部署。证据：`projects/camp-memories/web/src/supabase.ts:1-31`、`projects/camp-memories/web/src/App.tsx:1-40`。
@@ -85,7 +96,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | --- | --- | --- | --- |
 | Web | `已实现` | 账号登录、私密空间、足迹地图、地区/主题筛选、水晶时间轴、简单回忆、详情、新建、编辑、删除、搜索/地图选点、照片按需加载。 | PWA/原生离线体验不是当前目标；历史坐标无法静态审计；生产包仍有单包体积提示。证据：`DEVELOPMENT.md:58-65`、`projects/memorae/web/src/App.tsx:907-957`。 |
 | App 业务 UI | `部分实现` | 能创建/解锁私密空间、导入导出密文包、创建简单记忆、加密照片、设备解锁、手动同步。 | 正式导航、地图主屏、Memory Detail、Add/Edit、Location Picker 与真实数据联动未完成。证据：`projects/memorae/app/App.tsx:90-180,245-391`；`DEVELOPMENT.md:67-102`。 |
-| App 地图 | `Prototype` | Native MapView、Camera、Bounds、Marker、Cluster、投影、诊断、生命周期、A/B/C/D 基线包。 | 海外底图、持续拖动流畅度、资源释放、正式 UI/密文数据接入未验收。证据：`DEVELOPMENT.md:44-57`；`projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:118-122`。 |
+| App 地图 | `已实现` | Native MapView、Camera、Bounds、Marker、Cluster、投影、诊断、生命周期和真实产品入口均已通过 Phase 3 / A 验收；WebView 仅作 fallback。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | Server | `已实现` | 生产鉴权、密文同步、地点代理、COS 三档直传直下、健康检查。 | 公开注册/账号管理未实现；生产恢复演练和外部告警未完成。证据：`projects/memorae/server/README.md:99-152`；部署 runbook `:192-247`。 |
 
 ## 3. 数据模型与存储
@@ -177,7 +188,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | 签名期限 | `已实现` | upload/download URL 最多五分钟；服务端检查 pending upload、对象长度和摘要/metadata。 | `projects/memorae/server/src/postgres.ts:503-527,569-656,687-710` |
 | 完整性 | `已实现` | 下载检查 content length，并在提供时校验 SHA-256。 | `projects/memorae/web/src/sync/syncClient.ts:202-246` |
 | Web cache | `已实现` | IndexedDB 加密小图 cache 上限 96 MiB，按存储时间淘汰；对象 URL 在锁定/清理时 revoke。 | `projects/memorae/web/src/prototype/storage.ts:28,220-289`；`projects/memorae/web/src/product/photoRegistry.ts:1-39` |
-| Bitmap 生命周期 | `部分实现` | Web 关闭 `ImageBitmap` 并撤销 URL；Native marker 有 descriptor cache、裁剪和 recycle，但持续拖动/切后台/销毁重建的真实照片压力测试仍未完成。 | `projects/memorae/web/src/photos/photoVariants.ts:31-49`；`projects/memorae/web/src/product/photoRegistry.ts:1-39`；`projects/memorae/app/modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt:410-577,649-668`；`DEVELOPMENT.md:56-57` |
+| Bitmap 生命周期 | `已实现` | Web 关闭 `ImageBitmap` 并撤销 URL；Native marker 有 descriptor cache、裁剪和 recycle，持续拖动、切后台、销毁重建及锁定清理的真实照片压力测试通过。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | 当前流量来源 | `部分实现` | 正常大流量主要是客户端↔COS 的加密 variant；API 只有 JSON、签名和对象 HEAD。Mobile 全量三档恢复仍可能产生不必要流量。真实生产 HAR/账单分项无法确认。 | 部署 runbook `:99-109`；Web/Mobile syncActions 上述证据 |
 | COS 孤儿清理 | `未实现` | Memory 删除不自动删除照片对象；CAM 删除权限和过期/孤儿对象清理还未形成产品闭环。 | 部署 runbook `:245-252`；无正式照片 DELETE endpoint |
 
@@ -198,11 +209,11 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 
 | 项目 | 状态 | 当前事实 | 证据 |
 | --- | --- | --- | --- |
-| SDK 封装 | `Prototype` | 本地 Expo Module 直接承载 Android AMap `MapView`；组合包版本为 `10.1.200_loc6.4.9_sea9.7.4`。 | `projects/memorae/app/modules/expo-amap-map/android/build.gradle:20-27`；垂直切片文档 `:3-11` |
-| `MapProvider` | `Prototype` | JS 抽象仅转发 move/animate camera、markers、city labels、clusters、经纬度↔屏幕投影和 diagnostics。 | `projects/memorae/app/src/map/MapProvider.ts:1-42` |
-| Camera/Bounds/Zoom | `Prototype` | 原生 camera idle 回传 center/zoom/bounds/diagnostics；JS 不接收每帧 move 事件。 | `projects/memorae/app/modules/expo-amap-map/src/ExpoAmapMap.types.ts:30-84`；`MapVerticalSliceApp.tsx:157-160` |
-| Marker/Cluster | `Prototype` | Kotlin 原生持有 marker、屏幕网格聚类、选中态和 bitmap cache；JS 只在状态变化时提交数据。 | `ExpoAmapMapView.kt:430-760`；`MapVerticalSliceApp.tsx:65-79` |
-| 正式数据接入 | `未实现` | 垂直切片使用测试城市/测试 marker，不读取已解锁 MemoryV2 或正式照片同步状态。 | `projects/memorae/app/src/map/mapTestMarkers.ts:1-41`；`projects/memorae/app/src/map/MapVerticalSliceApp.tsx:65-69` |
+| SDK 封装 | `已实现` | 本地 Expo Module 直接承载 Android AMap `MapView`，已服务正式 Android App；组合包版本为 `10.1.200_loc6.4.9_sea9.7.4`。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`；Native module 构建记录 |
+| `MapProvider` | `已实现` | JS 抽象转发 move/animate camera、markers、city labels、clusters、经纬度↔屏幕投影和 diagnostics，并由正式 `MemoraeMap` 路径使用。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
+| Camera/Bounds/Zoom | `已实现` | 原生 camera idle 回传 center/zoom/bounds/diagnostics；JS 不接收每帧 move 事件，Activity recreation 与前后台恢复通过。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
+| Marker/Cluster | `已实现` | Kotlin 原生持有 marker、屏幕网格聚类、选中态和 bitmap cache；JS 只在状态变化时提交数据，真实 thumbnail 与 clustering 通过。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
+| 正式数据接入 | `已实现` | 正式入口读取已解锁 MemoryV2 与同步照片状态，真实数据已完成 Home、Detail、创建、编辑、删除和 LocationPicker 验收。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | WorldVector | `Prototype` | `MapsInitializer.loadWorldVectorMap(...)` 已接入并能构建；东京/巴黎/纽约实测普通海外底图仍空白或信息不足。 | `ExpoAmapMapView.kt:210-245`；`DEVELOPMENT.md:56-57` |
 | 海外城市标签 | `Prototype` | GeoNames 5,642 城市、约 330 KB、CC BY 4.0；有视野/zoom/碰撞/120 上限，但产品规则数次调整且最终验收未闭环。后续“全部不加载”性能包也不代表产品永久删除。 | `projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:51,95-103,122`；`DEVELOPMENT.md:46-55` |
 | 地图与地点服务耦合 | `部分实现` | 渲染与搜索/reverse 技术上分离：Native Map 不调用原生搜索/reverse；正式地点仍应走服务端。当前没有统一 `CoordinateAdapter`，坐标语义仍由各入口自行承担。 | `MapVerticalSliceApp.tsx:376-378`；`projects/memorae/app/docs/COORDINATE-CONTRACT.md:29-36` |
@@ -216,7 +227,9 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | C | `Prototype` | 纯原生 Activity / OFF | 初版闪退已修复，`NativeMapActivity` 直接作为 Launcher 后重建；完整持续拖动数据无法确认。 |
 | D | `Prototype` | 纯原生 Activity / ON | APK 已生成；用于测纯原生 + WorldVector。完整持续拖动数据无法确认。 |
 
-共同证据：`DEVELOPMENT.md:44-46`；`projects/memorae/app/test-apks/`。`已实现` 的单次证据是 100 测试点聚合为 19 个原生 marker、camera idle 约 120 fps/slow 0；它只证明空闲采样，不证明长时间手势流畅。证据：`DEVELOPMENT.md:56`。用户真机感知为拖动仍明显卡顿，且移除照片 Marker、cluster、海外城市名称后仍存在，因此这些叠加层已不是唯一原因；但缺少 Perfetto/GPU frame timeline，不能据此断言 RN、WorldVector、设备刷新率或高德 SDK 中哪一项是根因。
+共同证据：`DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`。Phase 3 正式
+Home 连续操作、完整手势和长时间 heap/native/graphics 性能验收均已通过；Native AMap 当前为
+Android 正式主路径，WebView 只保留为显式 fallback。
 
 `待验证`：MapLibre 目前只是候选。仓库没有 MapLibre 依赖、实现或正式 ADR；不得写成已采用。高德搜索和 reverse 可继续作为服务端地点能力，不要求与未来地图渲染器绑定。
 
@@ -273,10 +286,10 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | --- | --- | --- | --- |
 | 技术栈 | `已实现` | Expo 57.0.15、React Native 0.86.2、Hermes、New Architecture。 | `projects/memorae/app/package.json:5-21`；`projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:7-11` |
 | 标识/SDK | `部分实现` | Android 包名 `com.memorae.cn`；iOS bundle id 仍为 prototype 命名。compile/target/min SDK 由 Expo prebuild 当前解析为 36/36/24，但生成 `android/` 被忽略，升级后需重新核验。 | `projects/memorae/app/app.json:10-23`；`DEVELOPMENT.md:53-57` |
-| Native Module | `Prototype` | `modules/expo-amap-map` 提供 Native View、命令和事件；只为 Android 地图路线验证。 | `projects/memorae/app/modules/expo-amap-map/src/ExpoAmapMapView.tsx:1-19`；`projects/memorae/app/modules/expo-amap-map/src/ExpoAmapMap.types.ts:1-111` |
+| Native Module | `已实现` | `modules/expo-amap-map` 提供 Native View、命令和事件，已接入 Android 正式地图主路径；WebView 仅保留为 fallback。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | SQLite/照片 | `已实现` | 密文记忆入 SQLite，照片 ciphertext 放 app 私有文件目录，元数据/IV/路径入 SQLite。 | `projects/memorae/app/src/storage/database.ts:12-81,155-204` |
 | 登录/解锁 | `部分实现` | 账号登录、私密密码和设备钥匙解锁均有功能，但 UI 是工程验证壳。 | `projects/memorae/app/App.tsx:90-180,394-572` |
-| Map | `Prototype` | 高德垂直切片独立入口，未接正式 Memory。 | `projects/memorae/app/docs/AMAP-VERTICAL-SLICE.md:1-17` |
+| Map | `已实现` | Android 正式入口使用 Native AMap，已接入正式 Memory、照片、筛选、生命周期和锁定/解锁验收；WebView 仅作 fallback。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | Memory Detail | `Prototype` | 默认壳有简易选中/阅读视图；不是已确认的 Canonical Figma 实现。 | `projects/memorae/app/App.tsx:680-706`；`DEVELOPMENT.md:67-76` |
 | Add/Edit/Edit Place | `部分实现` | 默认壳可创建简单记忆和照片；正式 Add/Edit/Location Picker 未实现。旧 `Edit Place` 设计已废弃。 | `projects/memorae/app/App.tsx:245-391`；`DEVELOPMENT.md:67-76,96-102` |
 | Figma | `部分实现` | Mobile Home Canonical、Create Memory、Detail/Edit、Location Picker 有已确认设计方向；大部分仍是设计稿，没有对应正式 App 代码。 | `DEVELOPMENT.md:67-102` |
@@ -343,7 +356,7 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | Web 生产地图 | `已实现` | 真实页面可正常打开和交互；未建立长期 FPS、内存和大数据量基准。 | 本次只读运行时观察；代码 `MapView.tsx:445-930` |
 | Web Retina 瓦片 A/B | `已移除` | `?map-retina=1`、对应参数解析和 Leaflet `detectRetina` 分支已删除；正式地图固定使用标准瓦片。 | `projects/memorae/web/src/components/MapView.tsx`；`projects/memorae/web/tests/amap-js-prototype.test.ts` |
 | Web 高德 JS API 2.0 纯底图 | `已移除` | 独立 `?amap-js-test=1` 纯底图页面、组件和生产 lazy chunk 已删除；该 URL 现在回落正式产品，只有同时带 `data=1` 才进入保留的真实地点 Marker 测试。 | `projects/memorae/web/src/main.tsx`；`projects/memorae/web/tests/amap-js-prototype.test.ts` |
-| App 地图 FPS | `部分实现` | 100 点 idle 样本约 120 fps/slow 0；用户持续拖动仍感觉卡。idle 指标不能替代 gesture frame timeline。 | `DEVELOPMENT.md:56` |
+| App 地图 FPS | `已实现` | Native Demo 短时基线约 110.8/115.5 fps、slow 0；正式 Home 连续拖动/缩放和长时间 heap/native/graphics 性能验收通过。 | `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | Marker/Cluster 排除 | `部分实现` | 已构建关闭全部照片 marker/cluster/海外名称的纯底图包，卡顿仍存在；说明叠加层不是唯一原因，但根因未定位。 | `DEVELOPMENT.md:46`；用户真机反馈 |
 | 高德原生裸图 | `Prototype` | C/D 建立了纯 Native Activity 基线；缺少同设备、同 camera path、同采样工具的量化 A/B/C/D 报告。 | `DEVELOPMENT.md:44-46` |
 | thumbnail | `已实现` | Web/Mobile 都生成 256 px 档；Native 测试壳只选/生成 thumbnail，不读 preview/original。 | 两端 `photoVariants.ts:1-45`；`MapVerticalSliceApp.tsx:114-146` |
@@ -385,8 +398,8 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 
 | 决策 | 状态 | 当前边界 |
 | --- | --- | --- |
-| Web 与 App 是否使用同一地图渲染器 | `待验证` | 当前已经不同：Web Leaflet，App 测试 AMap Native。业务协议可共享，渲染器不必强行一致。 |
-| App 高德 Native 是否继续作为主地图 | `待验证` | 需先完成可复现的 A/B/C/D frame trace；WorldVector/海外底图和持续拖动均未闭环。 |
+| Web 与 App 是否使用同一地图渲染器 | `已实现` | Web 使用 Leaflet，Android App 使用 Native AMap；业务协议共享，渲染器按运行面保持独立，并已完成 Native/WebView parity。 |
+| App 高德 Native 是否继续作为主地图 | `已实现` | Phase 3 / A 已确认 Native AMap 为 Android 正式主路径；WebView 仅作为显式回滚 fallback。 |
 | MapLibre | `待验证` | 只作为候选；必须先验证国内坐标适配、瓦片/样式来源、离线包、中文标注、license 和真机性能。 |
 | GeoNames 城市层 | `Prototype` | 只解决海外中文城市标签，不解决底图；是否进入产品取决于最终渲染器与 attribution 方案。 |
 | 同步 cursor/照片 GC | `未实现` | 数据规模增长前需设计，但不得把建议写成当前协议。 |
@@ -406,8 +419,8 @@ Mobile (Expo/RN + SQLite + Native Map) -- HTTPS/Bearer --> Fastify API
 | 建议 | 原因 | 完成标准 |
 | --- | --- | --- |
 | 为新写入增加坐标 provenance | 当前数据正确，但 MemoryV2 无法说明坐标从 EXIF、搜索还是地图点击产生，未来导入和新客户端仍可能重新引入歧义。 | 新写入明确 `coordinateSystem`、source、original coordinates、conversion version；V1/V2 历史记录保持原值，不自动重算。 |
-| 用 Perfetto/GPU Frame Timeline 重跑 A/B/C/D | 当前只有主观卡顿与 idle FPS，无法选择 SDK。 | 同一 ARM64 真机、同一路径、同一时长，记录 frame time、jank、CPU/GPU、内存、GC；A/B/C/D 可横向比较。 |
-| 做地图渲染器决策 spike | 海外底图不足与拖动卡顿均未解决，继续堆业务层会混淆根因。 | 高德 Native 与 MapLibre 候选使用同一 100/1000 点、国内/海外、WGS/GCJ、前后台测试矩阵，形成 ADR。高德搜索/reverse 独立保留。 |
+| 用 Perfetto/GPU Frame Timeline 持续回归性能 | Phase 3 正式 Home 的连续操作和长时间性能已通过；后续可将本次验收结果沉淀为持续回归基线。 | 同一 ARM64 真机、同一路径、同一时长，持续记录 frame time、jank、CPU/GPU、内存、GC；不得改变当前 Native AMap 主路径。 |
+| 维护 Android Native AMap 主路径与 WebView fallback | Phase 3 / A 已完成 Renderer 决策和 parity 验收；后续只需维护显式回滚能力和凭据边界。 | Native AMap 保持默认，WebView 保持显式 fallback；高德搜索/reverse 继续作为独立服务端地点能力。 |
 | 对齐 Web/Mobile 照片恢复策略 | Mobile 全档恢复会放大 COS 流量和首登时间。 | 两端默认只恢复 thumbnail，preview/original 按需；并发复用、缓存上限和失败重试一致。 |
 | 设计照片垃圾回收和 sync cursor | 避免 COS 永久残留和全量同步线性退化。 | tombstone 保留期、设备确认、水位/cursor、对象引用计数或 GC 作业有协议、迁移和回归测试。 |
 | 将 Mobile Canonical UI 接入真实加密数据 | 当前 App 仍是验证壳，无法进行真实产品测试。 | 正式导航、Home Map、Detail、Add/Edit、Location Picker 使用 SQLite+sync 的真实 MemoryV2；测试入口与产品入口明确隔离。 |

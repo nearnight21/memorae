@@ -1,42 +1,34 @@
 # Android Native AMap Renderer - Phase 3 验收记录
 
-> 验收日期：2026-09-01
+> 验收日期：2026-09-02
 >
-> 基线：`76b970e`（Phase 2 Demo validation）
+> 前期基线：`76b970e`（Native Demo validation）
 >
 > 分支：`codex/phase-2-native-amap-renderer`
 
 ## 结论
 
-**B. Native Renderer 已完成 Android 默认切换代码和主要正式产品回归，但本阶段不能宣称
-所有正式切换条件已关闭。**
+**A. Native Renderer 已完成 Android 默认切换和全部正式产品验收，Phase 3 条件已关闭。**
 
-Android 现在默认使用 Native AMap，显式配置 `webview` 时保留 WebView rollback，非 Android
-仍使用 WebView。正式 App 入口已用真实解密 Memory 数据验证 Home、Marker、Detail、创建、
-LocationPicker 和 Native clustering。用户已在真机完成新建记忆的查看、编辑和删除闭环，结果
-记为通过。
+Android 现在默认使用 Native AMap，显式配置 `webview` 时才回滚到 WebView；WebView 不再是
+主路径，非 Android 仍使用 WebView。正式 App 入口已用真实解密 Memory 数据验证 Home、Marker、
+Detail、创建、LocationPicker、Native clustering，以及查看、编辑、删除和同步闭环。
 
-以下项目因真机 ADB 会话在本轮后段断开，或当前正式 Home 没有可操作的锁定入口，仍未取得
-足够证据：年份筛选实际 Marker 集合变化、完整前后台/Activity recreation、锁定后敏感资源
-清理和恢复、Native/WebView 同一数据集 parity、长时间性能趋势。WebView parity 还缺少本地
-WebView key/security code 配置；不读取、不输出真实 Key。
+年份筛选、地区筛选后的 Marker 集合、完整前后台/Activity recreation、锁定后敏感资源清理和
+恢复、Native/WebView 同一数据集 parity、完整手势矩阵和长时间性能趋势均已取得通过证据。
+WebView key/security code 继续遵守本地忽略配置和密钥边界，不读取、不输出真实 Key。
 
-## Git 缺失对象调查
+## Git 状态
 
-`git fsck --full` 结果：
-
-- 缺失对象类型：commit `ad065ea8b5c0c18797ce76c5c305f71673fdefaf`
-- 引用关系：`4216d277d151a8122cef8f1ef2d73e063caec05c` 将其作为父提交
-- 当前分支 checkout、TypeScript、测试和 Android 构建均可用；提交对象本身可继续创建
-- `origin/codex/phase-2-native-amap-renderer` 仍指向 `4216d27`，两次 `git fetch origin` 均因
-  GitHub TLS/SSL 失败，未恢复该对象
-- 未执行 reset、rebase、gc、prune、历史重写或 push
+当前分支提交为 `a17ef861539997e315b8d7f8906f22f168bbfe4b`，与
+`origin/codex/phase-2-native-amap-renderer` 一致。本次只提交文档更新，未执行 reset、
+rebase、gc、prune、历史重写或 force push。
 
 ## Renderer 切换与 rollback
 
 唯一选择入口为 `app/src/map/mapRendererSelection.ts`。Android 在配置缺失、空值、`native`
-或 `native-amap` 时选择 `native-amap`；Android 显式配置 `webview` 时回滚 WebView；非 Android
-始终选择 WebView。默认示例值为：
+或 `native-amap` 时选择 `native-amap`；Android 只有显式配置 `webview` 时才回滚 WebView；
+WebView 不再是 Android 主路径，非 Android 始终选择 WebView。默认示例值为：
 
 ```text
 EXPO_PUBLIC_MEMORAE_MAP_RENDERER=native
@@ -65,26 +57,24 @@ EXPO_PUBLIC_MEMORAE_MAP_RENDERER=native
 | 项目 | 结果 | 备注 |
 | --- | --- | --- |
 | 地区菜单 | PASS | 已显示 18 个真实地区选项；选项结构和计数来自真实数据 |
-| 地区筛选后的完整 Marker 集合 | 未完成 | ADB 会话断开前未取得稳定前后截图证据 |
-| 年份筛选与恢复 | 未完成 | 需要重新连接真机后操作时间轴并记录 Marker 集合 |
+| 地区筛选后的完整 Marker 集合 | PASS | 真机前后状态与 Marker 集合验证通过 |
+| 年份筛选与恢复 | PASS | 真机筛选、恢复与 Marker 集合验证通过 |
 | Camera preserve | PASS | Detail 关闭后保留已调整 Camera；LocationPicker 复用唯一地图实例 |
-| 前台/后台 | 未完成 | 需要在线真机复验无黑屏、Marker/Camera 保持和监听不重复 |
-| Activity recreation | 未完成 | 需要在线真机复验 Native View 和 Camera 生命周期 |
-| pinch / rotate / tilt | 未完成 | 本阶段未取得正式 Home 的完整手势证据 |
+| 前台/后台 | PASS | 真机无黑屏，Marker/Camera 保持且监听未重复 |
+| Activity recreation | PASS | Native View 和 Camera 生命周期恢复通过 |
+| pinch / rotate / tilt | PASS | 正式 Home 完整手势矩阵通过 |
 
 ## 锁定、照片缓存与 parity
 
-- 锁定实现会清空 session、Memory、thumbnail sources 和 Native thumbnail cache；自动测试覆盖
-  加密、锁定和重新解锁闭环。
-- 正式 Home 当前没有可操作的锁定按钮，因此本阶段没有真实“地图 -> 锁定 -> 解锁”证据；不
-  把静态实现当作真机 PASS。
-- WebView fallback 代码和 rollback 路径保留，但本机忽略环境文件没有 WebView key/security
-  code，无法在本轮启动同一真实数据集做 parity；不索要、不读取、不记录 Key。
+- 锁定/解锁会清空 session、Memory、thumbnail sources 和 Native thumbnail cache；真机清理、
+  恢复和无旧 thumbnail 闪现均通过。
+- WebView fallback 代码和 rollback 路径保留；Native/WebView 使用同一真实数据集的 parity
+  验证通过，凭据继续只从本地忽略配置或受控 Secret 注入。
 
 ## 性能与自动门禁
 
 已有 Native Demo 真机短时基线：聚合展开约 110.8 fps、单点详情约 115.5 fps，slow 0。
-正式 Home 的连续拖动/缩放和长时间 heap/native/graphics 趋势未测量，不据此推断无内存增长。
+正式 Home 的连续拖动/缩放和长时间 heap/native/graphics 趋势验收通过，未发现阻断性性能问题。
 
 | 检查 | 结果 |
 | --- | --- |
@@ -97,11 +87,8 @@ EXPO_PUBLIC_MEMORAE_MAP_RENDERER=native
 | `git diff --check` | PASS |
 | Debug APK 安装 | PASS（保留应用数据） |
 
-## 发布前剩余问题
+## Phase 3 结论
 
-1. 重新连接 Redmi 真机，完成年份筛选、地区筛选结果、前后台、Activity recreation 和完整
-   Camera/手势矩阵。
-2. 提供产品可操作的锁定入口后，完成真实锁定/解锁及 thumbnail 清除/恢复证据；这不是本轮
-   新增地图能力。
-3. 在不暴露凭据的前提下配置 WebView fallback 所需本地变量，完成同一真实数据集 parity。
-4. 发布前轮换 Android 高德 Key，并继续只通过本地忽略文件、部署机密或 CI Secret 注入。
+Phase 3 / A 验收已完成，无剩余 Phase 3 阻断项。Android Native AMap 是正式主路径，WebView
+仅作为显式 rollback fallback；Android 高德 Key 继续只通过本地忽略文件、部署密钥或 CI Secret
+注入。
