@@ -104,6 +104,39 @@ JSON 模式固定监听 `127.0.0.1`；`MEMORY_RECALL_LISTEN_HOST` 只影响 Post
 | CI | GitHub Actions workflow；Web/App 使用空值公开配置，Server 使用本地 JSON 门禁；PostgreSQL 集成测试需单独临时 Secret | 生产数据库、生产 COS、正式签名密码参与普通验证 | 三端 verify 已接线；发布 Secret 不参与普通 CI。 |
 | Production | Web/App 构建平台公开变量、EAS credentials、Server 密钥管理或权限受限 `server/deploy/.env` | 客户端持有 Server Secret；复用其他产品数据库/COS/地图身份；签名材料进入 Git | Memorae Compose/Caddy/EAS 配置已在本仓，真实平台凭据仍由平台管理。 |
 
+## 多设备快速恢复
+
+仓库提供 [`scripts/restore-local-config.ps1`](../scripts/restore-local-config.ps1)，用于从仓库外的加密配置包恢复本机配置。配置包解密后应使用以下结构：
+
+```text
+memorae-secrets/
+├─ config/
+│  ├─ web.env.local
+│  ├─ app.env.local
+│  └─ server.deploy.env
+└─ ssh/
+   ├─ id_ed25519
+   └─ id_ed25519.pub
+```
+
+完整恢复并验证生产 SSH：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\restore-local-config.ps1 `
+  -SecretRoot 'D:\secure\memorae-secrets' -Profile Full -TestSsh
+```
+
+只恢复日常 Web/App 开发配置：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\restore-local-config.ps1 `
+  -SecretRoot 'D:\secure\memorae-secrets' -Profile Client
+```
+
+支持的配置档为 `Full`、`Client`、`Web`、`App` 和 `Server`。`Full` 与 `Server` 默认安装 SSH；其他配置档可显式传入 `-InstallSsh`。脚本将 SSH 私钥安装为用户目录下的专用 `memorae_ed25519`，并维护 `memorae-prod` 别名，不覆盖默认 `id_ed25519`。
+
+目标文件已有不同内容时脚本默认停止；显式传入 `-Force` 才会先创建带时间戳的备份再替换。使用 `-WhatIf` 可以只检查来源、变量完整性、Git 忽略规则和计划操作。配置包必须位于仓库外，并应通过密码管理器附件或带文件名加密的加密包传递，不能以明文进入普通网盘或 Git。
+
 ## 独立交付验收
 
 1. `.github/workflows/ci.yml` 在 Web、App、Server 三个 job 中分别执行现有 `npm run verify`。
