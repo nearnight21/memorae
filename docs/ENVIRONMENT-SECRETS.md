@@ -42,6 +42,7 @@
 | `EXPO_PUBLIC_AMAP_VERTICAL_SLICE` | 可选，`1` 开启 | 开发开关 | 本地开发进程 | 不需要 | 禁止开启 | 进入 Native 地图隔离入口。 |
 | `EXPO_PUBLIC_AMAP_WEBVIEW_DEBUG` | 可选，`1` 开启 | 开发开关 | 本地开发进程 | 不需要 | 禁止开启 | 开启 WebView 调试。 |
 | `EXPO_PUBLIC_MEMORAE_MAP_RENDERER` | 可选，默认 `webview` | 客户端配置 | `app/.env.local` | EAS Environment / CI Variable | 正式 App 构建环境 | Android 地图 Renderer；缺省使用高德 JS API 2.0 WebView，显式配置 `native` 或 `native-amap` 才启用 Native AMap。 |
+| `EXPO_PUBLIC_TIMELINE_PROTOTYPE` | 可选，`1` 开启 | 开发开关 | 本地开发进程 | 不需要 | 禁止开启 | 独立打开弧形时间轴交互原型；不接入正式 Home 或地图。 |
 | `MEMORY_RECALL_ANDROID_KEYSTORE_PATH` | Release 必需 | Secret 路径 | 指向 `D:\hermes\secure\memorae\` 中正式证书 | 受控 Runner 或 EAS credential store | 正式构建机仓库外路径 | 唯一正式 keystore。 |
 | `MEMORY_RECALL_ANDROID_STORE_PASSWORD` | Release 必需 | Secret | 安全目录加载到进程环境 | EAS/CI Secret | 正式构建 Secret | keystore 密码。 |
 | `MEMORY_RECALL_ANDROID_KEY_ALIAS` | Release 必需 | Secret 元数据 | 安全目录加载到进程环境 | EAS/CI Secret | 正式构建 Secret | 正式签名 alias。 |
