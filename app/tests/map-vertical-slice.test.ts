@@ -106,6 +106,13 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /\.marker \{ display: block;/);
   assert.match(runtimeSource, /memory-count/);
   assert.match(runtimeSource, /groupDescriptor/);
+  assert.match(runtimeSource, /centeredGroup/);
+  assert.match(runtimeSource, /distanceFromCenter/);
+  assert.match(runtimeSource, /centerLat \?\? group\.lat/);
+  assert.match(runtimeSource, /centerLng \?\? group\.lng/);
+  assert.match(runtimeSource, /provinceHasSingleCity/);
+  assert.match(runtimeSource, /provinceHasSingleCity \? 9 : 6/);
+  assert.match(runtimeSource, /PROVINCE_COLLISION_DISTANCE = 60/);
   assert.match(runtimeSource, /zooms: \[4, 14\]/);
   assert.match(runtimeSource, /Math\.max\(4, Math\.min\(14, message\.zoom\)\)/);
   assert.doesNotMatch(runtimeSource, /setFitView|MarkerCluster|transform:scale/);
@@ -117,6 +124,7 @@ test('地图 Runtime 内嵌脚本保持可执行语法', () => {
   const html = buildAmapRuntimeHtml('test-key', 'test-security-code');
   const script = html.slice(html.indexOf('<script>') + '<script>'.length, html.lastIndexOf('</script>'));
   assert.doesNotThrow(() => new Function(script));
+  assert.match(html, /高德脚本未初始化 AMap；请检查 JS API Key 状态与权限。/);
 });
 
 test('地点服务结果转换为 MemoryV2.location 时保留版面坐标，不把经纬度写入 mx/my', () => {
@@ -337,6 +345,7 @@ test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地�
   assert.match(source, /https:\/\/\*\.autonavi\.com/);
   assert.doesNotMatch(source, /memorae\.cn\/\?amap-runtime/);
   assert.match(source, /clearSensitiveData/);
+  assert.match(source, /script\.onerror = \(\) => \{[\s\S]*clearTimeout\(scriptTimeout\)/);
   assert.equal(AMAP_JS_MAP_STYLE, 'amap://styles/86c653c12a194bd61f7e37008e400725');
   assert.match(html, /mapStyle: "amap:\/\/styles\/86c653c12a194bd61f7e37008e400725"/);
 });

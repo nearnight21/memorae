@@ -27,9 +27,9 @@ const marker: MemoryMapMarker = {
   region: { country: '中国', province: '上海市', city: '上海市' },
 };
 
-test('Android 默认 Native 且可显式回滚 WebView，其他平台保持 WebView', () => {
-  assert.equal(selectMemoraeMapRenderer('android', undefined), 'native-amap');
-  assert.equal(selectMemoraeMapRenderer('android', ''), 'native-amap');
+test('Android 默认使用 JS WebView，Native 仅可显式启用，其他平台保持 WebView', () => {
+  assert.equal(selectMemoraeMapRenderer('android', undefined), 'webview');
+  assert.equal(selectMemoraeMapRenderer('android', ''), 'webview');
   assert.equal(selectMemoraeMapRenderer('android', 'native'), 'native-amap');
   assert.equal(selectMemoraeMapRenderer('android', 'native-amap'), 'native-amap');
   assert.equal(selectMemoraeMapRenderer('android', 'webview'), 'webview');
@@ -38,6 +38,41 @@ test('Android 默认 Native 且可显式回滚 WebView，其他平台保持 WebV
   assert.equal(selectMemoraeMapRenderer('ios', 'webview'), 'webview');
   assert.equal(nativeAmapPrivacyConsentEnabled('1'), true);
   assert.equal(nativeAmapPrivacyConsentEnabled('true'), false);
+});
+
+test('Android Native 默认使用高德普通矢量底图', async () => {
+  const source = await readFile(
+    new URL('../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /amap\.mapType = AMap\.MAP_TYPE_NORMAL/);
+  assert.doesNotMatch(source, /amap\.mapType = AMap\.MAP_TYPE_SATELLITE/);
+});
+
+test('Android Native 只从打包 assets 加载本地自定义地图样式', async () => {
+  const source = await readFile(
+    new URL('../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt', import.meta.url),
+    'utf8',
+  );
+  const styleData = await readFile(
+    new URL('../modules/expo-amap-map/android/src/main/assets/amap_custom_style/style.data', import.meta.url),
+  );
+  const styleExtraData = await readFile(
+    new URL('../modules/expo-amap-map/android/src/main/assets/amap_custom_style/style_extra.data', import.meta.url),
+  );
+  assert.ok(styleData.byteLength > 0);
+  assert.ok(styleExtraData.byteLength > 0);
+  assert.match(source, /\.setStyleData\(styleData\)/);
+  assert.match(source, /\.setStyleExtraData\(styleExtraData\)/);
+  assert.match(source, /AMap custom style source = LOCAL/);
+  assert.match(source, /style\.data loaded = \$styleDataLoaded/);
+  assert.match(source, /style_extra\.data loaded = \$styleExtraDataLoaded/);
+  assert.doesNotMatch(source, /setStyleId|setCustomMapStyleID|CUSTOM_MAP_STYLE_ID/);
+});
+
+test('Android Manifest 只声明一次高德网络状态权限', async () => {
+  const manifest = await readFile(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8');
+  assert.equal(manifest.match(/android\.permission\.ACCESS_NETWORK_STATE/g)?.length, 1);
 });
 
 test('中立 Marker 转换为最小 Native DTO 且拒绝 Data URI', () => {

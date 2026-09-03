@@ -3,7 +3,7 @@
 状态：A（性能可接受，停止专项优化）
 
 基线：`c565a1a`（Phase 3 / A）
-范围：Android 默认 Renderer 为 Native AMap；WebView 继续仅作 fallback。本阶段未改地图架构、`MemoraeMap` 接口、Renderer 选择或配置。
+范围：本报告记录 Android 默认 Renderer 曾为 Native AMap、WebView 仅作 fallback 时的性能验收。本阶段未改地图架构、`MemoraeMap` 接口或 Renderer 选择。文中耗时是卫星底图测量记录；2026-09-03 后 Native 配置路径采用 `MAP_TYPE_NORMAL` 普通矢量图，产品默认 Renderer 已另行切换为 WebView。
 
 ## 测量方法
 

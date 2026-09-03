@@ -87,6 +87,21 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         return '<span class="marker' + selected + '"><span class="photo-shell">' + photo + '</span>' + badge + '<span class="anchor"></span></span>';
       };
       const average = (values, field) => values.reduce((sum, value) => sum + value[field], 0) / values.length;
+      const centeredGroup = (values) => {
+        const centerLat = average(values, 'lat');
+        const centerLng = average(values, 'lng');
+        const longitudeScale = Math.max(.2, Math.cos(centerLat * Math.PI / 180));
+        const distanceFromCenter = (value) => Math.pow(value.lat - centerLat, 2)
+          + Math.pow((value.lng - centerLng) * longitudeScale, 2);
+        const value = values.reduce((nearest, candidate) => {
+          const distanceDifference = distanceFromCenter(candidate) - distanceFromCenter(nearest);
+          if (Math.abs(distanceDifference) > Number.EPSILON) {
+            return distanceDifference < 0 ? candidate : nearest;
+          }
+          return candidate.id.localeCompare(nearest.id) < 0 ? candidate : nearest;
+        });
+        return { value, lat: value.lat, lng: value.lng, centerLat, centerLng };
+      };
       const groupDescriptor = (value, zoom) => {
         const country = countryFor(value);
         const province = clean(value.province);
@@ -135,17 +150,61 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           groups.set(key, group);
         });
         return Array.from(groups.entries()).map(([key, group]) => {
-          const value = group.values.find((item) => safeDataUri(item.thumbnailRef)) || group.values[0];
           return {
             key,
             values: group.values,
-            value,
-            lat: average(group.values, 'lat'),
-            lng: average(group.values, 'lng'),
+            ...centeredGroup(group.values),
             scope: group.descriptor?.scope,
             label: group.descriptor?.label,
           };
         });
+      };
+      const PROVINCE_COLLISION_DISTANCE = 60;
+      const mergeNearbyProvinceGroups = (groups, map, zoom) => {
+        if (zoom >= 6) return groups;
+        const provinceGroups = groups.filter((group) => group.scope === 'province');
+        if (provinceGroups.length < 2 || typeof map.lngLatToContainer !== 'function') return groups;
+        const otherGroups = groups.filter((group) => group.scope !== 'province');
+        const working = provinceGroups.map((group) => ({ ...group, screenCluster: false }));
+        const screenPoint = (group) => map.lngLatToContainer([
+          group.centerLng ?? group.lng,
+          group.centerLat ?? group.lat,
+        ]);
+        const closeEnough = (left, right) => {
+          const leftPoint = screenPoint(left);
+          const rightPoint = screenPoint(right);
+          if (!leftPoint || !rightPoint) return false;
+          return Math.hypot(leftPoint.x - rightPoint.x, leftPoint.y - rightPoint.y)
+            < PROVINCE_COLLISION_DISTANCE;
+        };
+        // Merge display groups recursively; the underlying memory records stay unchanged.
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (let leftIndex = 0; leftIndex < working.length; leftIndex += 1) {
+            let merged = false;
+            for (let rightIndex = leftIndex + 1; rightIndex < working.length; rightIndex += 1) {
+              if (!closeEnough(working[leftIndex], working[rightIndex])) continue;
+              const left = working[leftIndex];
+              const right = working[rightIndex];
+              const values = [...left.values, ...right.values];
+              const labels = [left.label, right.label].filter(Boolean);
+              working[leftIndex] = {
+                key: 'screen:' + [left.key, right.key].sort().join('|'),
+                values,
+                ...centeredGroup(values),
+                label: labels.join('、') || undefined,
+                screenCluster: true,
+              };
+              working.splice(rightIndex, 1);
+              changed = true;
+              merged = true;
+              break;
+            }
+            if (merged) break;
+          }
+        }
+        return [...otherGroups, ...working];
       };
       const render = () => {
         if (!map || !window.AMap) return;
@@ -153,7 +212,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         markers.clear();
         const values = window.__MEMORY_MARKERS__ || [];
         const zoom = map.getZoom?.() || 4;
-        groupedMarkers(values.filter(safeMarker), zoom).forEach((group) => {
+        mergeNearbyProvinceGroups(groupedMarkers(values.filter(safeMarker), zoom), map, zoom).forEach((group) => {
           const ids = group.values.map((value) => value.id);
           const count = ids.length;
           const marker = new AMap.Marker({
@@ -167,9 +226,19 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               post({ type: 'markerPressed', id: ids[0] });
               return;
             }
-            const nextZoom = group.scope === 'province' ? 6 : group.scope === 'city' ? 9 : Math.min(14, zoom + 2);
-            map.setZoomAndCenter(nextZoom, [group.lng, group.lat], false, 300);
-            post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: group.lat, lng: group.lng });
+            const cities = Array.from(new Set(group.values.map((value) => clean(value.city)).filter(Boolean)));
+            const provinceHasSingleCity = group.scope === 'province'
+              && cities.length === 1
+              && group.values.every((value) => Boolean(clean(value.city)));
+            const nextZoom = group.screenCluster
+              ? 6
+              : group.scope === 'province'
+              ? (provinceHasSingleCity ? 9 : 6)
+              : group.scope === 'city' ? 9 : Math.min(14, zoom + 2);
+            const centerLat = group.centerLat ?? group.lat;
+            const centerLng = group.centerLng ?? group.lng;
+            map.setZoomAndCenter(nextZoom, [centerLng, centerLat], false, 300);
+            post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: centerLat, lng: centerLng });
           });
           marker.setMap(map);
           markers.set(group.key, marker);
@@ -237,6 +306,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       }, 12000);
       script.onload = () => {
         window.clearTimeout(scriptTimeout);
+        if (!window.AMap || typeof window.AMap.Map !== 'function') {
+          setNotice('高德 JS Key 无效、已回收或没有 JS API 权限。');
+          post({ type: 'error', message: '高德脚本未初始化 AMap；请检查 JS API Key 状态与权限。' });
+          return;
+        }
         try {
           map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 4, zooms: [4, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
@@ -259,7 +333,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           post({ type: 'error', message: error instanceof Error ? error.message : '高德地图无法启动。' });
         }
       };
-      script.onerror = () => { setNotice('高德地图加载失败。'); post({ type: 'error', message: '高德地图脚本加载失败。' }); };
+      script.onerror = () => {
+        window.clearTimeout(scriptTimeout);
+        setNotice('高德地图脚本加载失败，请检查网络、代理或 JS API Key。');
+        post({ type: 'error', message: '高德地图脚本加载失败，请检查网络、代理或 JS API Key。' });
+      };
       document.head.appendChild(script);
     })();
   </script>

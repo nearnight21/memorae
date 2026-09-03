@@ -84,8 +84,10 @@ Camera、Marker、Cluster、`TextureMapView`、RN/Kotlin bridge、生命周期�
 测试区域不使用宁波离线包。
 
 结果：`MAP_TYPE_NORMAL` 的矢量底图加载明显快于 `MAP_TYPE_SATELLITE`，快速 Camera 变化时更跟手，
-通过本轮速度优先的最小 A/B。结论采用 A：**Normal 明显改善快速平移 / zoom 的地图加载，值得进入
-下一步视觉样式适配。** 本轮不修改正式默认地图、不增加自定义样式，也不保留临时地图类型切换入口。
+通过本轮速度优先的最小 A/B。结论采用 A：**Normal 明显改善快速平移 / zoom 的地图加载。**
+2026-09-03 根据产品决定，Android 默认地图改为 WebView + 高德 JS API 2.0，并使用在线自定义样式 ID
+`amap://styles/86c653c12a194bd61f7e37008e400725`。Native AMap 保留为显式配置路径；其普通矢量底图和本地
+样式资源不作为默认入口使用。
 
 ### RN WebView + AMap JS API 2.0
 
