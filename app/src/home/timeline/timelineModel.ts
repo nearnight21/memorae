@@ -149,3 +149,124 @@ export function timelineLogicalOffsetFromVisual(
   return itemWidth
     + (visualOffset - rightNeighborOffset) * (itemWidth / outerStep);
 }
+
+export const ARC_TIMELINE_PIXELS_PER_YEAR = 76;
+export const ARC_TIMELINE_GESTURE_SPEED = 2;
+export const ARC_TIMELINE_VELOCITY_PROJECTION_SECONDS = 0.12;
+export const ARC_TIMELINE_EDGE_SCROLL_PIXELS_PER_SECOND = ARC_TIMELINE_PIXELS_PER_YEAR;
+export const ARC_TIMELINE_MAX_LENS_DRAG_YEARS = 1.15;
+export const ARC_TIMELINE_EDGE_STOP_YEARS = 0.85;
+export const ARC_TIMELINE_EDGE_INSET_PX = 50;
+
+export function clampArcTimelineIndex(index: number, itemCount: number): number {
+  'worklet';
+  if (itemCount <= 0) return 0;
+  return Math.max(0, Math.min(itemCount - 1, index));
+}
+
+export function wrapArcTimelineIndex(index: number, itemCount: number): number {
+  'worklet';
+  if (itemCount <= 0) return 0;
+  const wrapped = index % itemCount;
+  return wrapped < 0 ? wrapped + itemCount : wrapped;
+}
+
+export function wrapArcTimelineYearIndex(
+  index: number,
+  itemCount: number,
+  firstYearIndex = 0,
+): number {
+  'worklet';
+  const yearCount = itemCount - firstYearIndex;
+  if (yearCount <= 0) return firstYearIndex;
+  const wrapped = (index - firstYearIndex) % yearCount;
+  return firstYearIndex + (wrapped < 0 ? wrapped + yearCount : wrapped);
+}
+
+export function nearestCyclicArcTimelineIndex(
+  targetIndex: number,
+  aroundIndex: number,
+  itemCount: number,
+  firstYearIndex = 0,
+): number {
+  'worklet';
+  const yearCount = itemCount - firstYearIndex;
+  if (yearCount <= 0) return firstYearIndex;
+  const wrappedTarget = wrapArcTimelineYearIndex(targetIndex, itemCount, firstYearIndex);
+  const turns = Math.round((aroundIndex - wrappedTarget) / yearCount);
+  return wrappedTarget + turns * yearCount;
+}
+
+export function arcTimelineIndexFromDrag(
+  startIndex: number,
+  translationX: number,
+  pixelsPerYear = 76,
+  edgeScrollYears = 0,
+): number {
+  'worklet';
+  return startIndex + translationX / pixelsPerYear + edgeScrollYears;
+}
+
+export function visualArcTimelineDragOffset(
+  dragOffsetYears: number,
+  maximumDragYears = 1.15,
+): number {
+  'worklet';
+  return Math.max(-maximumDragYears, Math.min(maximumDragYears, dragOffsetYears));
+}
+
+export function arcTimelineMaxDragYears(
+  width: number,
+  radiusRatio = 0.54,
+  radiusCap = 220,
+  stepRadians = 0.32,
+  edgeInsetPx = 50,
+): number {
+  'worklet';
+  const radius = Math.min(radiusCap, width * radiusRatio);
+  if (radius <= 0) return 0;
+  const maximumHorizontalOffset = Math.max(0, width / 2 - edgeInsetPx);
+  const angle = Math.asin(Math.min(0.999, maximumHorizontalOffset / radius));
+  return angle / stepRadians;
+}
+
+export function resolveArcTimelineEdgeDirection(
+  previousDirection: number,
+  dragOffsetYears: number,
+  startYears = 1.15,
+  stopYears = 0.85,
+): number {
+  'worklet';
+  if (previousDirection > 0) return dragOffsetYears < stopYears ? 0 : 1;
+  if (previousDirection < 0) return dragOffsetYears > -stopYears ? 0 : -1;
+  if (dragOffsetYears > startYears) return 1;
+  if (dragOffsetYears < -startYears) return -1;
+  return 0;
+}
+
+export function projectedArcTimelineIndex(
+  currentIndex: number,
+  velocityX: number,
+  itemCount: number,
+  pixelsPerYear = 76,
+  projectionSeconds = 0.12,
+): number {
+  'worklet';
+  if (itemCount <= 0) return 0;
+  return Math.round(currentIndex + velocityX * projectionSeconds / pixelsPerYear);
+}
+
+export function arcTimelineButtonIndex(
+  scrollIndex: number,
+  buttonOffsetYears: number,
+  itemCount: number,
+  maximumDragYears = 1.15,
+  firstYearIndex = 0,
+): number {
+  'worklet';
+  return wrapArcTimelineYearIndex(
+    Math.round(scrollIndex + visualArcTimelineDragOffset(buttonOffsetYears, maximumDragYears)),
+    itemCount,
+    firstYearIndex,
+  );
+}

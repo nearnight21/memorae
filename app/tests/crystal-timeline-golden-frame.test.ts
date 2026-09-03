@@ -87,7 +87,7 @@ test('滑块轮廓由可调 Bézier Path 生成，不是固定圆角胶囊', () 
   assert.ok(inset.height < geometry.height);
 });
 
-test('Golden Renderer 由测试页与正式 Timeline 共用，正式手势不驱动形变和动态光照', async () => {
+test('Golden Renderer 保持在测试链，正式 Timeline 使用弧形时间轴模型', async () => {
   const [
     ordinaryEntry,
     testEntry,
@@ -110,12 +110,15 @@ test('Golden Renderer 由测试页与正式 Timeline 共用，正式手势不驱
 
   assert.doesNotMatch(ordinaryEntry, /GoldenFrame|crystal-timeline-reference/);
   assert.match(testEntry, /CrystalTimelineGoldenFrameScreen/);
-  assert.match(formalTimeline, /GOLDEN_CRYSTAL_PRESET/);
-  assert.match(formalTimeline, /timelineVisualOffsetAroundLens/);
-  assert.match(formalTimeline, /timelineLogicalOffsetFromVisual/);
   assert.match(formalTimeline, /Gesture\.Pan\(\)/);
-  assert.match(formalTimeline, /translateX\.value = withSpring/);
-  assert.doesNotMatch(formalTimeline, /pressProgress|snapProgress|highlightOffsetX|withTiming|withSequence/);
+  assert.match(formalTimeline, /arcTimelineButtonIndex/);
+  assert.match(formalTimeline, /arcTimelineIndexFromDrag/);
+  assert.match(formalTimeline, /arcTimelineMaxDragYears/);
+  assert.match(formalTimeline, /useFrameCallback/);
+  assert.match(formalTimeline, /useAnimatedReaction/);
+  assert.match(formalTimeline, /withTiming\(1, RETURN_CONFIG/);
+  assert.match(formalTimeline, /highlightedIndex/);
+  assert.doesNotMatch(formalTimeline, /GOLDEN_CRYSTAL_PRESET|timelineVisualOffsetAroundLens|timelineLogicalOffsetFromVisual/);
   assert.match(formalCanvas, /GoldenCrystalTrackLayers/);
   assert.match(formalCanvas, /GoldenCrystalMaterialLayers/);
   assert.doesNotMatch(formalCanvas, /useSharedValue|useDerivedValue|usePathValue|SharedValue/);
