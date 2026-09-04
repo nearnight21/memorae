@@ -1,4 +1,4 @@
-import CrystalTimeline from './timeline/CrystalTimeline';
+import ArcTimeline from './timeline/ArcTimeline';
 
 interface Props {
   years: string[];
@@ -7,5 +7,5 @@ interface Props {
 }
 
 export default function MobileTimeline({ years, selectedYear, onSelect }: Props) {
-  return <CrystalTimeline years={years} selectedYear={selectedYear} onSelect={onSelect} />;
+  return <ArcTimeline years={years} selectedYear={selectedYear} onSelect={onSelect} />;
 }

@@ -7,7 +7,7 @@ import {
   formatTimelineDate,
   timelineProgressToDate,
   timelineYearProgress,
-} from '../src/prototype/crystalTimelineTime';
+} from '../src/archive/crystal-timeline/crystalTimelineTime';
 
 test('水晶时间轴的连续位置可以映射到完整日期范围', () => {
   assert.equal(timelineProgressToDate(0).toISOString(), CRYSTAL_TIMELINE_MIN_DATE.toISOString());

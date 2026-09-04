@@ -5,6 +5,7 @@ import {
   buildTimelineItems,
   clampTimelineIndex,
   commitTimelineSelection,
+  filterMemoriesByTimelineYear,
   projectedTimelineIndex,
   resistedTimelineOffset,
   timelineIndexForOffset,
@@ -23,8 +24,8 @@ import {
   CRYSTAL_RAIL_CORE_HEIGHT,
   CRYSTAL_RAIL_HEIGHT,
   crystalRailBottomDistance,
-} from '../src/home/timeline/crystalTimelineGeometry';
-import { GOLDEN_CRYSTAL_PRESET } from '../src/home/timeline/goldenCrystalPreset';
+} from '../src/archive/crystal-timeline/crystalTimelineGeometry';
+import { GOLDEN_CRYSTAL_PRESET } from '../src/archive/crystal-timeline/goldenCrystalPreset';
 
 test('水晶时间轴冻结 390×844 验收几何，不回退为过大滑块或细线导轨', () => {
   assert.equal(CRYSTAL_LENS_WIDTH, 88);
@@ -141,4 +142,17 @@ test('同一松手结果不会重复提交年份，全部时间仍以 null 提�
   assert.equal(commitTimelineSelection('2024', '2025', (value) => committed.push(value)), true);
   assert.equal(commitTimelineSelection('2025', null, (value) => committed.push(value)), true);
   assert.deepEqual(committed, ['2025', null]);
+});
+
+test('年份筛选包含选中年份及其之前的记忆', () => {
+  const memories = [
+    { id: 'before', date: '2022-05-01' },
+    { id: 'selected', date: '2024-01-02' },
+    { id: 'after', date: '2025-12-31' },
+  ];
+  assert.deepEqual(
+    filterMemoriesByTimelineYear(memories, '2024').map((memory) => memory.id),
+    ['before', 'selected'],
+  );
+  assert.deepEqual(filterMemoriesByTimelineYear(memories, null), memories);
 });

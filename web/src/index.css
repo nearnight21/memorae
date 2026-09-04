@@ -1341,10 +1341,6 @@
   transform: translateY(-1px);
 }
 
-.crystal-timeline-formal.is-expanded ~ .map-create-memory-circle {
-  bottom: 208px;
-}
-
 .map-create-dock:has(.map-create-memory-trigger:hover),
 .map-create-dock:has(.map-create-memory-trigger:focus-visible) {
   width: 112px;

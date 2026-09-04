@@ -13,7 +13,7 @@ import type { MemoryV2 } from '../memory/memoryV2';
 import MobileTimeline from './MobileTimeline';
 import RegionControl from './RegionControl';
 import { androidTopInset } from '../ui/layout';
-import { CRYSTAL_HOME_BOTTOM_PADDING } from './timeline/crystalTimelineGeometry';
+import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
 
 interface Props {
   markers: readonly MemoryMapMarker[];
@@ -136,7 +136,7 @@ export default function HomeScreen({
           pointerEvents="box-none"
           style={[
             styles.bottomArea,
-            { paddingBottom: Math.max(CRYSTAL_HOME_BOTTOM_PADDING, insets.bottom + 16) },
+            { paddingBottom: Math.max(ARC_HOME_BOTTOM_PADDING, insets.bottom + 16) },
           ]}
         >
           <View style={styles.timelineWrap}>

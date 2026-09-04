@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { CalendarDays, Plus } from 'lucide-react';
-import type { Memory, MemoryFilters } from '../types';
-import { memoryDateValue, throughDateRange } from '../lib/memoryFilters';
-import { getTimelineTicks } from '../lib/timelineTicks';
+import type { Memory, MemoryFilters } from '../../types';
+import { memoryDateValue, throughDateRange } from '../../lib/memoryFilters';
+import { getTimelineTicks } from '../../lib/timelineTicks';
 import './CrystalTimeline.css';
 
 const DAY_MS = 86_400_000;

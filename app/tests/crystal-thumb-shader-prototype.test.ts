@@ -60,8 +60,8 @@ test('Golden Frame 保留 Legacy 并提供 Shader 调试视图和受限参数组
     readFile(new URL('../src/testing/CrystalTimelineGoldenFrameScreen.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/testing/CrystalTimelineGoldenRenderer.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/testing/CrystalThumbShaderPrototype.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/home/timeline/CrystalTimeline.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/home/timeline/CrystalRailCanvas.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/home/timeline/ArcTimeline.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/archive/crystal-timeline/CrystalRailCanvas.tsx', import.meta.url), 'utf8'),
   ]);
 
   assert.match(screen, /legacy: 'Legacy'/);

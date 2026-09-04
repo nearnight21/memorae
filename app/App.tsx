@@ -78,6 +78,7 @@ import {
   type HomeRegionOption,
 } from './src/map/homeMapModel';
 import { loadDecryptedMemories } from './src/memory/memoryStore';
+import { filterMemoriesByTimelineYear } from './src/home/timeline/timelineModel';
 import HomeScreen from './src/home/HomeScreen';
 import MemoryDetailOverlay, { type DetailPhotoState } from './src/detail/MemoryDetailOverlay';
 import MemoryEditOverlay from './src/edit/MemoryEditOverlay';
@@ -278,7 +279,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   })[mode], [mode]);
 
   const visibleMemories = useMemo(
-    () => selectedYear ? memories.filter((memory) => memory.date.startsWith(`${selectedYear}-`)) : memories,
+    () => filterMemoriesByTimelineYear(memories, selectedYear),
     [memories, selectedYear],
   );
   const mapMarkers = useMemo(

@@ -1,0 +1,2 @@
+export const ARC_TIMELINE_HEIGHT = 220;
+export const ARC_HOME_BOTTOM_PADDING = 48;

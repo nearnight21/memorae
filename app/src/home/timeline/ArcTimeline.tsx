@@ -8,32 +8,53 @@ import Animated, {
   Extrapolation,
   interpolate,
   ReduceMotion,
-  useFrameCallback,
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withTiming,
+  useFrameCallback,
   withSpring,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import {
-  ARC_TIMELINE_PIXELS_PER_YEAR,
   ARC_TIMELINE_GESTURE_SPEED,
+  ARC_TIMELINE_PIXELS_PER_YEAR,
   arcTimelineButtonIndex,
   arcTimelineIndexFromDrag,
   arcTimelineMaxDragYears,
+  clampArcTimelineIndex,
+  buildTimelineItems,
+  commitTimelineSelection,
   nearestCyclicArcTimelineIndex,
   projectedArcTimelineIndex,
   resolveArcTimelineEdgeDirection,
   visualArcTimelineDragOffset,
+  timelineIndexForSelection,
+  type TimelineItem,
   wrapArcTimelineYearIndex,
-} from './arcTimelineModel';
+} from './timelineModel';
+
+interface Props {
+  years: string[];
+  selectedYear: string | null;
+  onSelect: (year: string | null) => void;
+}
+
+interface YearNodeProps {
+  item: TimelineItem;
+  index: number;
+  width: number;
+  scrollIndex: SharedValue<number>;
+  highlightedIndex: SharedValue<number>;
+  itemCount: number;
+  firstYearIndex: number;
+}
 
 const ARC_RADIUS_RATIO = 0.54;
 const ARC_STEP_RADIANS = 0.32;
-const ARC_TIMELINE_EDGE_SCROLL_YEARS_PER_SECOND = ARC_TIMELINE_GESTURE_SPEED;
+const ARC_EDGE_SCROLL_YEARS_PER_SECOND = ARC_TIMELINE_GESTURE_SPEED;
 const SPRING_CONFIG = {
   stiffness: 250,
   damping: 28,
@@ -47,32 +68,19 @@ const RETURN_CONFIG = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-interface Props {
-  years: readonly string[];
-  selectedIndex?: number;
-  onSelect?: (year: string) => void;
-}
+function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount, firstYearIndex }: YearNodeProps) {
+  // “全部”由中心按钮承载，不参与年份拱形节点，避免回弹期间出现幽灵节点。
+  if (item.value === null) return null;
 
-interface YearNodeProps {
-  year: string;
-  index: number;
-  width: number;
-    scrollIndex: SharedValue<number>;
-  highlightedIndex: SharedValue<number>;
-  itemCount: number;
-}
-
-function YearNode({ year, index, width, scrollIndex, highlightedIndex, itemCount }: YearNodeProps) {
   const animatedStyle = useAnimatedStyle(() => {
     let distance = index - scrollIndex.value;
-    if (itemCount > 0) {
-      const wrapped = (distance + itemCount / 2) % itemCount;
-      distance = (wrapped < 0 ? wrapped + itemCount : wrapped) - itemCount / 2;
+    const yearCount = itemCount - firstYearIndex;
+    if (index >= firstYearIndex && yearCount > 0) {
+      const wrapped = (distance + yearCount / 2) % yearCount;
+      distance = ((wrapped < 0 ? wrapped + yearCount : wrapped) - yearCount / 2);
     }
-    const angle = distance * ARC_STEP_RADIANS;
     const radius = Math.min(220, width * ARC_RADIUS_RATIO);
-    const x = Math.sin(angle) * radius;
-    const y = radius * (1 - Math.cos(angle));
+    const angle = distance * ARC_STEP_RADIANS;
     const normalizedDistance = Math.abs(distance);
     const isHighlighted = index === highlightedIndex.value;
     const baseScale = interpolate(normalizedDistance, [0, 1, 2.4], [1.12, 0.92, 0.72], Extrapolation.CLAMP);
@@ -80,12 +88,12 @@ function YearNode({ year, index, width, scrollIndex, highlightedIndex, itemCount
       opacity: isHighlighted ? 1 : interpolate(normalizedDistance, [0, 1.8, 3.4], [1, 0.72, 0], Extrapolation.CLAMP),
       zIndex: isHighlighted ? 2 : 0,
       transform: [
-        { translateX: x },
-        { translateY: y },
+        { translateX: Math.sin(angle) * radius },
+        { translateY: radius * (1 - Math.cos(angle)) },
         { scale: baseScale * (isHighlighted ? 1.1 : 1) },
       ],
     };
-  }, [highlightedIndex, index, itemCount, scrollIndex, width]);
+  }, [firstYearIndex, highlightedIndex, index, itemCount, scrollIndex, width]);
 
   const highlightedTextStyle = useAnimatedStyle(() => {
     const isHighlighted = index === highlightedIndex.value;
@@ -96,19 +104,21 @@ function YearNode({ year, index, width, scrollIndex, highlightedIndex, itemCount
   }, [highlightedIndex, index]);
 
   return (
-    <Animated.View accessibilityLabel={`${year} 年`} style={[styles.yearNode, animatedStyle]}>
-      <Animated.Text style={[styles.yearText, highlightedTextStyle]}>{year}</Animated.Text>
+    <Animated.View accessibilityLabel={`${item.label} 年`} style={[styles.yearNode, animatedStyle]}>
+      <Animated.Text style={[styles.yearText, highlightedTextStyle]}>{item.label}</Animated.Text>
     </Animated.View>
   );
 }
 
-export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelect }: Props) {
+export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
   const { width } = useWindowDimensions();
+  const items = useMemo(() => buildTimelineItems(years), [years]);
+  const selectedIndex = timelineIndexForSelection(items, selectedYear);
+  const firstYearIndex = items.length > 1 ? 1 : 0;
   const maximumDragYears = useMemo(() => arcTimelineMaxDragYears(width), [width]);
-  const safeIndex = Math.max(0, Math.min(Math.max(0, years.length - 1), selectedIndex));
-  const [displayIndex, setDisplayIndex] = useState(safeIndex);
-  const scrollIndex = useSharedValue(safeIndex);
-  const gestureStartIndex = useSharedValue(safeIndex);
+  const [displayIndex, setDisplayIndex] = useState(selectedIndex);
+  const scrollIndex = useSharedValue(selectedIndex);
+  const gestureStartIndex = useSharedValue(selectedIndex);
   const dragOffsetYears = useSharedValue(0);
   const edgeScrollOffset = useSharedValue(0);
   const edgeDirection = useSharedValue(0);
@@ -117,15 +127,25 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
   const releaseTargetIndex = useSharedValue(0);
   const releaseCommitted = useSharedValue(0);
   const highlightedIndex = useDerivedValue(
-    () => arcTimelineButtonIndex(scrollIndex.value, dragOffsetYears.value, years.length, maximumDragYears),
-    [dragOffsetYears, maximumDragYears, scrollIndex, years.length],
+    () => firstYearIndex > 0 && scrollIndex.value === 0 && Math.abs(dragOffsetYears.value) < 0.5
+      ? 0
+      : arcTimelineButtonIndex(scrollIndex.value, dragOffsetYears.value, items.length, maximumDragYears, firstYearIndex),
+    [dragOffsetYears, firstYearIndex, items.length, maximumDragYears, scrollIndex],
   );
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  const currentValueRef = useRef<string | null>(selectedYear);
+  const pendingSelectionIndex = useRef<number | null>(null);
 
   const updateDisplayIndex = useCallback((index: number) => {
     setDisplayIndex((current) => current === index ? current : index);
   }, []);
+
+  const commitIndex = useCallback((index: number) => {
+    const nextIndex = wrapArcTimelineYearIndex(Math.round(index), items.length, firstYearIndex);
+    const nextValue = items[nextIndex]?.value ?? null;
+    pendingSelectionIndex.current = nextIndex;
+    const committed = commitTimelineSelection(currentValueRef.current, nextValue, onSelect);
+    if (committed) currentValueRef.current = nextValue;
+  }, [firstYearIndex, items, onSelect]);
 
   useAnimatedReaction(
     () => highlightedIndex.value,
@@ -134,20 +154,6 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
     },
     [highlightedIndex, updateDisplayIndex],
   );
-
-  useEffect(() => {
-    if (years.length === 0) return;
-    const nextIndex = wrapArcTimelineYearIndex(selectedIndex, years.length, 0);
-    const targetIndex = nearestCyclicArcTimelineIndex(nextIndex, scrollIndex.value, years.length, 0);
-    scrollIndex.value = withSpring(targetIndex, SPRING_CONFIG);
-    dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
-  }, [dragOffsetYears, scrollIndex, selectedIndex, years.length]);
-
-  const commitIndex = useCallback((index: number) => {
-    const nextIndex = wrapArcTimelineYearIndex(Math.round(index), years.length, 0);
-    const year = years[nextIndex];
-    if (year) onSelectRef.current?.(year);
-  }, [years]);
 
   useAnimatedReaction(
     () => releaseProgress.value,
@@ -160,25 +166,44 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
     [commitIndex, releaseCommitted, releaseProgress, releaseTargetIndex],
   );
 
-  const animateToIndex = useCallback((index: number) => {
-    const nextIndex = wrapArcTimelineYearIndex(Math.round(index), years.length, 0);
-    const targetIndex = nearestCyclicArcTimelineIndex(nextIndex, scrollIndex.value, years.length, 0);
-    edgeScrollOffset.value = 0;
+  useEffect(() => {
+    currentValueRef.current = selectedYear;
+    setDisplayIndex(selectedIndex);
+    if (items.length === 0) return;
+    if (pendingSelectionIndex.current === selectedIndex) {
+      pendingSelectionIndex.current = null;
+      cancelAnimation(scrollIndex);
+      cancelAnimation(dragOffsetYears);
+      scrollIndex.value = selectedIndex === 0
+        ? 0
+        : wrapArcTimelineYearIndex(selectedIndex, items.length, firstYearIndex);
+      dragOffsetYears.value = 0;
+      return;
+    }
+    cancelAnimation(scrollIndex);
+    cancelAnimation(dragOffsetYears);
+    const targetIndex = selectedIndex === 0
+      ? 0
+      : wrapArcTimelineYearIndex(selectedIndex, items.length, firstYearIndex);
     scrollIndex.value = withSpring(targetIndex, SPRING_CONFIG);
     dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
+  }, [dragOffsetYears, firstYearIndex, items.length, scrollIndex, selectedIndex, selectedYear]);
+
+  const animateFromAccessibility = useCallback((index: number) => {
+    if (items.length === 0) return;
+    const nextIndex = wrapArcTimelineYearIndex(index, items.length, firstYearIndex);
+    edgeScrollOffset.value = 0;
+    pendingSelectionIndex.current = nextIndex;
     commitIndex(nextIndex);
-  }, [commitIndex, dragOffsetYears, edgeScrollOffset, scrollIndex, years.length]);
+    scrollIndex.value = withSpring(nearestCyclicArcTimelineIndex(nextIndex, scrollIndex.value, items.length, firstYearIndex), SPRING_CONFIG);
+    dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
+  }, [commitIndex, dragOffsetYears, edgeScrollOffset, firstYearIndex, items.length, scrollIndex]);
 
   useFrameCallback((frame) => {
     if (isDragging.value === 0 || edgeDirection.value === 0) return;
     const elapsedSeconds = Math.min(frame.timeSincePreviousFrame ?? 16, 32) / 1000;
     edgeScrollOffset.value += edgeDirection.value * 2 * elapsedSeconds;
-    scrollIndex.value = arcTimelineIndexFromDrag(
-      gestureStartIndex.value,
-      0,
-      76,
-      edgeScrollOffset.value,
-    );
+    scrollIndex.value = arcTimelineIndexFromDrag(gestureStartIndex.value, 0, 76, edgeScrollOffset.value);
   });
 
   const gesture = useMemo(() => Gesture.Pan()
@@ -198,12 +223,7 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
     .onUpdate((event) => {
       const dragYears = event.translationX / 76 * 2;
       dragOffsetYears.value = dragYears;
-      scrollIndex.value = arcTimelineIndexFromDrag(
-        gestureStartIndex.value,
-        0,
-        76,
-        edgeScrollOffset.value,
-      );
+      scrollIndex.value = arcTimelineIndexFromDrag(gestureStartIndex.value, 0, 76, edgeScrollOffset.value);
       edgeDirection.value = resolveArcTimelineEdgeDirection(
         edgeDirection.value,
         dragYears,
@@ -218,15 +238,9 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
         maximumDragYears,
       );
       const releaseVelocity = wasEdgeScrolling ? 0 : event.velocityX * 2;
-      const projectedIndex = projectedArcTimelineIndex(
-        buttonIndex,
-        releaseVelocity,
-        years.length,
-        76,
-        0.12,
-      );
-      const nextIndex = wrapArcTimelineYearIndex(projectedIndex, years.length, 0);
-      const targetIndex = nearestCyclicArcTimelineIndex(nextIndex, buttonIndex, years.length, 0);
+      const projectedIndex = projectedArcTimelineIndex(buttonIndex, releaseVelocity, items.length, 76, 0.12);
+      const nextIndex = wrapArcTimelineYearIndex(projectedIndex, items.length, firstYearIndex);
+      const targetIndex = nearestCyclicArcTimelineIndex(nextIndex, buttonIndex, items.length, firstYearIndex);
       isDragging.value = 0;
       edgeDirection.value = 0;
       edgeScrollOffset.value = 0;
@@ -235,7 +249,7 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
       releaseProgress.value = withTiming(1, RETURN_CONFIG);
       scrollIndex.value = withTiming(targetIndex, RETURN_CONFIG);
       dragOffsetYears.value = withTiming(0, RETURN_CONFIG);
-    }), [commitIndex, dragOffsetYears, edgeDirection, edgeScrollOffset, gestureStartIndex, isDragging, maximumDragYears, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, years.length]);
+    }), [dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureStartIndex, isDragging, items.length, maximumDragYears, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex]);
 
   const lensStyle = useAnimatedStyle(() => {
     const fractionalIndex = visualArcTimelineDragOffset(dragOffsetYears.value, maximumDragYears);
@@ -251,60 +265,59 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
     };
   }, [dragOffsetYears, maximumDragYears, width]);
 
-  if (years.length === 0) return null;
+  if (items.length === 0) return null;
+  const safeDisplayIndex = clampArcTimelineIndex(displayIndex, items.length);
 
   return (
-    <View accessibilityLabel="弧形时间轴原型" style={styles.root}>
-        <View style={styles.arcViewport}>
-          <Canvas style={StyleSheet.absoluteFill}>
-            <Path
-              color="rgba(255,255,252,0.72)"
-              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
-              strokeWidth={4}
-              style="stroke"
-            />
-            <Path
-              color="rgba(151,98,49,0.7)"
-              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
-              strokeWidth={1}
-              style="stroke"
-            />
-          </Canvas>
-          {years.map((year, index) => (
-            <YearNode
-              key={`${year}-${index}`}
-              highlightedIndex={highlightedIndex}
-              index={index}
-              itemCount={years.length}
-              scrollIndex={scrollIndex}
-              width={width}
-              year={year}
-            />
-          ))}
-          <GestureDetector gesture={gesture}>
-            <Animated.View
-              accessible
-              accessibilityActions={[
-                { name: 'increment', label: '后一年度' },
-                { name: 'decrement', label: '前一年度' },
-              ]}
-              accessibilityLabel="中心年份按钮"
-              accessibilityRole="adjustable"
-              accessibilityValue={{ text: `${years[displayIndex]} 年` }}
-              onAccessibilityAction={({ nativeEvent }) => {
-                if (nativeEvent.actionName === 'increment') animateToIndex(displayIndex + 1);
-                if (nativeEvent.actionName === 'decrement') animateToIndex(displayIndex - 1);
-              }}
-              style={[styles.lens, lensStyle]}
-            >
-              <Text style={styles.lensYear}>{years[displayIndex]}</Text>
-              <View style={styles.lensInner} />
-            </Animated.View>
-          </GestureDetector>
-        </View>
-        <View pointerEvents="none" style={styles.centerLabel}>
-          <Text style={styles.centerYear}>{years[displayIndex]}</Text>
-        </View>
+    <View accessibilityLabel="记忆年份时间轴" style={styles.root}>
+      <View style={styles.arcViewport}>
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Path
+            color="rgba(255,255,252,0.72)"
+            path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
+            strokeWidth={4}
+            style="stroke"
+          />
+          <Path
+            color="rgba(151,98,49,0.7)"
+            path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
+            strokeWidth={1}
+            style="stroke"
+          />
+        </Canvas>
+        {items.map((item, index) => (
+          <YearNode
+            key={item.key}
+            highlightedIndex={highlightedIndex}
+            index={index}
+            item={item}
+            itemCount={items.length}
+            firstYearIndex={firstYearIndex}
+            scrollIndex={scrollIndex}
+            width={width}
+          />
+        ))}
+        <GestureDetector gesture={gesture}>
+          <Animated.View
+            accessible
+            accessibilityActions={[
+              { name: 'increment', label: '增加年份' },
+              { name: 'decrement', label: '减少年份' },
+            ]}
+            accessibilityLabel="中心年份按钮"
+            accessibilityRole="adjustable"
+            accessibilityValue={{ text: items[safeDisplayIndex]?.value ? `${items[safeDisplayIndex].label} 年` : '全部时间' }}
+            onAccessibilityAction={({ nativeEvent }) => {
+              if (nativeEvent.actionName === 'increment') animateFromAccessibility(safeDisplayIndex + 1);
+              if (nativeEvent.actionName === 'decrement') animateFromAccessibility(safeDisplayIndex - 1);
+            }}
+            style={[styles.lens, lensStyle]}
+          >
+            <Text style={styles.lensYear}>{items[safeDisplayIndex]?.label}</Text>
+            <View style={styles.lensInner} />
+          </Animated.View>
+        </GestureDetector>
+      </View>
     </View>
   );
 }
@@ -373,20 +386,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  centerLabel: {
-    position: 'absolute',
-    top: 151,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  centerYear: {
-    color: '#7b5a3d',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
 });

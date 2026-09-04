@@ -5,7 +5,7 @@ import { Canvas } from '@shopify/react-native-skia';
 import {
   GoldenCrystalMaterialLayers,
   GoldenCrystalTrackLayers,
-} from '../home/timeline/GoldenCrystalVisual';
+} from '../archive/crystal-timeline/GoldenCrystalVisual';
 import type {
   GoldenCrystalGeometry,
   GoldenCrystalLighting,

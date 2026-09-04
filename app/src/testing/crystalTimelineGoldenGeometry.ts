@@ -1,1 +1,1 @@
-export * from '../home/timeline/goldenCrystalGeometry';
+export * from '../archive/crystal-timeline/goldenCrystalGeometry';

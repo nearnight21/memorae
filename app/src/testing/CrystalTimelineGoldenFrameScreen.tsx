@@ -38,7 +38,7 @@ import {
   type CrystalThumbShaderParameters,
 } from './CrystalThumbShaderPrototype';
 
-const REFERENCE_IMAGE = require('../../assets/golden-frame/crystal-timeline-reference.png');
+const REFERENCE_IMAGE = require('../../assets/archive/crystal-timeline/crystal-timeline-reference.png');
 
 const MODE_LABELS: Record<GoldenFrameMode, string> = {
   reference: 'Reference',
