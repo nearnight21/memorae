@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import MemoraeMap, {
   type CameraState,
   type MapCameraIdleEvent,
@@ -15,6 +21,7 @@ import RegionControl from './RegionControl';
 import TimelineQuietZone from './TimelineQuietZone';
 import { androidTopInset } from '../ui/layout';
 import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
+import { CREATE_OVERLAY_MAX_OPACITY } from './timeline/timelineModel';
 
 const TIMELINE_VERTICAL_OFFSET = 50;
 
@@ -63,14 +70,34 @@ export default function HomeScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [regionMenuOpen, setRegionMenuOpen] = useState(false);
+  const createPullProgress = useSharedValue(0);
   const homeStatus = status?.includes('诊断：') ? undefined : status;
   const years = useMemo(() => Array.from(new Set(
     memories.map((memory) => memory.date.slice(0, 4)).filter((year) => /^\d{4}$/.test(year)),
   )).sort(), [memories]);
 
   useEffect(() => {
-    if (!chromeVisible || locationMode) setRegionMenuOpen(false);
-  }, [chromeVisible, locationMode]);
+    if (!chromeVisible || locationMode) {
+      setRegionMenuOpen(false);
+      createPullProgress.value = 0;
+    }
+  }, [chromeVisible, createPullProgress, locationMode]);
+
+  const createShadeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      createPullProgress.value,
+      [0, 1],
+      [0, CREATE_OVERLAY_MAX_OPACITY],
+      Extrapolation.CLAMP,
+    ),
+  }), [createPullProgress]);
+
+  const createLabelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(createPullProgress.value, [0, 0.22, 0.72, 1], [0, 0, 0.78, 1], Extrapolation.CLAMP),
+    transform: [{
+      scale: interpolate(createPullProgress.value, [0, 0.72, 1], [0.92, 1, 1.045], Extrapolation.CLAMP),
+    }],
+  }), [createPullProgress]);
 
   function selectRegion(region: HomeRegionOption): void {
     setRegionMenuOpen(false);
@@ -137,6 +164,10 @@ export default function HomeScreen({
             </Text>
           </View>
         )}
+        <View pointerEvents="none" style={styles.createOverlay}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.createShade, createShadeStyle]} />
+          <Animated.Text style={[styles.createTargetLabel, createLabelStyle]}>新建记忆</Animated.Text>
+        </View>
         <View
           pointerEvents="box-none"
           style={[
@@ -145,16 +176,14 @@ export default function HomeScreen({
           ]}
         >
           <View style={styles.timelineWrap}>
-            <MobileTimeline years={years} selectedYear={selectedYear} onSelect={onYearChange} />
+            <MobileTimeline
+              years={years}
+              selectedYear={selectedYear}
+              onSelect={onYearChange}
+              onCreateMemory={onCreateMemory}
+              createPullProgress={createPullProgress}
+            />
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="新建记忆"
-            onPress={onCreateMemory}
-            style={({ pressed }) => [styles.createButton, pressed && styles.createPressed]}
-          >
-            <Text style={styles.createPlus}>+</Text>
-          </Pressable>
         </View>
       </View>}
       {locationMode && locationOverlay}
@@ -178,9 +207,9 @@ const styles = StyleSheet.create({
   regionOptionCount: { color: '#8b8175', fontSize: 12, lineHeight: 18 },
   messageSlot: { alignSelf: 'center', alignItems: 'center', gap: 6, maxWidth: 250, marginTop: 72 },
   message: { color: '#6e766f', fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  bottomArea: { paddingHorizontal: 16, minHeight: 240, justifyContent: 'flex-end' },
+  createOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 5, alignItems: 'center', justifyContent: 'center' },
+  createShade: { backgroundColor: '#241f1b' },
+  createTargetLabel: { color: '#fffaf0', fontSize: 28, lineHeight: 36, fontWeight: '600', letterSpacing: 2, textShadowColor: 'rgba(26,20,16,0.28)', textShadowRadius: 8, textShadowOffset: { width: 0, height: 2 } },
+  bottomArea: { paddingHorizontal: 16, minHeight: 240, justifyContent: 'flex-end', zIndex: 6 },
   timelineWrap: { marginHorizontal: -16, transform: [{ translateY: TIMELINE_VERTICAL_OFFSET }] },
-  createButton: { position: 'absolute', right: 16, bottom: 168, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(246,245,240,0.86)', shadowColor: '#262926', shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  createPlus: { color: '#3c403d', fontSize: 27, lineHeight: 30, fontWeight: '300' },
-  createPressed: { opacity: 0.68, transform: [{ scale: 0.96 }] },
 });

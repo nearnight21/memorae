@@ -177,3 +177,34 @@ test('Golden Renderer 保持在测试链，正式 Timeline 使用弧形时间轴
   assert.match(lowerRefractionBlock, /rgba\(135,77,29,0\.82\)/);
   assert.doesNotMatch(sharedVisual, /useSharedValue|useDerivedValue|usePathValue|withSpring|Gesture\./);
 });
+
+test('正式中心年份按钮以互斥手势承载回到现在与上拉创建，并由 Home 展示全屏目标', async () => {
+  const [timeline, mobileTimeline, home] = await Promise.all([
+    readFile(new URL('../src/home/timeline/ArcTimeline.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/home/MobileTimeline.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(timeline, /Gesture\.Tap\(\)[\s\S]*\.numberOfTaps\(2\)/);
+  assert.match(timeline, /Gesture\.Exclusive\(doubleTapGesture, panGesture\)/);
+  assert.match(timeline, /const currentYear = String\(new Date\(\)\.getFullYear\(\)\)/);
+  assert.match(timeline, /withSpring\(currentYearTargetIndex, SPRING_CONFIG\)/);
+  assert.match(timeline, /onSelect\(currentYear\)/);
+  assert.match(timeline, /resolveArcTimelineGestureMode/);
+  assert.match(timeline, /resolveCreatePullRelease/);
+  assert.match(timeline, /scheduleOnRN\(triggerCreateOnce\)/);
+  assert.match(timeline, /Haptics\.impactAsync\(Haptics\.ImpactFeedbackStyle\.Light\)/);
+  assert.doesNotMatch(timeline, /setInterval|setTimeout|from 'react-native'.*Animated/);
+  const createReleaseBranch = timeline.match(
+    /if \(resolvedMode === ARC_TIMELINE_GESTURE_CREATE\) \{([\s\S]*?)if \(resolvedMode !== ARC_TIMELINE_GESTURE_HORIZONTAL\)/,
+  )?.[1] ?? '';
+  assert.doesNotMatch(createReleaseBranch, /commitIndex|onSelect/);
+
+  assert.match(mobileTimeline, /onCreateMemory/);
+  assert.match(mobileTimeline, /createPullProgress/);
+  assert.match(home, /useSharedValue\(0\)/);
+  assert.match(home, />新建记忆<\/Animated\.Text>/);
+  assert.match(home, /CREATE_OVERLAY_MAX_OPACITY/);
+  assert.match(home, /onCreateMemory=\{onCreateMemory\}/);
+  assert.doesNotMatch(home, /styles\.createButton|styles\.createPlus|styles\.createPressed/);
+});

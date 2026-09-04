@@ -2,12 +2,20 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ARC_TIMELINE_GESTURE_CREATE,
+  ARC_TIMELINE_GESTURE_HORIZONTAL,
+  ARC_TIMELINE_GESTURE_PENDING,
   buildTimelineItems,
   clampTimelineIndex,
   commitTimelineSelection,
+  createPullDisplayDistance,
+  createPullProgress,
   filterMemoriesByTimelineYear,
+  isCreatePullArmed,
   projectedTimelineIndex,
   resistedTimelineOffset,
+  resolveArcTimelineGestureMode,
+  resolveCreatePullRelease,
   timelineIndexForOffset,
   timelineIndexForSelection,
   timelineLogicalOffsetFromVisual,
@@ -49,7 +57,12 @@ test('水晶时间轴使用真实年份补齐自然年并保留全部时间，�
     '2026',
   ]);
   assert.equal(items.some((item) => item.value === '2027' || item.value === '2028'), false);
-  assert.deepEqual(buildTimelineItems([], 2026), []);
+  assert.deepEqual(buildTimelineItems([], 2026, 3).map((item) => item.value), [
+    null,
+    '2024',
+    '2025',
+    '2026',
+  ]);
 });
 
 test('年份索引和时间轴 offset 可以双向换算', () => {
@@ -155,4 +168,31 @@ test('年份筛选包含选中年份及其之前的记忆', () => {
     ['before', 'selected'],
   );
   assert.deepEqual(filterMemoriesByTimelineYear(memories, null), memories);
+});
+
+test('弧形时间轴先锁定横向或向上创建方向，小幅抖动和下拉不进入创建', () => {
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 4, -5), ARC_TIMELINE_GESTURE_PENDING);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 28, -8), ARC_TIMELINE_GESTURE_HORIZONTAL);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 8, -28), ARC_TIMELINE_GESTURE_CREATE);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 2, 40), ARC_TIMELINE_GESTURE_PENDING);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_HORIZONTAL, 2, -80), ARC_TIMELINE_GESTURE_HORIZONTAL);
+  assert.equal(createPullProgress(ARC_TIMELINE_GESTURE_HORIZONTAL, -200), 0);
+});
+
+test('向上拉越过阈值后进入 armed，退回阈值以下恢复并在阈值后增加阻尼', () => {
+  assert.equal(isCreatePullArmed(ARC_TIMELINE_GESTURE_CREATE, -111), false);
+  assert.equal(isCreatePullArmed(ARC_TIMELINE_GESTURE_CREATE, -112), true);
+  assert.equal(isCreatePullArmed(ARC_TIMELINE_GESTURE_CREATE, -90), false);
+  assert.equal(createPullProgress(ARC_TIMELINE_GESTURE_CREATE, -56), 0.5);
+  assert.equal(createPullProgress(ARC_TIMELINE_GESTURE_CREATE, -160), 1);
+  assert.equal(createPullDisplayDistance(-112), 112);
+  assert.ok(createPullDisplayDistance(-212) < 212);
+});
+
+test('Create Pull 未 armed 时取消，armed 松手只允许一次 create', () => {
+  assert.equal(resolveCreatePullRelease(ARC_TIMELINE_GESTURE_CREATE, false, false), 'cancel');
+  assert.equal(resolveCreatePullRelease(ARC_TIMELINE_GESTURE_CREATE, true, false), 'create');
+  assert.equal(resolveCreatePullRelease(ARC_TIMELINE_GESTURE_CREATE, true, true), 'none');
+  assert.equal(resolveCreatePullRelease(ARC_TIMELINE_GESTURE_HORIZONTAL, true, false), 'none');
+  assert.equal(resolveCreatePullRelease(ARC_TIMELINE_GESTURE_PENDING, false, false), 'none');
 });

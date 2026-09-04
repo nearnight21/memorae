@@ -17,14 +17,26 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
   <style>
     html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: transparent; }
     .notice { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 2; padding: 10px 12px; border: 1px solid rgba(92,78,61,.22); border-radius: 12px; background: rgba(250,248,241,.94); color: #423b32; font: 13px/1.4 sans-serif; }
-    .marker { display: block; width: 52px; height: 60px; position: relative; filter: drop-shadow(0 2px 3px rgba(38,41,38,.14)); }
-    .marker.selected { filter: drop-shadow(0 3px 5px rgba(181,129,75,.32)); }
-    .photo-shell { position: absolute; left: 4px; top: 2px; width: 44px; height: 44px; border: 2px solid #fff; border-radius: 7px; overflow: hidden; background: #dfe4df; box-shadow: 0 2px 6px rgba(31,33,31,.18); }
-    .photo { width: 100%; height: 100%; object-fit: cover; }
-    .photo.fallback { display: block; background: #b5814b; }
-    .memory-count { position: absolute; right: -3px; top: -4px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border: 2px solid #fff; border-radius: 10px; background: #8f6034; color: #fff; text-align: center; font: 600 11px/16px sans-serif; }
-    .anchor { position: absolute; bottom: 2px; left: 23px; width: 6px; height: 6px; border-radius: 50%; background: #b5814b; border: 1px solid rgba(255,255,255,.85); }
-    .marker.selected .anchor { background: #8f6034; box-shadow: 0 0 0 5px rgba(181,129,75,.22); }
+    .marker { display: block; width: 58.5px; height: 58.5px; position: relative; overflow: visible; cursor: pointer; transform-origin: center; }
+    .marker.enter-pending { opacity: 0; }
+    .marker.entering { animation: map-bubble-enter 360ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both; }
+    .photo-shell { position: absolute; left: 4.6px; top: 0; width: 49.3px; height: 49.3px; overflow: visible; }
+    .photo { display: block; width: 49.3px; height: 49.3px; box-sizing: border-box; border: 2.3px solid #f8f3e8; border-radius: 50%; outline: .8px solid rgba(139,111,57,.72); object-fit: cover; background: #dfe4df; box-shadow: 0 5.4px 13.1px rgba(61,54,44,.28); transition: transform 180ms ease, outline 180ms ease; }
+    .photo.fallback { background: #b5814b; }
+    .memory-count { position: absolute; right: .8px; top: -3.9px; z-index: 2; min-width: 15.4px; height: 15.4px; padding: 0 3.9px; box-sizing: border-box; border: 1.5px solid #f8f3e8; border-radius: 999px; background: #8f6034; color: #fff; text-align: center; font: 600 8.5px/12.3px sans-serif; }
+    .marker-label { position: absolute; top: 52.4px; left: 50%; transform: translateX(-50%); max-width: 86.2px; padding: 1.5px 5.4px; box-sizing: border-box; border: .8px solid rgba(139,111,57,.38); border-radius: 999px; background: rgba(248,243,232,.94); color: #51483d; box-shadow: 0 2.3px 6.2px rgba(61,54,44,.16); font: 500 8.5px/1.25 'Songti SC', STSong, serif; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .anchor { position: absolute; bottom: 2.3px; left: 27px; width: 4.6px; height: 4.6px; box-sizing: border-box; border: .8px solid rgba(255,255,255,.85); border-radius: 50%; background: #b5814b; }
+    .marker.selected .photo { transform: scale(1.2); outline: 3.1px solid rgba(181,129,75,.42); }
+    .marker.selected .marker-label { border-color: rgba(181,129,75,.72); }
+    .marker.selected .anchor { background: #8f6034; box-shadow: 0 0 0 3.9px rgba(181,129,75,.22); }
+    @keyframes map-bubble-enter {
+      from { opacity: 0; transform: translateY(9px) scale(0.72); }
+      72% { opacity: 1; transform: translateY(-2px) scale(1.07); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .marker.entering { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -37,7 +49,10 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const apiKey = ${key};
       const securityJsCode = ${security};
       window._AMapSecurityConfig = { securityJsCode };
+      const CAMERA_FOCUS_OFFSET_X = 200;
       const markers = new Map();
+      let renderedGroupSignatures = new Map();
+      let renderedScreenSignature = null;
       let map = null;
       let selectedId = null;
       let tileTimeout = null;
@@ -60,9 +75,57 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         if (country) return country;
         return clean(value.province) || clean(value.city) ? '中国' : '未标注地区';
       };
+      const textFingerprint = (value) => {
+        if (typeof value !== 'string' || !value) return '';
+        let hash = 2166136261;
+        for (let index = 0; index < value.length; index += 1) {
+          hash ^= value.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return value.length + ':' + (hash >>> 0).toString(36);
+      };
+      const groupSignature = (group) => JSON.stringify({
+        scope: group.scope,
+        label: group.label,
+        lat: group.lat,
+        lng: group.lng,
+        values: group.values.map((value) => ({
+          id: value.id,
+          lat: value.lat,
+          lng: value.lng,
+          thumbnail: textFingerprint(value.thumbnailRef),
+          country: clean(value.country),
+          province: clean(value.province),
+          city: clean(value.city),
+        })).sort((left, right) => left.id.localeCompare(right.id)),
+      });
+      const updateSelectedMarkers = () => {
+        markers.forEach(({ element, ids }) => {
+          element.classList.toggle('selected', ids.includes(selectedId));
+        });
+      };
+      const logicalCameraCenter = () => {
+        if (!map) return null;
+        const size = map.getSize?.();
+        const width = typeof size?.getWidth === 'function' ? size.getWidth() : size?.width;
+        const height = typeof size?.getHeight === 'function' ? size.getHeight() : size?.height;
+        if (
+          Number.isFinite(width) && Number.isFinite(height)
+          && typeof map.containerToLngLat === 'function'
+          && typeof AMap.Pixel === 'function'
+        ) {
+          return map.containerToLngLat(new AMap.Pixel(width / 2 + CAMERA_FOCUS_OFFSET_X, height / 2));
+        }
+        return map.getCenter?.() || null;
+      };
+      const setLogicalCamera = (zoom, lng, lat) => {
+        if (!map) return;
+        map.setZoomAndCenter(zoom, [lng, lat], true);
+        map.panBy(-CAMERA_FOCUS_OFFSET_X, 0, 0);
+      };
       const postCameraIdle = () => {
         if (!map) return;
-        const center = map.getCenter?.();
+        const center = logicalCameraCenter();
         if (!center) return;
         const lat = typeof center.getLat === 'function' ? center.getLat() : center[1];
         const lng = typeof center.getLng === 'function' ? center.getLng() : center[0];
@@ -78,13 +141,60 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         } : undefined;
         if (Number.isFinite(lat) && Number.isFinite(lng)) post({ type: 'cameraIdle', lat, lng, zoom, bounds: cameraBounds });
       };
-      const markerHtml = (value, count, ids) => {
-        const photo = safeDataUri(value.thumbnailRef)
-          ? '<img class="photo" src="' + value.thumbnailRef + '" />'
-          : '<span class="photo fallback"></span>';
-        const badge = count > 1 ? '<span class="memory-count">' + count + '</span>' : '';
-        const selected = ids.includes(selectedId) ? ' selected' : '';
-        return '<span class="marker' + selected + '"><span class="photo-shell">' + photo + '</span>' + badge + '<span class="anchor"></span></span>';
+      const fallbackPhoto = () => {
+        const fallback = document.createElement('span');
+        fallback.className = 'photo fallback';
+        return fallback;
+      };
+      const markerContent = (group, ids, shouldEnter) => {
+        const element = document.createElement('span');
+        element.className = 'marker' + (ids.includes(selectedId) ? ' selected' : '');
+        let entered = false;
+        const enter = () => {
+          if (!shouldEnter || entered) return;
+          entered = true;
+          element.classList.remove('enter-pending');
+          element.classList.add('entering');
+        };
+        if (shouldEnter) element.classList.add('enter-pending');
+
+        const photoShell = document.createElement('span');
+        photoShell.className = 'photo-shell';
+        if (safeDataUri(group.value.thumbnailRef)) {
+          const image = document.createElement('img');
+          image.className = 'photo';
+          image.alt = '';
+          image.decoding = 'async';
+          image.addEventListener('load', enter, { once: true });
+          image.addEventListener('error', () => {
+            image.replaceWith(fallbackPhoto());
+            enter();
+          }, { once: true });
+          image.src = group.value.thumbnailRef;
+          photoShell.appendChild(image);
+        } else {
+          photoShell.appendChild(fallbackPhoto());
+          enter();
+        }
+        element.appendChild(photoShell);
+
+        if (ids.length > 1) {
+          const badge = document.createElement('span');
+          badge.className = 'memory-count';
+          badge.textContent = String(ids.length);
+          element.appendChild(badge);
+        }
+        const label = clean(group.label);
+        if (label) {
+          const labelElement = document.createElement('span');
+          labelElement.className = 'marker-label';
+          labelElement.textContent = label;
+          element.appendChild(labelElement);
+        }
+        const anchor = document.createElement('span');
+        anchor.className = 'anchor';
+        element.appendChild(anchor);
+        return element;
       };
       const average = (values, field) => values.reduce((sum, value) => sum + value[field], 0) / values.length;
       const centeredGroup = (values) => {
@@ -208,18 +318,33 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       };
       const render = () => {
         if (!map || !window.AMap) return;
-        markers.forEach((marker) => marker.setMap(null));
-        markers.clear();
         const values = window.__MEMORY_MARKERS__ || [];
         const zoom = map.getZoom?.() || 5;
-        mergeNearbyProvinceGroups(groupedMarkers(values.filter(safeMarker), zoom), map, zoom).forEach((group) => {
+        const groups = mergeNearbyProvinceGroups(groupedMarkers(values.filter(safeMarker), zoom), map, zoom);
+        const previousGroupSignatures = renderedGroupSignatures;
+        const nextGroupSignatures = new Map();
+        const signedGroups = groups.map((group) => ({ group, signature: groupSignature(group) }));
+        const screenSignature = JSON.stringify(signedGroups
+          .map(({ group, signature }) => [group.key, signature])
+          .sort(([left], [right]) => left.localeCompare(right)));
+        if (renderedScreenSignature === screenSignature) {
+          updateSelectedMarkers();
+          return;
+        }
+        const screenChanged = renderedScreenSignature !== null && renderedScreenSignature !== screenSignature;
+        markers.forEach(({ marker }) => marker.setMap(null));
+        markers.clear();
+        signedGroups.forEach(({ group, signature }) => {
           const ids = group.values.map((value) => value.id);
           const count = ids.length;
+          const shouldEnter = screenChanged || previousGroupSignatures.get(group.key) !== signature;
+          nextGroupSignatures.set(group.key, signature);
+          const element = markerContent(group, ids, shouldEnter);
           const marker = new AMap.Marker({
             position: [group.lng, group.lat],
             anchor: 'bottom-center',
             extData: { ids, count, scope: group.scope, label: group.label },
-            content: markerHtml(group.value, count, ids),
+            content: element,
           });
           marker.on('click', () => {
             if (count === 1) {
@@ -237,12 +362,14 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               : group.scope === 'city' ? 9 : Math.min(14, zoom + 2);
             const centerLat = group.centerLat ?? group.lat;
             const centerLng = group.centerLng ?? group.lng;
-            map.setZoomAndCenter(nextZoom, [centerLng, centerLat], false, 300);
+            setLogicalCamera(nextZoom, centerLng, centerLat);
             post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: centerLat, lng: centerLng });
           });
           marker.setMap(map);
-          markers.set(group.key, marker);
+          markers.set(group.key, { marker, element, ids });
         });
+        renderedGroupSignatures = nextGroupSignatures;
+        renderedScreenSignature = screenSignature;
       };
       const handleMessage = (event) => {
         let message;
@@ -262,14 +389,14 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           post({ type: 'markersApplied', count: window.__MEMORY_MARKERS__.length });
         } else if (message.type === 'setSelected' && (message.id === null || typeof message.id === 'string')) {
           selectedId = message.id;
-          render();
+          updateSelectedMarkers();
         } else if (
           message.type === 'setCamera'
           && Number.isFinite(message.lat) && message.lat >= -90 && message.lat <= 90
           && Number.isFinite(message.lng) && message.lng >= -180 && message.lng <= 180
         ) {
           const zoom = Number.isFinite(message.zoom) ? Math.max(4, Math.min(14, message.zoom)) : map.getZoom();
-          const center = map.getCenter?.();
+          const center = logicalCameraCenter();
           const currentLat = center && (typeof center.getLat === 'function' ? center.getLat() : center[1]);
           const currentLng = center && (typeof center.getLng === 'function' ? center.getLng() : center[0]);
           const currentZoom = map.getZoom?.();
@@ -279,7 +406,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             && Math.abs(currentLng - message.lng) < 0.000001
             && Number.isFinite(currentZoom) && Math.abs(currentZoom - zoom) < 0.001
           ) return;
-          map.setZoomAndCenter(zoom, [message.lng, message.lat], false, 300);
+          setLogicalCamera(zoom, message.lng, message.lat);
         } else if (message.type === 'clearSensitiveData') {
           window.__MEMORY_MARKERS__ = [];
           selectedId = null;
@@ -325,6 +452,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             post({ type: 'error', message: '底图瓦片加载超时，请检查高德 Key、安全密钥和网络。' });
           }, 12000);
           setNotice('', false);
+          setLogicalCamera(5, 104.1954, 35.8617);
           render();
           post({ type: 'ready' });
           postCameraIdle();

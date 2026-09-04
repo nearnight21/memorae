@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Canvas, Path } from '@shopify/react-native-skia';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -19,19 +20,31 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import {
+  ARC_TIMELINE_GESTURE_CREATE,
+  ARC_TIMELINE_GESTURE_HORIZONTAL,
+  ARC_TIMELINE_GESTURE_PENDING,
   ARC_TIMELINE_GESTURE_SPEED,
   ARC_TIMELINE_PIXELS_PER_YEAR,
+  CREATE_PULL_ACTIVATION_DISTANCE,
+  CREATE_PULL_INTENT_THRESHOLD,
+  CREATE_PULL_MAX_DISTANCE,
   arcTimelineButtonIndex,
   arcTimelineIndexFromDrag,
   arcTimelineMaxDragYears,
   clampArcTimelineIndex,
   buildTimelineItems,
   commitTimelineSelection,
+  createPullDisplayDistance,
+  createPullProgress as resolveCreatePullProgress,
+  isCreatePullArmed,
   nearestCyclicArcTimelineIndex,
   projectedArcTimelineIndex,
+  resolveArcTimelineGestureMode,
   resolveArcTimelineEdgeDirection,
+  resolveCreatePullRelease,
   visualArcTimelineDragOffset,
   timelineIndexForSelection,
+  type ArcTimelineGestureMode,
   type TimelineItem,
   wrapArcTimelineYearIndex,
 } from './timelineModel';
@@ -40,6 +53,8 @@ interface Props {
   years: string[];
   selectedYear: string | null;
   onSelect: (year: string | null) => void;
+  onCreateMemory?: () => void;
+  createPullProgress: SharedValue<number>;
 }
 
 interface YearNodeProps {
@@ -64,6 +79,16 @@ const SPRING_CONFIG = {
 } as const;
 const RETURN_CONFIG = {
   duration: 260,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+} as const;
+const CREATE_CONFIRM_CONFIG = {
+  duration: 110,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+} as const;
+const CREATE_OVERLAY_RETURN_CONFIG = {
+  duration: 170,
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
@@ -110,9 +135,17 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
   );
 }
 
-export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
+export default function ArcTimeline({
+  years,
+  selectedYear,
+  onSelect,
+  onCreateMemory,
+  createPullProgress,
+}: Props) {
   const { width } = useWindowDimensions();
   const items = useMemo(() => buildTimelineItems(years), [years]);
+  const currentYear = String(new Date().getFullYear());
+  const currentYearIndex = timelineIndexForSelection(items, currentYear);
   const selectedIndex = timelineIndexForSelection(items, selectedYear);
   const firstYearIndex = items.length > 1 ? 1 : 0;
   const maximumDragYears = useMemo(() => arcTimelineMaxDragYears(width), [width]);
@@ -126,6 +159,12 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
   const releaseProgress = useSharedValue(0);
   const releaseTargetIndex = useSharedValue(0);
   const releaseCommitted = useSharedValue(0);
+  const gestureMode = useSharedValue<ArcTimelineGestureMode>(ARC_TIMELINE_GESTURE_PENDING);
+  const createPullOffsetY = useSharedValue(0);
+  const createPullArmed = useSharedValue(0);
+  const createHapticTriggered = useSharedValue(0);
+  const createCommitted = useSharedValue(0);
+  const doubleTapScale = useSharedValue(1);
   const highlightedIndex = useDerivedValue(
     () => firstYearIndex > 0 && scrollIndex.value === 0 && Math.abs(dragOffsetYears.value) < 0.5
       ? 0
@@ -146,6 +185,20 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
     const committed = commitTimelineSelection(currentValueRef.current, nextValue, onSelect);
     if (committed) currentValueRef.current = nextValue;
   }, [firstYearIndex, items, onSelect]);
+
+  const triggerCreateOnce = useCallback(() => {
+    onCreateMemory?.();
+  }, [onCreateMemory]);
+
+  const triggerCreateHaptic = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  }, []);
+
+  const selectCurrentYear = useCallback(() => {
+    pendingSelectionIndex.current = currentYearIndex;
+    currentValueRef.current = currentYear;
+    onSelect(currentYear);
+  }, [currentYear, currentYearIndex, onSelect]);
 
   useAnimatedReaction(
     () => highlightedIndex.value,
@@ -172,12 +225,6 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
     if (items.length === 0) return;
     if (pendingSelectionIndex.current === selectedIndex) {
       pendingSelectionIndex.current = null;
-      cancelAnimation(scrollIndex);
-      cancelAnimation(dragOffsetYears);
-      scrollIndex.value = selectedIndex === 0
-        ? 0
-        : wrapArcTimelineYearIndex(selectedIndex, items.length, firstYearIndex);
-      dragOffsetYears.value = 0;
       return;
     }
     cancelAnimation(scrollIndex);
@@ -188,6 +235,10 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
     scrollIndex.value = withSpring(targetIndex, SPRING_CONFIG);
     dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
   }, [dragOffsetYears, firstYearIndex, items.length, scrollIndex, selectedIndex, selectedYear]);
+
+  useEffect(() => () => {
+    createPullProgress.value = 0;
+  }, [createPullProgress]);
 
   const animateFromAccessibility = useCallback((index: number) => {
     if (items.length === 0) return;
@@ -206,21 +257,51 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
     scrollIndex.value = arcTimelineIndexFromDrag(gestureStartIndex.value, 0, 76, edgeScrollOffset.value);
   });
 
-  const gesture = useMemo(() => Gesture.Pan()
-    .activeOffsetX([-6, 6])
-    .failOffsetY([-18, 18])
-    .onBegin(() => {
+  const panGesture = useMemo(() => Gesture.Pan()
+    .minDistance(CREATE_PULL_INTENT_THRESHOLD)
+    .onStart(() => {
       cancelAnimation(scrollIndex);
       cancelAnimation(dragOffsetYears);
       cancelAnimation(releaseProgress);
+      cancelAnimation(createPullOffsetY);
+      cancelAnimation(createPullProgress);
       gestureStartIndex.value = scrollIndex.value;
       dragOffsetYears.value = 0;
       edgeScrollOffset.value = 0;
       edgeDirection.value = 0;
-      isDragging.value = 1;
+      isDragging.value = 0;
       releaseProgress.value = 0;
+      gestureMode.value = ARC_TIMELINE_GESTURE_PENDING;
+      createPullOffsetY.value = 0;
+      createPullProgress.value = 0;
+      createPullArmed.value = 0;
+      createHapticTriggered.value = 0;
+      createCommitted.value = 0;
     })
     .onUpdate((event) => {
+      const nextMode = resolveArcTimelineGestureMode(
+        gestureMode.value,
+        event.translationX,
+        event.translationY,
+      );
+      gestureMode.value = nextMode;
+      if (nextMode === ARC_TIMELINE_GESTURE_CREATE) {
+        isDragging.value = 0;
+        edgeDirection.value = 0;
+        edgeScrollOffset.value = 0;
+        dragOffsetYears.value = 0;
+        createPullOffsetY.value = -createPullDisplayDistance(event.translationY);
+        createPullProgress.value = resolveCreatePullProgress(nextMode, event.translationY);
+        const nextArmed = isCreatePullArmed(nextMode, event.translationY) ? 1 : 0;
+        if (nextArmed === 1 && createHapticTriggered.value === 0) {
+          createHapticTriggered.value = 1;
+          scheduleOnRN(triggerCreateHaptic);
+        }
+        createPullArmed.value = nextArmed;
+        return;
+      }
+      if (nextMode !== ARC_TIMELINE_GESTURE_HORIZONTAL) return;
+      isDragging.value = 1;
       const dragYears = event.translationX / 76 * 2;
       dragOffsetYears.value = dragYears;
       scrollIndex.value = arcTimelineIndexFromDrag(gestureStartIndex.value, 0, 76, edgeScrollOffset.value);
@@ -232,7 +313,45 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
       );
     })
     .onEnd((event) => {
+      const resolvedMode = gestureMode.value;
       const wasEdgeScrolling = edgeDirection.value !== 0;
+      gestureMode.value = ARC_TIMELINE_GESTURE_PENDING;
+      isDragging.value = 0;
+      edgeDirection.value = 0;
+      edgeScrollOffset.value = 0;
+      if (resolvedMode === ARC_TIMELINE_GESTURE_CREATE) {
+        const releaseAction = resolveCreatePullRelease(
+          resolvedMode,
+          createPullArmed.value === 1,
+          createCommitted.value !== 0,
+        );
+        if (releaseAction === 'create') {
+          createCommitted.value = 1;
+          createPullArmed.value = 1;
+          scheduleOnRN(triggerCreateOnce);
+          createPullProgress.value = withTiming(1, CREATE_CONFIRM_CONFIG);
+          createPullOffsetY.value = withTiming(
+            -Math.min(CREATE_PULL_MAX_DISTANCE, CREATE_PULL_ACTIVATION_DISTANCE + 8),
+            CREATE_CONFIRM_CONFIG,
+            () => {
+              createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
+              createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
+              createPullArmed.value = 0;
+            },
+          );
+          return;
+        }
+        createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
+        createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
+        createPullArmed.value = 0;
+        return;
+      }
+      if (resolvedMode !== ARC_TIMELINE_GESTURE_HORIZONTAL) {
+        createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
+        createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
+        createPullArmed.value = 0;
+        return;
+      }
       const buttonIndex = scrollIndex.value + visualArcTimelineDragOffset(
         dragOffsetYears.value,
         maximumDragYears,
@@ -241,29 +360,75 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
       const projectedIndex = projectedArcTimelineIndex(buttonIndex, releaseVelocity, items.length, 76, 0.12);
       const nextIndex = wrapArcTimelineYearIndex(projectedIndex, items.length, firstYearIndex);
       const targetIndex = nearestCyclicArcTimelineIndex(nextIndex, buttonIndex, items.length, firstYearIndex);
-      isDragging.value = 0;
-      edgeDirection.value = 0;
-      edgeScrollOffset.value = 0;
       releaseTargetIndex.value = nextIndex;
       releaseCommitted.value = 0;
       releaseProgress.value = withTiming(1, RETURN_CONFIG);
       scrollIndex.value = withTiming(targetIndex, RETURN_CONFIG);
       dragOffsetYears.value = withTiming(0, RETURN_CONFIG);
-    }), [dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureStartIndex, isDragging, items.length, maximumDragYears, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex]);
+    })
+    .onFinalize((_event, success) => {
+      if (success) return;
+      gestureMode.value = ARC_TIMELINE_GESTURE_PENDING;
+      isDragging.value = 0;
+      edgeDirection.value = 0;
+      edgeScrollOffset.value = 0;
+      dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
+      createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
+      createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
+      createPullArmed.value = 0;
+    }), [createCommitted, createHapticTriggered, createPullArmed, createPullOffsetY, createPullProgress, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, gestureStartIndex, isDragging, items.length, maximumDragYears, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, triggerCreateHaptic, triggerCreateOnce]);
+
+  const doubleTapGesture = useMemo(() => Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDelay(260)
+    .maxDuration(220)
+    .maxDistance(CREATE_PULL_INTENT_THRESHOLD)
+    .onEnd((_event, success) => {
+      if (!success || isDragging.value !== 0 || gestureMode.value !== ARC_TIMELINE_GESTURE_PENDING) return;
+      cancelAnimation(scrollIndex);
+      cancelAnimation(dragOffsetYears);
+      cancelAnimation(releaseProgress);
+      cancelAnimation(createPullOffsetY);
+      cancelAnimation(createPullProgress);
+      edgeDirection.value = 0;
+      edgeScrollOffset.value = 0;
+      createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
+      createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
+      const currentYearTargetIndex = nearestCyclicArcTimelineIndex(
+        currentYearIndex,
+        scrollIndex.value,
+        items.length,
+        firstYearIndex,
+      );
+      scrollIndex.value = withSpring(currentYearTargetIndex, SPRING_CONFIG);
+      dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
+      doubleTapScale.value = withTiming(0.94, { duration: 70 }, (finished) => {
+        if (finished) doubleTapScale.value = withSpring(1, SPRING_CONFIG);
+      });
+      scheduleOnRN(selectCurrentYear);
+    }), [createPullOffsetY, createPullProgress, currentYearIndex, doubleTapScale, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, isDragging, items.length, releaseProgress, scrollIndex, selectCurrentYear]);
+
+  const gesture = Gesture.Exclusive(doubleTapGesture, panGesture);
 
   const lensStyle = useAnimatedStyle(() => {
     const fractionalIndex = visualArcTimelineDragOffset(dragOffsetYears.value, maximumDragYears);
     const radius = Math.min(220, width * ARC_RADIUS_RATIO);
     const angle = fractionalIndex * ARC_STEP_RADIANS;
     const distance = Math.abs(fractionalIndex);
+    const createScale = interpolate(createPullProgress.value, [0, 1], [1, 1.035], Extrapolation.CLAMP)
+      * (createPullArmed.value === 1 ? 1.025 : 1);
     return {
       transform: [
         { translateX: Math.sin(angle) * radius },
-        { translateY: radius * (1 - Math.cos(angle)) },
-        { scale: interpolate(distance, [0, 0.5], [1, 0.94], Extrapolation.CLAMP) },
+        { translateY: radius * (1 - Math.cos(angle)) + createPullOffsetY.value },
+        { scale: interpolate(distance, [0, 0.5], [1, 0.94], Extrapolation.CLAMP) * createScale * doubleTapScale.value },
       ],
     };
-  }, [dragOffsetYears, maximumDragYears, width]);
+  }, [createPullArmed, createPullOffsetY, createPullProgress, doubleTapScale, dragOffsetYears, maximumDragYears, width]);
+
+  const trackStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(createPullProgress.value, [0, 0.35, 1], [1, 0.72, 0], Extrapolation.CLAMP),
+  }), [createPullProgress]);
 
   if (items.length === 0) return null;
   const safeDisplayIndex = clampArcTimelineIndex(displayIndex, items.length);
@@ -271,32 +436,34 @@ export default function ArcTimeline({ years, selectedYear, onSelect }: Props) {
   return (
     <View accessibilityLabel="记忆年份时间轴" style={styles.root}>
       <View style={styles.arcViewport}>
-        <Canvas style={StyleSheet.absoluteFill}>
-          <Path
-            color="rgba(255,255,252,0.72)"
-            path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
-            strokeWidth={4}
-            style="stroke"
-          />
-          <Path
-            color="rgba(151,98,49,0.7)"
-            path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
-            strokeWidth={1}
-            style="stroke"
-          />
-        </Canvas>
-        {items.map((item, index) => (
-          <YearNode
-            key={item.key}
-            highlightedIndex={highlightedIndex}
-            index={index}
-            item={item}
-            itemCount={items.length}
-            firstYearIndex={firstYearIndex}
-            scrollIndex={scrollIndex}
-            width={width}
-          />
-        ))}
+        <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
+          <Canvas style={StyleSheet.absoluteFill}>
+            <Path
+              color="rgba(255,255,252,0.72)"
+              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
+              strokeWidth={4}
+              style="stroke"
+            />
+            <Path
+              color="rgba(151,98,49,0.7)"
+              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
+              strokeWidth={1}
+              style="stroke"
+            />
+          </Canvas>
+          {items.map((item, index) => (
+            <YearNode
+              key={item.key}
+              highlightedIndex={highlightedIndex}
+              index={index}
+              item={item}
+              itemCount={items.length}
+              firstYearIndex={firstYearIndex}
+              scrollIndex={scrollIndex}
+              width={width}
+            />
+          ))}
+        </Animated.View>
         <GestureDetector gesture={gesture}>
           <Animated.View
             accessible
@@ -326,7 +493,7 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     height: 220,
-    overflow: 'hidden',
+    overflow: 'visible',
     backgroundColor: 'transparent',
   },
   arcViewport: {
@@ -336,6 +503,16 @@ const styles = StyleSheet.create({
     right: 0,
     height: 156,
     alignItems: 'center',
+    overflow: 'visible',
+  },
+  trackLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   yearNode: {
     position: 'absolute',
@@ -372,6 +549,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 5,
+    zIndex: 3,
   },
   lensInner: {
     width: 12,
