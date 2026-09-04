@@ -1,7 +1,7 @@
 import type { MemoryV2 } from '../memory/memoryV2';
 import type { CameraState, MapBounds, MapCameraIdleEvent } from './MemoraeMap.types';
 
-export const HOME_CHINA_CAMERA = { latitude: 35.8617, longitude: 104.1954, zoom: 4 } as const;
+export const HOME_CHINA_CAMERA = { latitude: 35.8617, longitude: 104.1954, zoom: 5 } as const;
 export const HOME_MAP_MIN_ZOOM = 4;
 export const HOME_MAP_MAX_ZOOM = 14;
 export const HOME_PROVINCE_ZOOM = 6;

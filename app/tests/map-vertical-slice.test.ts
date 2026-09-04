@@ -113,6 +113,7 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /provinceHasSingleCity/);
   assert.match(runtimeSource, /provinceHasSingleCity \? 9 : 6/);
   assert.match(runtimeSource, /PROVINCE_COLLISION_DISTANCE = 60/);
+  assert.match(runtimeSource, /center: \[104\.1954, 35\.8617\], zoom: 5/);
   assert.match(runtimeSource, /zooms: \[4, 14\]/);
   assert.match(runtimeSource, /Math\.max\(4, Math\.min\(14, message\.zoom\)\)/);
   assert.doesNotMatch(runtimeSource, /setFitView|MarkerCluster|transform:scale/);
@@ -332,6 +333,7 @@ test('地图缩略图尺寸不再由照片数量决定，同省多段记忆按�
   assert.ok(markers.every((marker) => !('scale' in marker) && !('photoCount' in marker) && !('thumbnailRefs' in marker)));
 
   const options = buildHomeRegionOptions(memories);
+  assert.equal(HOME_CHINA_CAMERA.zoom, 5);
   assert.deepEqual(options.find((option) => option.key === 'country:中国')?.camera, HOME_CHINA_CAMERA);
   assert.equal(options.find((option) => option.key === 'province:中国:浙江省')?.memoryCount, 3);
   assert.equal(options.find((option) => option.key === 'city:中国:浙江省:宁波市')?.memoryCount, 3);

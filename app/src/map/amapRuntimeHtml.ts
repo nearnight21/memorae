@@ -211,7 +211,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         markers.forEach((marker) => marker.setMap(null));
         markers.clear();
         const values = window.__MEMORY_MARKERS__ || [];
-        const zoom = map.getZoom?.() || 4;
+        const zoom = map.getZoom?.() || 5;
         mergeNearbyProvinceGroups(groupedMarkers(values.filter(safeMarker), zoom), map, zoom).forEach((group) => {
           const ids = group.values.map((value) => value.id);
           const count = ids.length;
@@ -312,7 +312,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           return;
         }
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 4, zooms: [4, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'] });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 5, zooms: [4, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('moveend', postCameraIdle);
           map.on('zoomend', () => { render(); postCameraIdle(); });
