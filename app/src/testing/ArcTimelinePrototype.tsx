@@ -172,7 +172,7 @@ export default function ArcTimelinePrototype({ years, selectedIndex = 0, onSelec
   useFrameCallback((frame) => {
     if (isDragging.value === 0 || edgeDirection.value === 0) return;
     const elapsedSeconds = Math.min(frame.timeSincePreviousFrame ?? 16, 32) / 1000;
-    edgeScrollOffset.value += edgeDirection.value * 2 * elapsedSeconds;
+    edgeScrollOffset.value += edgeDirection.value * ARC_TIMELINE_EDGE_SCROLL_YEARS_PER_SECOND * elapsedSeconds;
     scrollIndex.value = arcTimelineIndexFromDrag(
       gestureStartIndex.value,
       0,

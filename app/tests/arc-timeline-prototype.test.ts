@@ -16,7 +16,7 @@ import {
 } from '../src/testing/arcTimelineModel';
 
 test('弧形时间轴左拖进入更早年份，右拖进入更晚年份', () => {
-  assert.equal(ARC_TIMELINE_GESTURE_SPEED, 2);
+  assert.equal(ARC_TIMELINE_GESTURE_SPEED, 3);
   assert.equal(arcTimelineIndexFromDrag(3, -ARC_TIMELINE_PIXELS_PER_YEAR), 2);
   assert.equal(arcTimelineIndexFromDrag(3, ARC_TIMELINE_PIXELS_PER_YEAR), 4);
 });
@@ -104,6 +104,7 @@ test('弧形时间轴原型独立于正式 Home 和地图入口', async () => {
   assert.match(component, /withTiming\(targetIndex, RETURN_CONFIG/);
   assert.match(component, /const buttonIndex = scrollIndex\.value \+ visualArcTimelineDragOffset\([\s\S]*dragOffsetYears\.value/);
   assert.match(component, /ARC_TIMELINE_GESTURE_SPEED/);
+  assert.match(component, /edgeDirection\.value \* ARC_TIMELINE_EDGE_SCROLL_YEARS_PER_SECOND \* elapsedSeconds/);
   assert.match(component, /arcTimelineMaxDragYears\(width\)/);
   assert.match(component, /maximumDragYears \* 0\.74/);
   assert.match(component, /gestureStartIndex\.value,[\s\S]*0,[\s\S]*edgeScrollOffset\.value/);

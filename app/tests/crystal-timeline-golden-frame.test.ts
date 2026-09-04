@@ -115,6 +115,7 @@ test('Golden Renderer 保持在测试链，正式 Timeline 使用弧形时间轴
   assert.match(formalTimeline, /arcTimelineIndexFromDrag/);
   assert.match(formalTimeline, /arcTimelineMaxDragYears/);
   assert.match(formalTimeline, /useFrameCallback/);
+  assert.match(formalTimeline, /edgeDirection\.value \* ARC_EDGE_SCROLL_YEARS_PER_SECOND \* elapsedSeconds/);
   assert.match(formalTimeline, /useAnimatedReaction/);
   assert.match(formalTimeline, /withTiming\(1, RETURN_CONFIG/);
   assert.match(formalTimeline, /highlightedIndex/);
