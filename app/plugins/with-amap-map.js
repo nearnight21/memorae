@@ -6,6 +6,7 @@ const {
 } = require('expo/config-plugins');
 
 const AMAP_KEY_META_DATA = 'com.amap.api.v2.apikey';
+const ACCESS_NETWORK_STATE_PERMISSION = 'android.permission.ACCESS_NETWORK_STATE';
 const MISSING_KEY_SENTINEL = 'AMAP_KEY_NOT_CONFIGURED';
 
 module.exports = function withAmapMap(config, props = {}) {
@@ -13,6 +14,15 @@ module.exports = function withAmapMap(config, props = {}) {
   const apiKey = process.env[envName]?.trim() || MISSING_KEY_SENTINEL;
 
   const manifestConfig = withAndroidManifest(config, (nextConfig) => {
+    const permissions = nextConfig.modResults.manifest['uses-permission'] ?? [];
+    const withoutDuplicateNetworkPermission = permissions.filter(
+      (entry) => entry.$?.['android:name'] !== ACCESS_NETWORK_STATE_PERMISSION,
+    );
+    nextConfig.modResults.manifest['uses-permission'] = [
+      ...withoutDuplicateNetworkPermission,
+      { $: { 'android:name': ACCESS_NETWORK_STATE_PERMISSION } },
+    ];
+
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(
       nextConfig.modResults,
     );
