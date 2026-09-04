@@ -15,7 +15,7 @@
 - Mobile 的 Home、LocationPicker 和业务编排只依赖中立 `MemoraeMap`；WebView/高德专有 DTO
   已收口到 Renderer adapter。Android 缺省使用 Local Expo Module + Kotlin `TextureMapView`
   的 Native AMap Renderer 作为显式配置路径；默认使用 WebView + 高德 JS API 2.0，加载自定义样式 ID。
-  Native 从 APK assets 加载 `style.data` 与 `style_extra.data`，但不作为默认地图路径。Native Phase 3 / A 验收见
+  Native Phase 3 / A 验收见
   `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`。
 
 ## 必须保持
@@ -84,9 +84,9 @@ Phase 1 已完成以下边界收口：
 5. 当前产品没有消费者的 imperative map commands、selected marker、map ready/error 和屏幕投影
    未进入 Phase 1 接口；现有聚类、地区筛选、中心点选址和暂停 Marker 更新行为继续保留。
 
-Phase 3 已完成 Android Native AMap Renderer 的能力、兼容性和性能验收；2026-09-03 根据
-产品决定，Android 默认切换为 WebView + 高德 JS API 2.0，并加载在线自定义样式 ID。
-Native AMap 保留为显式配置路径，使用普通矢量底图和打包在 APK assets 中的本地样式文件。
+Phase 3 已完成 Android Native AMap Renderer 的能力、兼容性和性能验收；2026-09-04 根据
+产品决定，Android 默认切回 WebView + 高德 JS API 2.0，并加载在线自定义样式 ID。
+Native AMap 保留为显式配置路径，并已适配同一在线自定义样式 ID。
 `TextureMapView` 生命周期、Native saved state、Marker diff、Native 聚类、Camera epsilon 和
 短生命周期 thumbnail 文件边界均已通过验收，没有扩张 Phase 1 公开接口。99/99 测试、Expo
 Doctor 21/21、Native 编译与 Debug APK、真机正式 Home/Create/Edit/Delete/LocationPicker、

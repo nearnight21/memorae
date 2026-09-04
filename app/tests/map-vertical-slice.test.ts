@@ -200,7 +200,26 @@ test('地点选择模式复用 Home 的唯一地图实例', async () => {
   assert.match(appSource, /locationPickerOriginCamera/);
   assert.match(appSource, /setHomeViewport\(\{ camera: origin \}\)/);
   assert.match(homeSource, /locationOverlay/);
-  assert.match(homeSource, /showStatus=\{!locationMode && chromeVisible\}/);
+  assert.match(homeSource, /showStatus=\{false\}/);
+});
+
+test('正式 Home 在地图与时间轴之间使用单层独立安静区并将时间轴下移 50px', async () => {
+  const [homeSource, quietZoneSource] = await Promise.all([
+    readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/home/TimelineQuietZone.tsx', import.meta.url), 'utf8'),
+  ]);
+  assert.match(homeSource, /<TimelineQuietZone \/>/);
+  assert.match(homeSource, /const TIMELINE_VERTICAL_OFFSET = 50/);
+  assert.match(homeSource, /transform: \[\{ translateY: TIMELINE_VERTICAL_OFFSET \}\]/);
+  assert.match(homeSource, /map: \{[\s\S]*zIndex: 2/);
+  assert.match(homeSource, /overlay: \{[\s\S]*zIndex: 4/);
+  assert.match(homeSource, /status\?\.includes\('诊断：'\) \? undefined : status/);
+  assert.match(quietZoneSource, /TIMELINE_QUIET_ZONE_SCREEN_RATIO = 0\.3/);
+  assert.match(quietZoneSource, /rgba\(247,245,239,0\.55\)/);
+  assert.doesNotMatch(quietZoneSource, /RadialGradient/);
+  assert.match(quietZoneSource, /pointerEvents="none"/);
+  assert.match(quietZoneSource, /zIndex: 3/);
+  assert.doesNotMatch(quietZoneSource, /Blur|WebView|MemoraeMap/);
 });
 
 test('远端照片同步完成后批量刷新缩略图，不逐张重建地图 Marker', async () => {

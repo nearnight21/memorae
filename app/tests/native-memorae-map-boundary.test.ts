@@ -49,25 +49,15 @@ test('Android Native 默认使用高德普通矢量底图', async () => {
   assert.doesNotMatch(source, /amap\.mapType = AMap\.MAP_TYPE_SATELLITE/);
 });
 
-test('Android Native 只从打包 assets 加载本地自定义地图样式', async () => {
+test('Android Native 使用与 WebView 相同的高德在线自定义地图样式 ID', async () => {
   const source = await readFile(
     new URL('../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt', import.meta.url),
     'utf8',
   );
-  const styleData = await readFile(
-    new URL('../modules/expo-amap-map/android/src/main/assets/amap_custom_style/style.data', import.meta.url),
-  );
-  const styleExtraData = await readFile(
-    new URL('../modules/expo-amap-map/android/src/main/assets/amap_custom_style/style_extra.data', import.meta.url),
-  );
-  assert.ok(styleData.byteLength > 0);
-  assert.ok(styleExtraData.byteLength > 0);
-  assert.match(source, /\.setStyleData\(styleData\)/);
-  assert.match(source, /\.setStyleExtraData\(styleExtraData\)/);
-  assert.match(source, /AMap custom style source = LOCAL/);
-  assert.match(source, /style\.data loaded = \$styleDataLoaded/);
-  assert.match(source, /style_extra\.data loaded = \$styleExtraDataLoaded/);
-  assert.doesNotMatch(source, /setStyleId|setCustomMapStyleID|CUSTOM_MAP_STYLE_ID/);
+  assert.match(source, /CUSTOM_MAP_STYLE_ID = "86c653c12a194bd61f7e37008e400725"/);
+  assert.match(source, /\.setStyleId\(CUSTOM_MAP_STYLE_ID\)/);
+  assert.match(source, /AMap custom style source = ONLINE/);
+  assert.doesNotMatch(source, /amap\.showMapText\(false\)/);
 });
 
 test('Android Manifest 只声明一次高德网络状态权限', async () => {

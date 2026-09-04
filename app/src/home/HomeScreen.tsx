@@ -12,8 +12,11 @@ import type { HomeRegionOption } from '../map/homeMapModel';
 import type { MemoryV2 } from '../memory/memoryV2';
 import MobileTimeline from './MobileTimeline';
 import RegionControl from './RegionControl';
+import TimelineQuietZone from './TimelineQuietZone';
 import { androidTopInset } from '../ui/layout';
 import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
+
+const TIMELINE_VERTICAL_OFFSET = 50;
 
 interface Props {
   markers: readonly MemoryMapMarker[];
@@ -60,6 +63,7 @@ export default function HomeScreen({
 }: Props) {
   const insets = useSafeAreaInsets();
   const [regionMenuOpen, setRegionMenuOpen] = useState(false);
+  const homeStatus = status?.includes('诊断：') ? undefined : status;
   const years = useMemo(() => Array.from(new Set(
     memories.map((memory) => memory.date.slice(0, 4)).filter((year) => /^\d{4}$/.test(year)),
   )).sort(), [memories]);
@@ -84,9 +88,10 @@ export default function HomeScreen({
           initialCamera={initialCamera}
           camera={camera}
           updatesPaused={mapUpdatesPaused}
-          showStatus={!locationMode && chromeVisible}
+          showStatus={false}
         />
       </View>
+      {!locationMode && chromeVisible && <TimelineQuietZone />}
       {!locationMode && chromeVisible && <View pointerEvents="box-none" style={styles.overlay}>
         <View pointerEvents="box-none" style={styles.topRow}>
           <View style={styles.regionArea}>
@@ -124,11 +129,11 @@ export default function HomeScreen({
             )}
           </View>
         </View>
-        {(loading || status || (memories.length === 0 && !loading)) && (
+        {(loading || homeStatus || (memories.length === 0 && !loading)) && (
           <View pointerEvents="none" style={styles.messageSlot}>
             {loading && <ActivityIndicator size="small" color="#b5814b" />}
             <Text style={styles.message}>
-              {loading ? '正在整理加密记忆…' : status ?? (memories.length === 0 ? '还没有带地点的记忆' : '')}
+              {loading ? '正在整理加密记忆…' : homeStatus ?? (memories.length === 0 ? '还没有带地点的记忆' : '')}
             </Text>
           </View>
         )}
@@ -160,7 +165,7 @@ export default function HomeScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#e3e8e5' },
   map: { ...StyleSheet.absoluteFill, zIndex: 2 },
-  overlay: { flex: 1, paddingTop: androidTopInset(), zIndex: 3, justifyContent: 'space-between' },
+  overlay: { flex: 1, paddingTop: androidTopInset(), zIndex: 4, justifyContent: 'space-between' },
   topRow: { paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   regionArea: { width: 224, zIndex: 4 },
   regionMenu: { marginTop: 8, maxHeight: 300, borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(246,245,240,0.96)', shadowColor: '#262926', shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
@@ -174,7 +179,7 @@ const styles = StyleSheet.create({
   messageSlot: { alignSelf: 'center', alignItems: 'center', gap: 6, maxWidth: 250, marginTop: 72 },
   message: { color: '#6e766f', fontSize: 12, lineHeight: 18, textAlign: 'center' },
   bottomArea: { paddingHorizontal: 16, minHeight: 240, justifyContent: 'flex-end' },
-  timelineWrap: { marginHorizontal: -16 },
+  timelineWrap: { marginHorizontal: -16, transform: [{ translateY: TIMELINE_VERTICAL_OFFSET }] },
   createButton: { position: 'absolute', right: 16, bottom: 168, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(246,245,240,0.86)', shadowColor: '#262926', shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   createPlus: { color: '#3c403d', fontSize: 27, lineHeight: 30, fontWeight: '300' },
   createPressed: { opacity: 0.68, transform: [{ scale: 0.96 }] },

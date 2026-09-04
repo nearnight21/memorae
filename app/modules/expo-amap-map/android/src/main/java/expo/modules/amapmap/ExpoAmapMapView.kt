@@ -47,8 +47,7 @@ import kotlin.math.max
 private const val TAG = "MemoraeNativeMap"
 private const val MISSING_KEY_SENTINEL = "AMAP_KEY_NOT_CONFIGURED"
 private const val SDK_VERSION = "10.1.200"
-private const val CUSTOM_MAP_STYLE_DATA_ASSET = "amap_custom_style/style.data"
-private const val CUSTOM_MAP_STYLE_EXTRA_ASSET = "amap_custom_style/style_extra.data"
+private const val CUSTOM_MAP_STYLE_ID = "86c653c12a194bd61f7e37008e400725"
 private const val SAVED_MAP_BUNDLE = "amap_map_view"
 private const val DEFAULT_STATE_KEY = "expo.modules.amapmap.primary"
 
@@ -347,52 +346,22 @@ class ExpoAmapMapView(
       isZoomGesturesEnabled = true
     }
     amap.mapType = AMap.MAP_TYPE_NORMAL
-    configureLocalCustomMapStyle(amap)
-    amap.showMapText(false)
+    configureOnlineCustomMapStyle(amap)
     amap.showBuildings(false)
     amap.setRoadArrowEnable(false)
     amap.isTrafficEnabled = false
     configureMapListeners(amap)
   }
 
-  private fun configureLocalCustomMapStyle(amap: AMap) {
-    val styleData = readCustomMapStyleAsset(CUSTOM_MAP_STYLE_DATA_ASSET)
-    val styleExtraData = readCustomMapStyleAsset(CUSTOM_MAP_STYLE_EXTRA_ASSET)
-    val styleDataLoaded = styleData != null
-    val styleExtraDataLoaded = styleExtraData != null
-
-    Log.i(TAG, "AMap custom style source = LOCAL")
-    Log.i(TAG, "style.data loaded = $styleDataLoaded")
-    Log.i(TAG, "style_extra.data loaded = $styleExtraDataLoaded")
-
-    if (styleData == null || styleExtraData == null) {
-      Log.e(TAG, "local_custom_style_not_enabled reason=required_asset_load_failed")
-      return
-    }
-
+  private fun configureOnlineCustomMapStyle(amap: AMap) {
+    Log.i(TAG, "AMap custom style source = ONLINE styleId=$CUSTOM_MAP_STYLE_ID")
     amap.setCustomMapStyle(
       CustomMapStyleOptions()
-        .setStyleData(styleData)
-        .setStyleExtraData(styleExtraData)
+        .setStyleId(CUSTOM_MAP_STYLE_ID)
         .setEnable(true),
     )
-    Log.i(TAG, "local_custom_style_submitted_to_sdk")
+    Log.i(TAG, "online_custom_style_submitted_to_sdk")
   }
-
-  private fun readCustomMapStyleAsset(assetPath: String): ByteArray? =
-    try {
-      context.assets.open(assetPath).use { input ->
-        input.readBytes().takeIf(ByteArray::isNotEmpty)
-          ?: error("Asset is empty: $assetPath")
-      }
-    } catch (error: Throwable) {
-      Log.e(
-        TAG,
-        "local_custom_style_asset_read_failed asset=$assetPath type=${error.javaClass.simpleName}",
-        error,
-      )
-      null
-    }
 
   private fun configureMapListeners(amap: AMap) {
     amap.setOnMapLoadedListener {

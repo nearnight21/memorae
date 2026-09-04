@@ -13,8 +13,7 @@
 ## 2026-09-03 Android 原生矢量底图更新
 
 Android 正式 App 默认使用 WebView + 高德 JS API 2.0，并加载高德自定义样式 ID
-`amap://styles/86c653c12a194bd61f7e37008e400725`。Native AMap 保留为显式配置路径；其从 APK assets 读取
-`style.data` 与 `style_extra.data` 后通过 `CustomMapStyleOptions` 本地加载。`MemoraeMap` 中立接口、Memory 数据边界、坐标规则、服务端地点
+`amap://styles/86c653c12a194bd61f7e37008e400725`。Native AMap 保留为显式配置路径，并已适配同一在线样式 ID。`MemoraeMap` 中立接口、Memory 数据边界、坐标规则、服务端地点
 API 和 Renderer 边界均未改变。
 
 ## Phase 3 / A 历史验收
@@ -49,7 +48,7 @@ Debug APK、正式 App 真机 Home/Create/Edit/Delete/LocationPicker、筛选、
 | --- | --- | --- | --- |
 | 生产 Web | `已实现` | `https://memorae.cn/` 已提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认正式页面可打开、解锁后由 Leaflet 渲染，`/health` 返回 `200 {"ok":true}`。 | `projects/memorae/web/src/main.tsx:4-25`；`projects/memorae/web/src/product/ProductGate.tsx:90-213`；`archive/deployment-pilot-2026-08-22:DEVELOPMENT.md:63-68` |
 | Mobile App | `部分实现` | Expo/RN 加密、SQLite、照片分级、设备解锁和手动同步链路可运行；正式 Home、Detail、Create/Edit/Delete、LocationPicker 与 Native AMap 已完成真实数据和真机验收，完整产品导航仍按独立路线维护。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
-| Mobile 地图 | `已实现` | Android 正式 App 默认使用 WebView + 高德 JS API 2.0 及自定义样式 ID；Native AMap 仅为显式配置路径。 | `DEVELOPMENT.md`；`app/src/map/mapRendererSelection.ts`；`app/src/map/amapRuntimeHtml.ts` |
+| Mobile 地图 | `已实现` | Android 正式 App 默认使用 WebView + 高德 JS API 2.0 及自定义样式 ID；Native AMap 为显式配置路径。 | `DEVELOPMENT.md`；`app/src/map/mapRendererSelection.ts`；`app/src/map/amapRuntimeHtml.ts` |
 | API | `已实现` | Fastify 提供账号会话、钥匙信封、记忆密文、照片授权/直传、地点搜索/反查/转换；生产 API 与 Web 同源。 | `projects/memorae/server/src/app.ts:189-311,313-408`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
 | PostgreSQL | `已实现` | 保存账号、会话、钥匙信封、记忆密文和照片对象元数据；不保存明文 MemoryV2。 | `projects/memorae/server/migrations/001_initial.sql:1-54`；`projects/memorae/server/src/postgres.ts:243-309` |
 | 腾讯云 COS | `已实现` | 私有桶保存三档客户端密文照片；客户端经五分钟签名 URL 直传直下，API 不中转照片字节。 | `projects/memorae/server/src/postgres.ts:503-527,569-656`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:86-109` |
@@ -405,7 +404,7 @@ WebView + 高德 JS API 2.0 自定义样式；Native AMap 保留为显式配置�
 | 决策 | 状态 | 当前边界 |
 | --- | --- | --- |
 | Web 与 App 是否使用同一地图渲染器 | `已实现` | Web 使用 Leaflet，Android App 默认使用高德 JS API 2.0 WebView；业务协议共享，渲染器按运行面保持独立。 |
-| App 高德 Native 是否继续作为主地图 | `已实现` | Native AMap 保留为 Android 的显式配置路径；默认地图改为高德 JS API 2.0 WebView 自定义样式。 |
+| App 高德 Native 是否继续作为主地图 | `已实现` | Native AMap 保留为 Android 的显式配置路径；默认地图使用高德 JS API 2.0 WebView 自定义样式。 |
 | MapLibre | `待验证` | 只作为候选；必须先验证国内坐标适配、瓦片/样式来源、离线包、中文标注、license 和真机性能。 |
 | GeoNames 城市层 | `Prototype` | 只解决海外中文城市标签，不解决底图；是否进入产品取决于最终渲染器与 attribution 方案。 |
 | 同步 cursor/照片 GC | `未实现` | 数据规模增长前需设计，但不得把建议写成当前协议。 |
