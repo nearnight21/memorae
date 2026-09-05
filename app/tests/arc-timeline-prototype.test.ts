@@ -100,7 +100,7 @@ test('下拉回到全景使用阻尼位移和一次性激活阈值', () => {
   assert.equal(resetPullDisplayDistance(-100), 0);
 });
 
-test('弧形时间轴原型独立于正式 Home 和地图入口', async () => {
+test('弧形时间轴原型独立于正式 Home、地图和生产入口', async () => {
   const [component, screen, entry] = await Promise.all([
     readFile(new URL('../src/testing/ArcTimelinePrototype.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/testing/ArcTimelinePrototypeScreen.tsx', import.meta.url), 'utf8'),
@@ -140,7 +140,11 @@ test('弧形时间轴原型独立于正式 Home 和地图入口', async () => {
   assert.match(component, /Math\.cos\(angle\)/);
   assert.match(component, /Q \$\{width \/ 2\} 22/);
   assert.match(screen, /ArcTimelinePrototype/);
-  assert.match(entry, /EXPO_PUBLIC_TIMELINE_PROTOTYPE/);
   assert.doesNotMatch(component, /MemoraeMap|HomeScreen|AMap|WebView/);
   assert.doesNotMatch(screen, /MemoraeMap|HomeScreen|AMap|WebView/);
+  assert.match(entry, /import App from '\.\/App'/);
+  assert.doesNotMatch(
+    entry,
+    /ArcTimelinePrototype|MapVerticalSliceApp|AmapJsWebViewSliceApp|EXPO_PUBLIC_.*SLICE|EXPO_PUBLIC_TIMELINE_PROTOTYPE/,
+  );
 });
