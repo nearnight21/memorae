@@ -389,7 +389,7 @@ test('Home 地区选择接通真实视野和相机导航，不再使用占位提
   const homeSource = await readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8');
   assert.match(appSource, /buildHomeRegionOptions/);
   assert.match(appSource, /currentHomeRegionLabel/);
-  assert.match(appSource, /initialCamera=\{HOME_CHINA_CAMERA\}/);
+  assert.match(appSource, /initialCamera=\{activeDefaultMapCamera\}/);
   assert.match(appSource, /onRegionSelect=\{selectHomeRegion\}/);
   assert.doesNotMatch(appSource, /地区选择入口已保留/);
   assert.match(homeSource, /regionOptions\.map/);

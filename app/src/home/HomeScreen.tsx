@@ -45,6 +45,7 @@ interface Props {
   locationOverlay?: ReactNode;
   onCreateMemory?: () => void;
   onResetMapView?: () => void;
+  onOpenMore?: () => void;
   chromeVisible?: boolean;
 }
 
@@ -68,6 +69,7 @@ export default function HomeScreen({
   locationOverlay,
   onCreateMemory,
   onResetMapView,
+  onOpenMore,
   chromeVisible = true,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -168,6 +170,17 @@ export default function HomeScreen({
               </View>
             )}
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="打开更多菜单"
+            onPress={() => {
+              setRegionMenuOpen(false);
+              onOpenMore?.();
+            }}
+            style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}
+          >
+            <Text style={styles.moreGlyph}>•••</Text>
+          </Pressable>
         </View>
         {(loading || homeStatus || (memories.length === 0 && !loading)) && (
           <View pointerEvents="none" style={styles.messageSlot}>
@@ -216,6 +229,9 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, paddingTop: androidTopInset(), zIndex: 4, justifyContent: 'space-between' },
   topRow: { paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   regionArea: { width: 224, zIndex: 4 },
+  moreButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(119,125,119,0.16)', backgroundColor: 'rgba(246,245,240,0.9)', alignItems: 'center', justifyContent: 'center', shadowColor: '#343831', shadowOpacity: 0.1, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  moreButtonPressed: { opacity: 0.72 },
+  moreGlyph: { color: '#515a54', fontSize: 17, lineHeight: 20, fontWeight: '700' },
   regionMenu: { marginTop: 8, maxHeight: 300, borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(246,245,240,0.96)', shadowColor: '#262926', shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
   regionMenuContent: { paddingVertical: 6 },
   regionOption: { minHeight: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },

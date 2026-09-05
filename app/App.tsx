@@ -6,6 +6,7 @@ import {
   Alert,
   BackHandler,
   Button,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -98,6 +99,20 @@ import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
 import type { EphemeralTestBootstrap } from './src/testing/ephemeralTestRuntime';
 import { firstPhotoCoordinates, type PhotoCoordinates } from './src/photos/photoMetadata';
+import OnboardingOverlay from './src/onboarding/OnboardingOverlay';
+import {
+  AboutScreen,
+  DefaultMapEditorOverlay,
+  HelpScreen,
+  MoreMenuSheet,
+  SettingsScreen,
+  SupportScreen,
+  type UtilityRoute,
+} from './src/settings/SettingsScreens';
+import { loadAppPreferences, saveDefaultMapCamera, saveOnboardingCompleted } from './src/settings/appPreferences';
+import { currentAppVersion, currentBuildVersion } from './src/settings/appVersion';
+import { effectiveDefaultMapCamera, normalizeDefaultMapCamera } from './src/settings/settingsModel';
+import { checkForAppUpdate, SUPPORT_PROJECT_URL, type UpdateCheckResult } from './src/settings/updateService';
 import {
   clearEncryptedContent,
   deleteEncryptedPhotoVariants,
@@ -212,6 +227,15 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [photoManageVisible, setPhotoManageVisible] = useState(false);
   const [moreActionsVisible, setMoreActionsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [appMenuVisible, setAppMenuVisible] = useState(false);
+  const [utilityRoute, setUtilityRoute] = useState<UtilityRoute | null>(null);
+  const [defaultMapCamera, setDefaultMapCamera] = useState<CameraState | null>(null);
+  const [defaultMapEditorVisible, setDefaultMapEditorVisible] = useState(false);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [onboardingMode, setOnboardingMode] = useState<'initial' | 'replay' | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
   const [detailPhotoUris, setDetailPhotoUris] = useState<(string | null)[]>([]);
   const [detailPhotoStates, setDetailPhotoStates] = useState<DetailPhotoState[]>([]);
   const [password, setPassword] = useState('');
@@ -238,6 +262,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [homeCameraTarget, setHomeCameraTarget] = useState<CameraState | null>(null);
   const [locationCameraTarget, setLocationCameraTarget] = useState<CameraState | null>(null);
   const locationPickerOriginCamera = useRef<CameraState | null>(null);
+  const defaultMapEditorOriginCamera = useRef<CameraState | null>(null);
   const detailLoadId = useRef(0);
   const detailPhotoPerformance = useRef(new Map<number, {
     startedAt: number;
@@ -300,9 +325,31 @@ export default function App({ testBootstrap }: AppProps = {}) {
       : undefined,
     [accountSession],
   );
+  const activeDefaultMapCamera = useMemo(
+    () => effectiveDefaultMapCamera(defaultMapCamera),
+    [defaultMapCamera],
+  );
+  const appVersion = useMemo(() => currentAppVersion(), []);
+  const buildVersion = useMemo(() => currentBuildVersion(), []);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (onboardingMode) {
+        void completeOnboarding();
+        return true;
+      }
+      if (defaultMapEditorVisible) {
+        cancelDefaultMapEditor();
+        return true;
+      }
+      if (utilityRoute) {
+        setUtilityRoute(null);
+        return true;
+      }
+      if (appMenuVisible) {
+        setAppMenuVisible(false);
+        return true;
+      }
       if (deleteConfirmVisible) {
         setDeleteConfirmVisible(false);
         return true;
@@ -330,13 +377,20 @@ export default function App({ testBootstrap }: AppProps = {}) {
       return false;
     });
     return () => subscription.remove();
-  }, [deleteConfirmVisible, moreActionsVisible, photoManageVisible, locationPickerVisible, editDraft, draftVisible, selectedMemory, cancelLocationPicker]);
+  }, [appMenuVisible, defaultMapEditorVisible, deleteConfirmVisible, moreActionsVisible, onboardingMode, photoManageVisible, locationPickerVisible, editDraft, draftVisible, selectedMemory, utilityRoute, cancelLocationPicker]);
 
   useEffect(() => {
     void (async () => {
       try {
         resetMapThumbnailCache();
         await initializeStorage();
+        const storedPreferences = await loadAppPreferences();
+        const storedDefaultCamera = effectiveDefaultMapCamera(storedPreferences.defaultMapCamera);
+        setDefaultMapCamera(storedPreferences.defaultMapCamera);
+        setOnboardingCompleted(storedPreferences.onboardingCompleted);
+        setHomeViewport({ camera: storedDefaultCamera });
+        setHomeCameraTarget(storedDefaultCamera);
+        setPreferencesLoaded(true);
         if (testBootstrap) {
           const bootstrap = await testBootstrap();
           await clearEncryptedContent();
@@ -395,6 +449,18 @@ export default function App({ testBootstrap }: AppProps = {}) {
       }
     })();
   }, [testBootstrap]);
+
+  useEffect(() => {
+    if (
+      mode === 'unlocked'
+      && preferencesLoaded
+      && !onboardingCompleted
+      && onboardingMode === null
+      && !defaultMapEditorVisible
+    ) {
+      setOnboardingMode('initial');
+    }
+  }, [defaultMapEditorVisible, mode, onboardingCompleted, onboardingMode, preferencesLoaded]);
 
   useEffect(() => () => resetMapThumbnailCache(), []);
 
@@ -625,6 +691,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setPhotoManageVisible(false);
     setMoreActionsVisible(false);
     setDeleteConfirmVisible(false);
+    setAppMenuVisible(false);
+    setUtilityRoute(null);
+    setDefaultMapEditorVisible(false);
+    setOnboardingMode(null);
     setLocationPickerVisible(false);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
@@ -1280,7 +1350,81 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   function resetHomeMapView(): void {
+    setHomeCameraTarget({ ...activeDefaultMapCamera });
+  }
+
+  function openUtilityRoute(route: UtilityRoute): void {
+    setAppMenuVisible(false);
+    setUtilityRoute(route);
+  }
+
+  function beginDefaultMapEditor(): void {
+    defaultMapEditorOriginCamera.current = homeViewport.camera;
+    setUtilityRoute(null);
+    setDefaultMapEditorVisible(true);
+    setHomeViewport({ camera: { ...activeDefaultMapCamera } });
+    setHomeCameraTarget({ ...activeDefaultMapCamera });
+  }
+
+  function cancelDefaultMapEditor(): void {
+    const origin = defaultMapEditorOriginCamera.current;
+    defaultMapEditorOriginCamera.current = null;
+    setDefaultMapEditorVisible(false);
+    setUtilityRoute('settings');
+    if (origin) setHomeCameraTarget(origin);
+  }
+
+  async function confirmDefaultMapEditor(): Promise<void> {
+    const camera = normalizeDefaultMapCamera(homeViewport.camera);
+    if (!camera) throw new Error('当前地图视图无法保存。');
+    await saveDefaultMapCamera(camera);
+    defaultMapEditorOriginCamera.current = null;
+    setDefaultMapCamera(camera);
+    setDefaultMapEditorVisible(false);
+    setUtilityRoute('settings');
+    setHomeCameraTarget(camera);
+    setStatus('默认地图视图已保存。');
+  }
+
+  async function restoreDefaultMapView(): Promise<void> {
+    await saveDefaultMapCamera(null);
+    setDefaultMapCamera(null);
+    setHomeViewport({ camera: { ...HOME_CHINA_CAMERA } });
     setHomeCameraTarget({ ...HOME_CHINA_CAMERA });
+    setStatus('默认地图视图已恢复为中国全景。');
+  }
+
+  function replayOnboarding(): void {
+    setUtilityRoute(null);
+    setOnboardingMode('replay');
+  }
+
+  async function completeOnboarding(): Promise<void> {
+    const completedMode = onboardingMode;
+    if (completedMode === 'initial') {
+      setOnboardingCompleted(true);
+      await saveOnboardingCompleted();
+    }
+    setOnboardingMode(null);
+    if (completedMode === 'replay') setUtilityRoute('help');
+  }
+
+  async function runUpdateCheck(): Promise<void> {
+    if (updateChecking) return;
+    setUpdateChecking(true);
+    try {
+      setUpdateResult(await checkForAppUpdate(appVersion));
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
+  async function openExternalUrl(url: string): Promise<void> {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setStatus('系统暂时无法打开该链接。');
+    }
   }
 
   async function exportBundle(): Promise<void> {
@@ -1551,8 +1695,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
         onCameraIdle={handleHomeCameraIdle}
         onCreateMemory={() => void runTask(beginCreateMemory)}
         onResetMapView={resetHomeMapView}
-        chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible}
-        initialCamera={HOME_CHINA_CAMERA}
+        onOpenMore={() => setAppMenuVisible(true)}
+        chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible}
+        initialCamera={activeDefaultMapCamera}
         camera={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
         mapUpdatesPaused={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
         locationMode={locationPickerVisible}
@@ -1619,6 +1764,60 @@ export default function App({ testBootstrap }: AppProps = {}) {
           busy={busy}
           onConfirm={() => void runTask(deleteSelectedMemory)}
           onCancel={() => setDeleteConfirmVisible(false)}
+        />
+      )}
+      {appMenuVisible && (
+        <MoreMenuSheet
+          onSelect={openUtilityRoute}
+          onClose={() => setAppMenuVisible(false)}
+        />
+      )}
+      {utilityRoute === 'settings' && (
+        <SettingsScreen
+          userCamera={defaultMapCamera}
+          effectiveCamera={activeDefaultMapCamera}
+          onEditMap={beginDefaultMapEditor}
+          onRestoreMap={() => void runTask(restoreDefaultMapView)}
+          onBack={() => setUtilityRoute(null)}
+        />
+      )}
+      {utilityRoute === 'help' && (
+        <HelpScreen
+          onReplay={replayOnboarding}
+          onBack={() => setUtilityRoute(null)}
+        />
+      )}
+      {utilityRoute === 'about' && (
+        <AboutScreen
+          version={appVersion}
+          buildVersion={buildVersion}
+          updateResult={updateResult}
+          checking={updateChecking}
+          onCheckUpdate={() => void runUpdateCheck()}
+          onOpenUpdate={() => {
+            if (updateResult?.status === 'available') void openExternalUrl(updateResult.url);
+          }}
+          onSupport={() => setUtilityRoute('support')}
+          onBack={() => setUtilityRoute(null)}
+        />
+      )}
+      {utilityRoute === 'support' && (
+        <SupportScreen
+          onOpenProject={() => void openExternalUrl(SUPPORT_PROJECT_URL)}
+          onBack={() => setUtilityRoute('about')}
+        />
+      )}
+      {defaultMapEditorVisible && (
+        <DefaultMapEditorOverlay
+          camera={homeViewport.camera}
+          onCancel={cancelDefaultMapEditor}
+          onSave={() => void runTask(confirmDefaultMapEditor)}
+        />
+      )}
+      {onboardingMode && (
+        <OnboardingOverlay
+          replay={onboardingMode === 'replay'}
+          onComplete={() => void completeOnboarding()}
         />
       )}
     </View>
