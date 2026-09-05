@@ -4,6 +4,12 @@ import test from 'node:test';
 import {
   ARC_TIMELINE_PIXELS_PER_YEAR,
   ARC_TIMELINE_GESTURE_SPEED,
+  ARC_TIMELINE_GESTURE_PENDING,
+  ARC_TIMELINE_GESTURE_HORIZONTAL,
+  ARC_TIMELINE_GESTURE_CREATE,
+  ARC_TIMELINE_GESTURE_RESET_MAP,
+  RESET_PULL_ACTIVATION_DISTANCE,
+  resetPullDisplayDistance,
   arcTimelineMaxDragYears,
   arcTimelineButtonIndex,
   arcTimelineIndexFromDrag,
@@ -11,6 +17,7 @@ import {
   nearestCyclicArcTimelineIndex,
   projectedArcTimelineIndex,
   resolveArcTimelineEdgeDirection,
+  resolveArcTimelineGestureMode,
   visualArcTimelineDragOffset,
   wrapArcTimelineYearIndex,
 } from '../src/testing/arcTimelineModel';
@@ -76,6 +83,21 @@ test('弧形时间轴边缘滚动使用回差，避免阈值附近反复启停',
   assert.equal(resolveArcTimelineEdgeDirection(0, -1.2), -1);
   assert.equal(resolveArcTimelineEdgeDirection(-1, -1.0), -1);
   assert.equal(resolveArcTimelineEdgeDirection(-1, -0.8), 0);
+});
+
+test('弧形时间轴方向锁定区分横向、上拉创建和下拉回到全景', () => {
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 4, 4), ARC_TIMELINE_GESTURE_PENDING);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 30, 8), ARC_TIMELINE_GESTURE_HORIZONTAL);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 8, -30), ARC_TIMELINE_GESTURE_CREATE);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_PENDING, 8, 30), ARC_TIMELINE_GESTURE_RESET_MAP);
+  assert.equal(resolveArcTimelineGestureMode(ARC_TIMELINE_GESTURE_RESET_MAP, -80, -80), ARC_TIMELINE_GESTURE_RESET_MAP);
+});
+
+test('下拉回到全景使用阻尼位移和一次性激活阈值', () => {
+  assert.equal(RESET_PULL_ACTIVATION_DISTANCE, 60);
+  assert.equal(resetPullDisplayDistance(30), 30);
+  assert.equal(resetPullDisplayDistance(100), 71.2);
+  assert.equal(resetPullDisplayDistance(-100), 0);
 });
 
 test('弧形时间轴原型独立于正式 Home 和地图入口', async () => {

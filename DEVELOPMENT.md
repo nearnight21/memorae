@@ -1,6 +1,6 @@
 # Memorae 开发交接
 
-> 最后更新：2026-09-03
+> 最后更新：2026-09-05
 >
 > 当前阶段：Android 默认使用 WebView + 高德 JS API 2.0，并加载高德自定义样式 ID；Native AMap Renderer 保留为显式配置路径。
 
@@ -17,6 +17,10 @@
   的 Native AMap Renderer 作为显式配置路径；默认使用 WebView + 高德 JS API 2.0，加载自定义样式 ID。
   Native Phase 3 / A 验收见
   `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`。
+- Home 默认地图 Camera 使用中国全景视图 `zoom=3.5`；正式时间轴继续使用单一 Pan 手势，
+  横向浏览年份、上拉新建记忆、下拉回到全景，并通过 `homeCameraTarget` 重置 Camera，
+  不改变年份、地区筛选或 Marker 数据。下拉动作的 60dp 激活阈值与 0.24 最大遮罩透明度
+  已有自动化测试覆盖，Android 真机连续手势验收仍需另行执行。
 
 ## 必须保持
 

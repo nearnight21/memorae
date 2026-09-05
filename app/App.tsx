@@ -1279,6 +1279,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setStatus(`已定位到${region.label}：${region.memoryCount} 段记忆。`);
   }
 
+  function resetHomeMapView(): void {
+    setHomeCameraTarget({ ...HOME_CHINA_CAMERA });
+  }
+
   async function exportBundle(): Promise<void> {
     if (!vault) throw new Error('没有可导出的私密空间。');
     await shareEncryptedBundle(vault);
@@ -1546,6 +1550,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
         )}
         onCameraIdle={handleHomeCameraIdle}
         onCreateMemory={() => void runTask(beginCreateMemory)}
+        onResetMapView={resetHomeMapView}
         chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible}
         initialCamera={HOME_CHINA_CAMERA}
         camera={locationPickerVisible ? locationCameraTarget : homeCameraTarget}

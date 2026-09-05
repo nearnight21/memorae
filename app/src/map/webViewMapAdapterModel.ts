@@ -15,7 +15,7 @@ import type {
 
 const COORDINATE_EPSILON = 0.000001;
 const ZOOM_EPSILON = 0.001;
-const DEFAULT_ZOOM = 4;
+const DEFAULT_ZOOM = 3.5;
 
 export function cameraStatesEqual(
   left: CameraState | null | undefined,

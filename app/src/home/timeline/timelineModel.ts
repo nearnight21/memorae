@@ -36,9 +36,8 @@ export function buildTimelineItems(
   const years = memoryYears
     .map(validYear)
     .filter((year): year is number => year !== null && year <= currentYear);
-  if (years.length === 0) return [];
 
-  const earliestMemoryYear = Math.min(...years);
+  const earliestMemoryYear = years.length > 0 ? Math.min(...years) : currentYear;
   const minimumWindowStart = currentYear - Math.max(1, minimumNaturalYears) + 1;
   const startYear = Math.min(earliestMemoryYear, minimumWindowStart);
   const naturalYears = Array.from(
@@ -170,6 +169,143 @@ export const ARC_TIMELINE_EDGE_SCROLL_PIXELS_PER_SECOND = ARC_TIMELINE_PIXELS_PE
 export const ARC_TIMELINE_MAX_LENS_DRAG_YEARS = 1.15;
 export const ARC_TIMELINE_EDGE_STOP_YEARS = 0.85;
 export const ARC_TIMELINE_EDGE_INSET_PX = 50;
+export const ARC_TIMELINE_GESTURE_PENDING = 0;
+export const ARC_TIMELINE_GESTURE_HORIZONTAL = 1;
+export const ARC_TIMELINE_GESTURE_CREATE = 2;
+export const ARC_TIMELINE_GESTURE_RESET_MAP = 3;
+export const CREATE_PULL_INTENT_THRESHOLD = 10;
+export const CREATE_PULL_ACTIVATION_DISTANCE = 112;
+export const CREATE_PULL_MAX_DISTANCE = 164;
+export const CREATE_PULL_RESISTANCE = 0.32;
+export const CREATE_OVERLAY_MAX_OPACITY = 0.5;
+export const RESET_PULL_INTENT_THRESHOLD = 10;
+export const RESET_PULL_ACTIVATION_DISTANCE = 60;
+export const RESET_PULL_MAX_DISTANCE = 112;
+export const RESET_PULL_RESISTANCE = 0.28;
+export const RESET_OVERLAY_MAX_OPACITY = 0.24;
+
+export type ArcTimelineGestureMode =
+  | typeof ARC_TIMELINE_GESTURE_PENDING
+  | typeof ARC_TIMELINE_GESTURE_HORIZONTAL
+  | typeof ARC_TIMELINE_GESTURE_CREATE
+  | typeof ARC_TIMELINE_GESTURE_RESET_MAP;
+
+export function resolveArcTimelineGestureMode(
+  currentMode: ArcTimelineGestureMode,
+  translationX: number,
+  translationY: number,
+  intentThreshold = 10,
+  dominanceRatio = 1.2,
+): ArcTimelineGestureMode {
+  'worklet';
+  if (currentMode !== ARC_TIMELINE_GESTURE_PENDING) return currentMode;
+  const horizontalDistance = Math.abs(translationX);
+  const verticalDistance = Math.abs(translationY);
+  if (Math.max(horizontalDistance, verticalDistance) < intentThreshold) {
+    return ARC_TIMELINE_GESTURE_PENDING;
+  }
+  if (horizontalDistance > verticalDistance * dominanceRatio) {
+    return ARC_TIMELINE_GESTURE_HORIZONTAL;
+  }
+  if (translationY < 0 && verticalDistance > horizontalDistance * dominanceRatio) {
+    return ARC_TIMELINE_GESTURE_CREATE;
+  }
+  if (translationY > 0 && verticalDistance > horizontalDistance * dominanceRatio) {
+    return ARC_TIMELINE_GESTURE_RESET_MAP;
+  }
+  return ARC_TIMELINE_GESTURE_PENDING;
+}
+
+export function resetPullDisplayDistance(
+  translationY: number,
+  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  maximumDistance = RESET_PULL_MAX_DISTANCE,
+  resistance = RESET_PULL_RESISTANCE,
+): number {
+  'worklet';
+  const downwardDistance = Math.max(0, translationY);
+  if (downwardDistance <= activationDistance) return Math.min(downwardDistance, maximumDistance);
+  return Math.min(maximumDistance, activationDistance + (downwardDistance - activationDistance) * resistance);
+}
+
+export function resetPullProgress(
+  mode: ArcTimelineGestureMode,
+  translationY: number,
+  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+): number {
+  'worklet';
+  if (mode !== ARC_TIMELINE_GESTURE_RESET_MAP || activationDistance <= 0) return 0;
+  return Math.max(0, Math.min(1, translationY / activationDistance));
+}
+
+export function isResetPullArmed(
+  mode: ArcTimelineGestureMode,
+  translationY: number,
+  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+): boolean {
+  'worklet';
+  return mode === ARC_TIMELINE_GESTURE_RESET_MAP && translationY >= activationDistance;
+}
+
+export type ResetPullRelease = 'none' | 'cancel' | 'reset';
+
+export function resolveResetPullRelease(
+  mode: ArcTimelineGestureMode,
+  armed: boolean,
+  alreadyCommitted: boolean,
+): ResetPullRelease {
+  'worklet';
+  if (mode !== ARC_TIMELINE_GESTURE_RESET_MAP) return 'none';
+  if (!armed) return 'cancel';
+  return alreadyCommitted ? 'none' : 'reset';
+}
+
+export function createPullDisplayDistance(
+  translationY: number,
+  activationDistance = 112,
+  maximumDistance = 164,
+  resistance = 0.32,
+): number {
+  'worklet';
+  const upwardDistance = Math.max(0, -translationY);
+  if (upwardDistance <= activationDistance) return Math.min(upwardDistance, maximumDistance);
+  return Math.min(
+    maximumDistance,
+    activationDistance + (upwardDistance - activationDistance) * resistance,
+  );
+}
+
+export function createPullProgress(
+  mode: ArcTimelineGestureMode,
+  translationY: number,
+  activationDistance = 112,
+): number {
+  'worklet';
+  if (mode !== ARC_TIMELINE_GESTURE_CREATE || activationDistance <= 0) return 0;
+  return Math.max(0, Math.min(1, -translationY / activationDistance));
+}
+
+export function isCreatePullArmed(
+  mode: ArcTimelineGestureMode,
+  translationY: number,
+  activationDistance = 112,
+): boolean {
+  'worklet';
+  return mode === ARC_TIMELINE_GESTURE_CREATE && -translationY >= activationDistance;
+}
+
+export type CreatePullRelease = 'none' | 'cancel' | 'create';
+
+export function resolveCreatePullRelease(
+  mode: ArcTimelineGestureMode,
+  armed: boolean,
+  alreadyCommitted: boolean,
+): CreatePullRelease {
+  'worklet';
+  if (mode !== ARC_TIMELINE_GESTURE_CREATE) return 'none';
+  if (!armed) return 'cancel';
+  return alreadyCommitted ? 'none' : 'create';
+}
 
 export function clampArcTimelineIndex(index: number, itemCount: number): number {
   'worklet';
