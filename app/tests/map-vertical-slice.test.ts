@@ -150,6 +150,8 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /PROVINCE_COLLISION_DISTANCE = 60/);
   assert.match(runtimeSource, /center: \[104\.1954, 35\.8617\], zoom: 3\.5/);
   assert.match(runtimeSource, /zooms: \[3\.5, 14\]/);
+  assert.match(runtimeSource, /setLogicalCamera\(3\.5, 104\.1954, 35\.8617\)/);
+  assert.doesNotMatch(runtimeSource, /setLogicalCamera\(5, 104\.1954, 35\.8617\)/);
   assert.match(runtimeSource, /Math\.max\(3\.5, Math\.min\(14, message\.zoom\)\)/);
   assert.doesNotMatch(runtimeSource, /zooms: \[4, 14\]/);
   assert.doesNotMatch(runtimeSource, /Math\.max\(4, Math\.min\(14, message\.zoom\)\)/);

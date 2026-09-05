@@ -452,7 +452,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             post({ type: 'error', message: '底图瓦片加载超时，请检查高德 Key、安全密钥和网络。' });
           }, 12000);
           setNotice('', false);
-          setLogicalCamera(5, 104.1954, 35.8617);
+          setLogicalCamera(3.5, 104.1954, 35.8617);
           render();
           post({ type: 'ready' });
           postCameraIdle();
