@@ -101,11 +101,10 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /window\.addEventListener\('message', handleMessage\)/);
   assert.match(runtimeSource, /document\.addEventListener\('message', handleMessage\)/);
   assert.doesNotMatch(runtimeSource, /#map \{ width: calc\(100% \+ 400px\); \}/);
-  assert.match(runtimeSource, /const CAMERA_FOCUS_OFFSET_X = 200/);
-  assert.match(runtimeSource, /const logicalCameraCenter = \(\) =>/);
-  assert.match(runtimeSource, /map\.containerToLngLat\(new AMap\.Pixel\(width \/ 2 \+ CAMERA_FOCUS_OFFSET_X, height \/ 2\)\)/);
-  assert.match(runtimeSource, /const setLogicalCamera = \(zoom, lng, lat/);
-  assert.match(runtimeSource, /map\.panBy\(-CAMERA_FOCUS_OFFSET_X, 0, 0\)/);
+  assert.match(runtimeSource, /const cameraCenter = \(\) => map\?\.getCenter\?\.\(\) \|\| null/);
+  assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat/);
+  assert.match(runtimeSource, /map\.setZoomAndCenter\(zoom, \[lng, lat\], true\)/);
+  assert.doesNotMatch(runtimeSource, /CAMERA_FOCUS_OFFSET_X|containerToLngLat|map\.panBy/);
   assert.match(runtimeSource, /postCameraIdle/);
   assert.match(runtimeSource, /message\.type === 'setCamera'/);
   assert.match(runtimeSource, /Math\.abs\(currentLat - message\.lat\)/);
@@ -150,8 +149,8 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /PROVINCE_COLLISION_DISTANCE = 60/);
   assert.match(runtimeSource, /center: \[104\.1954, 35\.8617\], zoom: 3\.5/);
   assert.match(runtimeSource, /zooms: \[3\.5, 14\]/);
-  assert.match(runtimeSource, /setLogicalCamera\(3\.5, 104\.1954, 35\.8617\)/);
-  assert.doesNotMatch(runtimeSource, /setLogicalCamera\(5, 104\.1954, 35\.8617\)/);
+  assert.match(runtimeSource, /setCamera\(3\.5, 104\.1954, 35\.8617\)/);
+  assert.doesNotMatch(runtimeSource, /setLogicalCamera|logicalCameraCenter/);
   assert.match(runtimeSource, /Math\.max\(3\.5, Math\.min\(14, message\.zoom\)\)/);
   assert.doesNotMatch(runtimeSource, /zooms: \[4, 14\]/);
   assert.doesNotMatch(runtimeSource, /Math\.max\(4, Math\.min\(14, message\.zoom\)\)/);

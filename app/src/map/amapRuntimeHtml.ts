@@ -49,7 +49,6 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const apiKey = ${key};
       const securityJsCode = ${security};
       window._AMapSecurityConfig = { securityJsCode };
-      const CAMERA_FOCUS_OFFSET_X = 200;
       const markers = new Map();
       let renderedGroupSignatures = new Map();
       let renderedScreenSignature = null;
@@ -104,28 +103,14 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           element.classList.toggle('selected', ids.includes(selectedId));
         });
       };
-      const logicalCameraCenter = () => {
-        if (!map) return null;
-        const size = map.getSize?.();
-        const width = typeof size?.getWidth === 'function' ? size.getWidth() : size?.width;
-        const height = typeof size?.getHeight === 'function' ? size.getHeight() : size?.height;
-        if (
-          Number.isFinite(width) && Number.isFinite(height)
-          && typeof map.containerToLngLat === 'function'
-          && typeof AMap.Pixel === 'function'
-        ) {
-          return map.containerToLngLat(new AMap.Pixel(width / 2 + CAMERA_FOCUS_OFFSET_X, height / 2));
-        }
-        return map.getCenter?.() || null;
-      };
-      const setLogicalCamera = (zoom, lng, lat) => {
+      const cameraCenter = () => map?.getCenter?.() || null;
+      const setCamera = (zoom, lng, lat) => {
         if (!map) return;
         map.setZoomAndCenter(zoom, [lng, lat], true);
-        map.panBy(-CAMERA_FOCUS_OFFSET_X, 0, 0);
       };
       const postCameraIdle = () => {
         if (!map) return;
-        const center = logicalCameraCenter();
+        const center = cameraCenter();
         if (!center) return;
         const lat = typeof center.getLat === 'function' ? center.getLat() : center[1];
         const lng = typeof center.getLng === 'function' ? center.getLng() : center[0];
@@ -362,7 +347,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               : group.scope === 'city' ? 9 : Math.min(14, zoom + 2);
             const centerLat = group.centerLat ?? group.lat;
             const centerLng = group.centerLng ?? group.lng;
-            setLogicalCamera(nextZoom, centerLng, centerLat);
+            setCamera(nextZoom, centerLng, centerLat);
             post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: centerLat, lng: centerLng });
           });
           marker.setMap(map);
@@ -396,7 +381,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           && Number.isFinite(message.lng) && message.lng >= -180 && message.lng <= 180
         ) {
           const zoom = Number.isFinite(message.zoom) ? Math.max(3.5, Math.min(14, message.zoom)) : map.getZoom();
-          const center = logicalCameraCenter();
+          const center = cameraCenter();
           const currentLat = center && (typeof center.getLat === 'function' ? center.getLat() : center[1]);
           const currentLng = center && (typeof center.getLng === 'function' ? center.getLng() : center[0]);
           const currentZoom = map.getZoom?.();
@@ -406,7 +391,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             && Math.abs(currentLng - message.lng) < 0.000001
             && Number.isFinite(currentZoom) && Math.abs(currentZoom - zoom) < 0.001
           ) return;
-          setLogicalCamera(zoom, message.lng, message.lat);
+          setCamera(zoom, message.lng, message.lat);
         } else if (message.type === 'clearSensitiveData') {
           window.__MEMORY_MARKERS__ = [];
           selectedId = null;
@@ -452,7 +437,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             post({ type: 'error', message: '底图瓦片加载超时，请检查高德 Key、安全密钥和网络。' });
           }, 12000);
           setNotice('', false);
-          setLogicalCamera(3.5, 104.1954, 35.8617);
+          setCamera(3.5, 104.1954, 35.8617);
           render();
           post({ type: 'ready' });
           postCameraIdle();
