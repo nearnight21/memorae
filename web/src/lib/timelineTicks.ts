@@ -24,6 +24,24 @@ const labelsForStep = (minYear: number, maxYear: number, step: number): number[]
   return [...new Set(years)].sort((left, right) => left - right);
 };
 
+const withoutCrowdedEndpointNeighbors = (
+  years: number[],
+  minYear: number,
+  maxYear: number,
+  width: number,
+  minLabelSpacing: number,
+): number[] => {
+  const span = maxYear - minYear;
+  if (span <= 0 || years.length <= 2) return years;
+  const endpointSpacing = minLabelSpacing;
+  return years.filter((year, index) => {
+    if (index === 0 || index === years.length - 1) return true;
+    const fromStart = ((year - minYear) / span) * width;
+    const fromEnd = ((maxYear - year) / span) * width;
+    return fromStart >= endpointSpacing && fromEnd >= endpointSpacing;
+  });
+};
+
 export const getTimelineTicks = (
   minYearInput: number,
   maxYearInput: number,
@@ -39,7 +57,13 @@ export const getTimelineTicks = (
   const span = maxYear - minYear;
   const step = TIMELINE_TICK_STEPS.find((candidate) => labelsForStep(minYear, maxYear, candidate).length <= targetCount)
     ?? TIMELINE_TICK_STEPS[TIMELINE_TICK_STEPS.length - 1];
-  const majorYears = labelsForStep(minYear, maxYear, step);
+  const majorYears = withoutCrowdedEndpointNeighbors(
+    labelsForStep(minYear, maxYear, step),
+    minYear,
+    maxYear,
+    width,
+    minLabelSpacing,
+  );
   const minorStep = Math.max(1, Math.ceil(step / 5));
   const firstMajor = majorYears[0] ?? minYear;
   const majorSet = new Set(majorYears);
