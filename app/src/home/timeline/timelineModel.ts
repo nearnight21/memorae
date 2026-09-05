@@ -218,9 +218,9 @@ export function resolveArcTimelineGestureMode(
 
 export function resetPullDisplayDistance(
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
-  maximumDistance = RESET_PULL_MAX_DISTANCE,
-  resistance = RESET_PULL_RESISTANCE,
+  activationDistance = 60,
+  maximumDistance = 112,
+  resistance = 0.28,
 ): number {
   'worklet';
   const downwardDistance = Math.max(0, translationY);
@@ -231,7 +231,7 @@ export function resetPullDisplayDistance(
 export function resetPullProgress(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  activationDistance = 60,
 ): number {
   'worklet';
   if (mode !== ARC_TIMELINE_GESTURE_RESET_MAP || activationDistance <= 0) return 0;
@@ -241,7 +241,7 @@ export function resetPullProgress(
 export function isResetPullArmed(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  activationDistance = 60,
 ): boolean {
   'worklet';
   return mode === ARC_TIMELINE_GESTURE_RESET_MAP && translationY >= activationDistance;
