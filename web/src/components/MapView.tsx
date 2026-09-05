@@ -1029,7 +1029,14 @@ export default function MapView({
         </button>}
       </div>}
 
-      {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
+      {!selectedMemory && allYears.length > 0 && (
+        <CrystalTimeline
+          memories={enriched}
+          filters={activeFilters}
+          onFiltersChange={updateFilters}
+          onAddMemory={onAddMemory}
+        />
+      )}
 
       {!selectedMemory && mapCreatePrompt && (
         <div
@@ -1048,7 +1055,7 @@ export default function MapView({
         </div>
       )}
 
-      {!selectedMemory && onAddMemory && (
+      {!selectedMemory && onAddMemory && allYears.length === 0 && (
         <button
           type="button"
           onClick={() => onAddMemory()}

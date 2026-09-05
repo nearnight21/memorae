@@ -136,11 +136,12 @@
 
 .crystal-formal-edge-plus {
   right: 18px;
-  pointer-events: none;
 }
 
 .crystal-formal-edge-calendar:hover,
-.crystal-formal-edge-calendar:focus-visible {
+.crystal-formal-edge-calendar:focus-visible,
+.crystal-formal-edge-plus:hover,
+.crystal-formal-edge-plus:focus-visible {
   border-color: rgba(130, 145, 157, 0.66);
   outline: none;
   transform: translateY(-1px) scale(1.03);
@@ -175,9 +176,13 @@
   color: rgba(51, 61, 70, 0.82);
 }
 
+.crystal-formal-years .is-end-major {
+  transform: translateX(calc(-100% - 34px));
+}
+
 .crystal-formal-track {
   position: absolute;
-  right: 76px;
+  right: 104px;
   bottom: 42px;
   left: 76px;
   height: 1px;
@@ -185,6 +190,11 @@
   border-radius: 999px;
   background: rgba(94, 104, 112, 0.35);
   box-shadow: 0 1px 1px rgba(255, 255, 255, 0.76);
+}
+
+.crystal-formal-edge:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .crystal-formal-track span {

@@ -6,12 +6,14 @@ import { getTimelineTicks } from '../lib/timelineTicks';
 import './CrystalTimeline.css';
 
 const DAY_MS = 86_400_000;
-const TRACK_INSET = 76;
+const TRACK_START_INSET = 76;
+const TRACK_END_INSET = 104;
 
 interface CrystalTimelineProps {
   memories: Memory[];
   filters: MemoryFilters;
   onFiltersChange: (filters: MemoryFilters) => void;
+  onAddMemory?: () => void;
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
@@ -20,17 +22,17 @@ const formatMonth = (date: Date) => `${date.getUTCFullYear()} · ${String(date.g
 
 const positionFor = (progress: number): string => {
   const normalized = clamp(progress);
-  const correction = TRACK_INSET - TRACK_INSET * 2 * normalized;
+  const correction = TRACK_START_INSET - (TRACK_START_INSET + TRACK_END_INSET) * normalized;
   return `calc(${normalized * 100}% + ${correction}px)`;
 };
 
 const progressForPointer = (element: HTMLElement, clientX: number): number => {
   const rect = element.getBoundingClientRect();
-  const width = Math.max(1, rect.width - TRACK_INSET * 2);
-  return clamp((clientX - rect.left - TRACK_INSET) / width);
+  const width = Math.max(1, rect.width - TRACK_START_INSET - TRACK_END_INSET);
+  return clamp((clientX - rect.left - TRACK_START_INSET) / width);
 };
 
-export default function CrystalTimeline({ memories, filters, onFiltersChange }: CrystalTimelineProps) {
+export default function CrystalTimeline({ memories, filters, onFiltersChange, onAddMemory }: CrystalTimelineProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const pointerStartX = useRef<number | null>(null);
   const movedPointer = useRef(false);
@@ -83,7 +85,8 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
   const timelineTicks = useMemo(() => {
     const start = bounds.min.getUTCFullYear();
     const end = bounds.max.getUTCFullYear();
-    return getTimelineTicks(start, end, { width: trackWidth || 1028 });
+    const availableWidth = Math.max(1, (trackWidth || 1028) - TRACK_START_INSET - TRACK_END_INSET);
+    return getTimelineTicks(start, end, { width: availableWidth });
   }, [bounds.max, bounds.min, trackWidth]);
   const hasCommittedDateFilter = Boolean(filters.dateRange?.start || filters.dateRange?.end);
   const hasDateSelection = hasCommittedDateFilter || dragProgress !== null;
@@ -242,7 +245,20 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
           >
             <CalendarDays size={18} strokeWidth={1.55} aria-hidden="true" />
           </button>
-          <span className="crystal-formal-edge crystal-formal-edge-plus" aria-hidden="true"><Plus size={22} strokeWidth={1.45} /></span>
+          <button
+            type="button"
+            className="crystal-formal-edge crystal-formal-edge-plus"
+            aria-label="新建记忆"
+            title="新建记忆"
+            disabled={!onAddMemory}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddMemory?.();
+            }}
+          >
+            <Plus size={22} strokeWidth={1.45} aria-hidden="true" />
+          </button>
           <div className="crystal-formal-years" aria-hidden="true">
             {timelineTicks.minorYears.map((year) => {
               const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
@@ -250,7 +266,11 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange }: 
             })}
             {timelineTicks.majorYears.map((year) => {
               const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
-              return <span key={year} className={year === currentYear ? 'is-current-major' : undefined} style={{ left: positionFor(yearProgress) }}>{year}</span>;
+              const className = [
+                year === currentYear ? 'is-current-major' : '',
+                year === bounds.max.getUTCFullYear() ? 'is-end-major' : '',
+              ].filter(Boolean).join(' ') || undefined;
+              return <span key={year} className={className} style={{ left: positionFor(yearProgress) }}>{year}</span>;
             })}
           </div>
           <div className="crystal-formal-track"><span /></div>
