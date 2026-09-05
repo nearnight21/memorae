@@ -39,6 +39,8 @@ test('App 更多入口接通设置、帮助、关于和引导重播', () => {
   const screensSource = readFileSync(new URL('../src/settings/SettingsScreens.tsx', import.meta.url), 'utf8');
 
   assert.match(homeSource, /accessibilityLabel="打开更多菜单"/);
+  assert.doesNotMatch(homeSource, />•••<\/Text>/);
+  assert.equal(homeSource.match(/<View style=\{styles\.moreDot\} \/>/g)?.length, 3);
   assert.match(screensSource, /accessibilityLabel="打开设置"/);
   assert.match(screensSource, /accessibilityLabel="打开帮助"/);
   assert.match(screensSource, /accessibilityLabel="打开关于"/);
