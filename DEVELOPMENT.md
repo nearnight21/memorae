@@ -52,14 +52,16 @@ Server PostgreSQL 集成测试需要独立测试库，并通过 `MEMORY_RECALL_T
 
 ## 跨电脑同步
 
-工作区干净时运行：
+工作区干净时，在当前分支运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\sync-canonical-worktree.ps1
 ```
 
-脚本只允许 `main` 快进到 `origin/main`；本地领先或分叉时停止，
-不执行 stash、reset、rebase、cherry-pick 或 push。
+在 `main` 上，脚本只允许安全地快进到 `origin/main`；本地领先或分叉时停止。
+在功能分支上，脚本只更新远端引用并验证当前提交已包含最新 `origin/main`，且没有落后或
+分叉于已配置的上游分支；检查通过后继续留在当前功能分支。脚本不执行 checkout、stash、
+reset、rebase、cherry-pick 或 push。
 
 ## 环境与交接规则
 

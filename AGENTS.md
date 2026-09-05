@@ -6,8 +6,9 @@
 
 - 先阅读仓库根目录 `DEVELOPMENT.md`、`TECHNICAL-BASELINE.md`、`docs/SYNC-CRYPTO-FREEZE.md`
   和 `docs/ENVIRONMENT-SECRETS.md`。
-- 修改文件前按 `DEVELOPMENT.md` 记录的当前分支运行 `scripts/sync-canonical-worktree.ps1`，
-  确认工作区干净且与 `origin` 同步。
+- 修改文件前在当前分支运行 `scripts/sync-canonical-worktree.ps1`。脚本在 `main` 上执行安全的
+  fast-forward；在功能分支上只更新远端引用并验证当前提交已包含最新 `origin/main`、且未落后
+  其上游分支，不切换分支、不改写历史。检查通过后直接留在当前功能分支开发。
 - 默认只修改本仓库；不要执行历史过滤、重写历史或在归档仓上开发。
 - Web、App、Server 是同一产品的三个独立运行面。业务实现不得跨运行面直接导入源码。
 - 每个开发任务开始前，先在进度说明中明确唯一目标运行面：`App`、`Web`、`Server`，或用户明确授权的跨端工作。
