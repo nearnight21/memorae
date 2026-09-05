@@ -49,6 +49,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const apiKey = ${key};
       const securityJsCode = ${security};
       window._AMapSecurityConfig = { securityJsCode };
+      const CAMERA_FOCUS_OFFSET_X = 200;
       const markers = new Map();
       let renderedGroupSignatures = new Map();
       let renderedScreenSignature = null;

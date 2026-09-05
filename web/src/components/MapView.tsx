@@ -18,6 +18,7 @@ import {
   type ViewportRegionCandidate,
 } from '../lib/mapViewportRegion';
 import MapMemoryOverlay from './MapMemoryOverlay';
+import CrystalTimeline from './CrystalTimeline';
 
 // 底图模式：'amap' = 高德瓦片（国内直连、中文标注、浅色）；'dark' = CARTO 深色无标注 + 自绘中文标注层
 const TILE_MODE: 'amap' | 'dark' = 'amap';
@@ -1013,6 +1014,7 @@ export default function MapView({
                 <div className="flex flex-wrap gap-1.5">
                   {THEME_OPTIONS.map((theme) => { const active = activeFilters.themes.includes(theme.value); return <button key={theme.value} type="button" onClick={() => updateFilters({ themes: active ? activeFilters.themes.filter((value) => value !== theme.value) : [...activeFilters.themes, theme.value] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{theme.label}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
                 </div>
+                <p className="map-ui-muted mt-3 text-[10px]">时间由底部水晶时间轴控制</p>
               </motion.div>}
             </AnimatePresence>
           </section>
@@ -1027,6 +1029,7 @@ export default function MapView({
         </button>}
       </div>}
 
+      {!selectedMemory && allYears.length > 0 && <CrystalTimeline memories={enriched} filters={activeFilters} onFiltersChange={updateFilters} />}
 
       {!selectedMemory && mapCreatePrompt && (
         <div
