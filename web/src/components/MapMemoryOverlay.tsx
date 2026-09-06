@@ -372,8 +372,9 @@ export default function MapMemoryOverlay({
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
         transition={{ type: 'spring', damping: 26, stiffness: 220 }}
       >
-        {/* 书脊折痕装订线与锁线孔 */}
+        {/* 书脊折痕装订线、锁线孔与自然垂落书签丝带 */}
         <div className="map-journal-spine" aria-hidden="true" />
+        <div className="map-journal-ribbon" aria-hidden="true" />
         <div className="map-journal-spine-stitches" aria-hidden="true">
           <span className="map-journal-stitch" />
           <span className="map-journal-stitch" />
@@ -392,7 +393,7 @@ export default function MapMemoryOverlay({
                 <div className="map-journal-photo-stack is-middle" aria-hidden="true" />
               )}
 
-              {/* 冲印相纸画幅（带相纸白边、立体微阴影、支持点击放大原图） */}
+              {/* 冲印相纸画幅（右上和左下贴半透明和纸胶带，带立体阴影与白边） */}
               <div
                 className="map-journal-photo-paper cursor-zoom-in group"
                 onClick={openOriginal}
@@ -401,6 +402,10 @@ export default function MapMemoryOverlay({
                 aria-label="查看原图"
                 title="点击查看高清原图"
               >
+                {/* 贴在相纸角上的手撕和纸胶带 */}
+                <div className="map-journal-tape is-tr" aria-hidden="true" />
+                <div className="map-journal-tape is-bl" aria-hidden="true" />
+
                 <div className="map-journal-photo-inner">
                   <AnimatePresence mode="wait">
                     <motion.img
@@ -439,6 +444,12 @@ export default function MapMemoryOverlay({
                     <span>{String(availablePhotos.length).padStart(2, '0')}</span>
                   </div>
                 )}
+              </div>
+
+              {/* 跨页旅行双环航空邮戳 */}
+              <div className="map-journal-postmark" aria-hidden="true">
+                <span className="map-journal-postmark-code">MEMORAE</span>
+                <span className="map-journal-postmark-date">{displayDate.replace(/\./g, '')}</span>
               </div>
 
               {/* 随附底片画廊缩略条（Filmstrip） */}

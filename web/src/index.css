@@ -764,24 +764,32 @@
   transition: opacity 280ms ease;
 }
 
-/* 双页手帐折页主容器（大画幅桌面黄金比例） */
+/* 双页手帐折页主容器（大画幅桌面黄金比例与书籍装帧物理质感） */
 .map-journal-folio {
   display: grid;
   grid-template-columns: minmax(460px, 48%) minmax(520px, 52%);
   width: min(1360px, calc(100vw - 56px));
   height: min(780px, calc(100vh - 64px));
   max-height: 840px;
-  border-radius: 14px 20px 20px 14px;
+  border-radius: 10px 16px 16px 10px;
   background:
-    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.25) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.4px),
     linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
   background-size: 10px 10px, 100% 100%;
-  border: 1px solid rgba(135, 115, 92, 0.32);
+  border: 1px solid rgba(135, 115, 92, 0.38);
+  /* 多层纸叠边缘厚度投影 + 外层硬皮封面包边 + 沉稳环境阴影 */
   box-shadow:
-    0 28px 64px rgba(28, 20, 12, 0.38),
-    0 8px 20px rgba(28, 20, 12, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset -1px 0 0 rgba(143, 108, 72, 0.12);
+    0 0 0 3.5px #2b221a,
+    3px 0 0 1px #eee7da,
+    6px 0 0 1px #e3dac8,
+    9px 0 0 1px #d9cfbb,
+    -3px 0 0 1px #eee7da,
+    -6px 0 0 1px #e3dac8,
+    -9px 0 0 1px #d9cfbb,
+    0 32px 72px rgba(18, 13, 8, 0.52),
+    0 10px 24px rgba(18, 13, 8, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset -1px 0 0 rgba(143, 108, 72, 0.15);
   overflow: hidden;
   isolation: isolate;
 }
@@ -792,14 +800,14 @@
   top: 0;
   bottom: 0;
   left: 48%;
-  width: 26px;
+  width: 28px;
   transform: translateX(-50%);
   background: linear-gradient(
     90deg,
     rgba(143, 108, 72, 0) 0%,
-    rgba(126, 92, 58, 0.08) 35%,
-    rgba(92, 64, 38, 0.18) 50%,
-    rgba(126, 92, 58, 0.08) 65%,
+    rgba(115, 82, 50, 0.09) 32%,
+    rgba(80, 54, 30, 0.24) 50%,
+    rgba(115, 82, 50, 0.09) 68%,
     rgba(143, 108, 72, 0) 100%
   );
   pointer-events: none;
@@ -825,9 +833,129 @@
 .map-journal-stitch {
   width: 2.5px;
   height: 22px;
-  background: rgba(143, 108, 72, 0.35);
+  background: rgba(143, 108, 72, 0.4);
   border-radius: 1px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 中缝顶部垂落的书签细织物丝带（Bookmark Ribbon） */
+.map-journal-ribbon {
+  position: absolute;
+  top: -6px;
+  left: calc(48% - 13px);
+  width: 13px;
+  height: 106px;
+  background: linear-gradient(180deg, #872822 0%, #9e2e28 72%, #751e1a 100%);
+  box-shadow:
+    2px 3px 6px rgba(0, 0, 0, 0.28),
+    inset 1px 0 0 rgba(255, 255, 255, 0.25),
+    inset -1px 0 0 rgba(0, 0, 0, 0.35);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+  z-index: 22;
+  pointer-events: none;
+  transform: rotate(1.2deg);
+}
+
+/* 跨页旅行双环航空邮戳（Postmark Stamp，缝合两页视角） */
+.map-journal-postmark {
+  position: absolute;
+  right: -24px;
+  bottom: 54px;
+  width: 74px;
+  height: 74px;
+  border: 1.5px dashed rgba(168, 76, 42, 0.44);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(168, 76, 42, 0.48);
+  font-family: var(--font-serif, "Noto Serif SC", serif);
+  transform: rotate(-12deg);
+  pointer-events: none;
+  z-index: 12;
+}
+
+.map-journal-postmark::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(168, 76, 42, 0.32);
+  border-radius: 50%;
+}
+
+.map-journal-postmark-code {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.map-journal-postmark-date {
+  font-size: 8px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  margin-top: 1px;
+}
+
+/* 半透明手撕和纸/牛皮纸胶带（Washi Tape，物理贴牢相纸） */
+.map-journal-tape {
+  position: absolute;
+  width: 86px;
+  height: 24px;
+  background: rgba(226, 214, 194, 0.82);
+  border-left: 1px dashed rgba(175, 155, 130, 0.4);
+  border-right: 1px dashed rgba(175, 155, 130, 0.4);
+  box-shadow: 0 1.5px 4px rgba(38, 28, 18, 0.18);
+  pointer-events: none;
+  z-index: 10;
+  backdrop-filter: blur(1px);
+}
+
+.map-journal-tape.is-tr {
+  top: -10px;
+  right: -16px;
+  transform: rotate(24deg);
+}
+
+.map-journal-tape.is-bl {
+  bottom: -8px;
+  left: -16px;
+  transform: rotate(26deg);
+}
+
+/* 复古暗铜色压花相角卡槽（Vintage Brass Photo Corners） */
+.map-journal-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  z-index: 8;
+  background: linear-gradient(135deg, #b08754 0%, #7d572e 100%);
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.3);
+}
+
+.map-journal-corner.is-tl {
+  top: -2px;
+  left: -2px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.map-journal-corner.is-tr {
+  top: -2px;
+  right: -2px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.map-journal-corner.is-bl {
+  bottom: -2px;
+  left: -2px;
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+}
+
+.map-journal-corner.is-br {
+  bottom: -2px;
+  right: -2px;
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
 }
 
 /* 页面通用布局 */
@@ -957,18 +1085,42 @@
   color: rgba(115, 95, 75, 0.72);
 }
 
-/* 随附底片画廊（Filmstrip） */
+/* 随附底片画廊（135 胶卷印相带 Contact Filmstrip） */
 .map-journal-filmstrip {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 18px;
   max-width: 100%;
   overflow-x: auto;
-  padding: 4px 6px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  background: #181512;
+  box-shadow: 0 4px 14px rgba(28, 20, 12, 0.28);
   scrollbar-width: none;
   z-index: 5;
+}
+
+.map-journal-filmstrip::before,
+.map-journal-filmstrip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-image: radial-gradient(circle, #38312b 1.2px, transparent 1.4px);
+  background-size: 8px 4px;
+  pointer-events: none;
+}
+
+.map-journal-filmstrip::before {
+  top: 2px;
+}
+
+.map-journal-filmstrip::after {
+  bottom: 2px;
 }
 
 .map-journal-filmstrip::-webkit-scrollbar {
@@ -981,10 +1133,10 @@
   height: 40px;
   flex-shrink: 0;
   padding: 2px;
-  border-radius: 3px;
-  background: #fffdf9;
-  border: 1px solid rgba(135, 115, 92, 0.32);
-  box-shadow: 0 2px 6px rgba(42, 32, 22, 0.12);
+  border-radius: 2px;
+  background: #25201b;
+  border: 1px solid #423b33;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: all 160ms ease;
   overflow: hidden;
@@ -992,14 +1144,14 @@
 
 .map-journal-film-thumb:hover {
   transform: translateY(-2px);
-  border-color: rgba(143, 108, 72, 0.6);
-  box-shadow: 0 4px 10px rgba(42, 32, 22, 0.2);
+  border-color: #a67c4e;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
 .map-journal-film-thumb.is-active {
-  border-color: var(--color-accent-fill);
-  box-shadow: 0 0 0 2px rgba(167, 107, 62, 0.28), 0 4px 12px rgba(42, 32, 22, 0.22);
-  transform: translateY(-2px) scale(1.05);
+  border-color: #e5a76c;
+  box-shadow: 0 0 0 1.5px #e5a76c, 0 4px 12px rgba(0, 0, 0, 0.6);
+  transform: translateY(-2px) scale(1.06);
 }
 
 .map-journal-film-img {
@@ -1008,6 +1160,105 @@
   object-fit: cover;
   border-radius: 1px;
   display: block;
+}
+
+/* 更换相纸微按钮 */
+.map-journal-change-photo-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(143, 108, 72, 0.25);
+  background: rgba(255, 253, 248, 0.9);
+  color: #5c4530;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 160ms ease;
+  z-index: 5;
+}
+
+.map-journal-change-photo-btn:hover {
+  background: #fff;
+  border-color: var(--color-accent-fill);
+  color: var(--color-accent-strong);
+}
+
+/* 底片移除按钮 */
+.map-journal-film-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  opacity: 0;
+  border: 0;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+
+.map-journal-film-thumb:hover .map-journal-film-remove {
+  opacity: 1;
+}
+
+/* 底片追加按钮 */
+.map-journal-film-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.map-journal-film-add:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+/* 未选照片时的复古相角槽位 */
+.map-journal-slot-paper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-width: 440px;
+  padding: 14px;
+  border-radius: 4px;
+  background: rgba(255, 253, 248, 0.65);
+  border: 1.5px dashed rgba(167, 137, 102, 0.45);
+  box-shadow: inset 0 2px 8px rgba(42, 32, 22, 0.05);
+  transition: all 200ms ease;
+}
+
+.map-journal-slot-paper:hover {
+  border-color: var(--color-accent-fill);
+  background: rgba(255, 253, 248, 0.95);
+  box-shadow: 0 8px 24px rgba(42, 32, 22, 0.12);
+}
+
+.map-journal-slot-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
 }
 
 /* 相纸翻页控制器 */
