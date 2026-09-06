@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Compass,
   Loader2,
   LoaderCircle,
   MapPin,
@@ -347,411 +348,456 @@ export default function MapMemoryOverlay({
   return (
     <motion.div
       id="map-memory-overlay"
-      className="pointer-events-none absolute inset-0 z-[1001] overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-[1001] flex items-center justify-center overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.28 }}
     >
+      {/* 沉静暗色背景蒙层，点击外部随手合上手帐 */}
       <motion.div
-        className="absolute left-[64px] top-[12%] z-10 h-[72%] w-[58%] sm:left-[72px] sm:w-[56%]"
-        initial={{
-          opacity: 0,
-          scale: 0.18,
-          x: anchor ? anchor.x - photoCenter.x : 80,
-          y: anchor ? anchor.y - photoCenter.y : 30,
-        }}
-        animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-        exit={{
-          opacity: 0,
-          scale: 0.24,
-          x: anchor ? anchor.x - photoCenter.x : 60,
-          y: anchor ? anchor.y - photoCenter.y : 20,
-        }}
-        transition={{ type: 'spring', damping: 24, stiffness: 210 }}
+        className="map-journal-backdrop pointer-events-auto absolute inset-0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* 双页旅行折页手帐主画卷 */}
+      <motion.main
+        className="map-journal-folio pointer-events-auto relative z-10"
+        initial={{ opacity: 0, scale: 0.94, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 12 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 220 }}
       >
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={displayedPhoto}
-            src={displayedPhoto}
-            alt={memory.title}
-            referrerPolicy="no-referrer"
-            initial={{ opacity: 0.25, scale: 1.025 }}
-            animate={{ opacity: 0.95, scale: 1 }}
-            exit={{ opacity: 0.18, scale: 0.985 }}
-            transition={{ duration: 0.28 }}
-            onError={() => {
-              if (!currentPhoto) return;
-              if (displayedPhoto !== currentPhoto && currentPhotoId) {
-                setPreviewUrls((current) => {
-                  const next = { ...current };
-                  delete next[currentPhotoId];
-                  return next;
-                });
-                return;
-              }
-              setFailedPhotos((failed) => failed.includes(currentPhoto) ? failed : [...failed, currentPhoto]);
-              setPhotoIdx(0);
-            }}
-            className="map-memory-photo-mask h-full w-full object-cover"
-          />
-        </AnimatePresence>
+        {/* 书脊折痕装订线与锁线孔 */}
+        <div className="map-journal-spine" aria-hidden="true" />
+        <div className="map-journal-spine-stitches" aria-hidden="true">
+          <span className="map-journal-stitch" />
+          <span className="map-journal-stitch" />
+          <span className="map-journal-stitch" />
+        </div>
 
-        {currentPhoto && <button
-          type="button"
-          onClick={openOriginal}
-          className="pointer-events-auto absolute inset-0 z-10 cursor-zoom-in"
-          aria-label="查看原图"
-          title="查看原图"
-        />}
+        {/* 左页：实体冲印相纸台 */}
+        <section className="map-journal-page map-journal-page-photo" aria-label="照片记忆">
+          {currentPhoto ? (
+            <div className="map-journal-photo-stage">
+              {/* 底层错落相纸（多图时自然微旋转） */}
+              {availablePhotos.length > 1 && (
+                <div className="map-journal-photo-stack is-back" aria-hidden="true" />
+              )}
+              {availablePhotos.length > 2 && (
+                <div className="map-journal-photo-stack is-middle" aria-hidden="true" />
+              )}
 
-        {availablePhotos.length > 1 && (
-          <div className="map-photo-toolbar pointer-events-auto absolute bottom-[7%] left-1/2 z-20 flex -translate-x-1/2 items-center gap-5">
-            <button
-              type="button"
-              onClick={() => goPhoto(-1)}
-              aria-label="上一张照片"
-              className="map-photo-nav-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-sm transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <span className="font-mono text-[13px] tracking-[0.14em] drop-shadow-md">
-              {String(photoIdx + 1).padStart(2, '0')} / {String(availablePhotos.length).padStart(2, '0')}
-            </span>
-            <button
-              type="button"
-              onClick={() => goPhoto(1)}
-              aria-label="下一张照片"
-              className="map-photo-nav-control flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-sm transition-colors cursor-pointer"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-      </motion.div>
+              {/* 冲印相纸画幅（带相纸白边、立体微阴影、支持点击放大原图） */}
+              <div
+                className="map-journal-photo-paper cursor-zoom-in group"
+                onClick={openOriginal}
+                role="button"
+                tabIndex={0}
+                aria-label="查看原图"
+                title="点击查看高清原图"
+              >
+                <div className="map-journal-photo-inner">
+                  <AnimatePresence mode="wait">
+                    <motion.img
+                      key={displayedPhoto}
+                      src={displayedPhoto}
+                      alt={memory.title}
+                      referrerPolicy="no-referrer"
+                      initial={{ opacity: 0.3, scale: 1.02 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0.2, scale: 0.98 }}
+                      transition={{ duration: 0.25 }}
+                      onError={() => {
+                        if (!currentPhoto) return;
+                        if (displayedPhoto !== currentPhoto && currentPhotoId) {
+                          setPreviewUrls((current) => {
+                            const next = { ...current };
+                            delete next[currentPhotoId];
+                            return next;
+                          });
+                          return;
+                        }
+                        setFailedPhotos((failed) => failed.includes(currentPhoto) ? failed : [...failed, currentPhoto]);
+                        setPhotoIdx(0);
+                      }}
+                      className="map-journal-photo-img"
+                    />
+                  </AnimatePresence>
+                  <div className="map-journal-photo-gloss" aria-hidden="true" />
+                </div>
 
-      <motion.article
-        className="map-memory-copy-feather map-ui-body pointer-events-auto absolute right-[2.5%] top-[10%] z-20 max-h-[80%] w-[44%] overflow-y-auto px-[5%] py-7 sm:right-[3.5%] sm:w-[41%] sm:py-8"
-        initial={{ opacity: 0, x: 28 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20 }}
-        transition={{ duration: 0.38, delay: 0.14 }}
-      >
-        <div className="map-memory-paper-header">
-          <div className="map-memory-paper-status-pill" aria-live="polite">
-            <span
-              className={`map-memory-status-dot ${
-                isEditing
-                  ? saveStatus === 'saving'
-                    ? 'is-saving'
-                    : 'is-editing'
-                  : 'is-synced'
-              }`}
-              aria-hidden="true"
-            />
-            <span>
-              {isEditing
-                ? (saveStatus === 'saving' ? '正在保存' : saveStatus === 'saved' ? '已保存' : '编辑草稿')
-                : (saveStatus === 'saved' ? '已保存' : '已同步')}
-            </span>
-          </div>
-          <div className="map-memory-paper-actions">
-            {!isEditing && onSaveMemory && (
-              <button
-                type="button"
-                onClick={beginEditing}
-                className="map-memory-paper-action map-memory-paper-edit"
-                aria-label="编辑记忆"
-                title="编辑记忆"
-              >
-                <PenLine className="h-3.5 w-3.5" strokeWidth={1.7} />
-                <span>编辑</span>
-              </button>
-            )}
-            {isEditing && (
-              <button
-                type="button"
-                onClick={cancelEditing}
-                disabled={saveStatus === 'saving'}
-                className="map-memory-paper-action map-memory-paper-cancel"
-              >
-                取消
-              </button>
-            )}
-            {isEditing && onSaveMemory && (
-              <button
-                type="button"
-                onClick={() => void completeEditing()}
-                disabled={saveStatus === 'saving' || (draftMemory.location?.name.trim() !== '' && locationResolution !== 'resolved')}
-                className="map-memory-paper-complete"
-              >
-                {saveStatus === 'saving' ? (
-                  <>
-                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                    <span>保存中</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-3.5 w-3.5" strokeWidth={2} />
-                    <span>完成</span>
-                  </>
-                )}
-              </button>
-            )}
-            {onDeleteMemory && (
-              <div className="map-memory-more-wrap">
-                <button
-                  type="button"
-                  className="map-memory-more"
-                  onClick={() => setMoreOpen((open) => !open)}
-                  aria-label="更多操作"
-                  aria-expanded={moreOpen}
-                  aria-haspopup="menu"
-                  title="更多操作"
-                >
-                  <MoreHorizontal className="h-4.5 w-4.5" strokeWidth={1.6} />
-                </button>
-                {moreOpen && (
-                  <div className="map-memory-more-menu" role="menu">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => { setMoreOpen(false); setDeleteArmed(true); }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
-                      删除记忆
-                    </button>
+                {/* 相纸右下角暗房打印编号 */}
+                {availablePhotos.length > 1 && (
+                  <div className="map-journal-photo-badge font-mono">
+                    <span>{String(photoIdx + 1).padStart(2, '0')}</span>
+                    <span className="opacity-40">/</span>
+                    <span>{String(availablePhotos.length).padStart(2, '0')}</span>
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="map-memory-paper-intro">
-          {isEditing ? (
-            <input
-              value={draftMemory.title}
-              onChange={(event) => updateDraft('title', event.target.value)}
-              placeholder="给这段记忆起个名字"
-              className="map-memory-inline-title map-ui-body w-full bg-transparent font-editorial-serif text-[28px] leading-tight outline-none sm:text-[36px]"
-              aria-label="编辑记忆标题"
-              autoFocus
-            />
-          ) : (
-            <h2 className="map-memory-paper-title font-editorial-serif text-[32px] leading-tight sm:text-[40px]">
-              {memory.title || '未命名记忆'}
-            </h2>
-          )}
-
-          {!isEditing ? (
-            <div className="map-memory-meta-row" aria-label="记忆信息">
-              <span className="map-memory-meta-item map-memory-meta-date">
-                <Calendar className="h-3.5 w-3.5 text-amber-800/60" aria-hidden="true" />
-                <time>{displayDate}</time>
-              </span>
-              {metadataLocation && (
-                <>
-                  <span className="map-memory-meta-separator" aria-hidden="true">·</span>
-                  <span className="map-memory-meta-item map-memory-meta-location">
-                    <MapPin className="h-3.5 w-3.5 text-amber-800/60" aria-hidden="true" />
-                    <span>{metadataLocation}</span>
+              {/* 翻页切换控制器 */}
+              {availablePhotos.length > 1 && (
+                <div className="map-journal-photo-nav" aria-label="翻看随附照片">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); goPhoto(-1); }}
+                    aria-label="上一张照片"
+                    className="map-journal-nav-btn"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="map-journal-nav-hint font-mono">
+                    {photoIdx + 1} / {availablePhotos.length}
                   </span>
-                </>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); goPhoto(1); }}
+                    aria-label="下一张照片"
+                    className="map-journal-nav-btn"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
               )}
-              <span className="map-memory-meta-separator" aria-hidden="true">·</span>
-              <span className="map-memory-meta-item map-memory-meta-tag-pill">
-                <Tag className="h-3 w-3 text-amber-900/50" aria-hidden="true" />
-                <span>{categoryLabel(memory.category)}</span>
-              </span>
             </div>
           ) : (
-            <div className="map-memory-edit-fields">
-              <div className="map-memory-edit-row-primary">
-                <div className="map-memory-edit-input-group map-memory-edit-date-group">
-                  <label htmlFor="edit-memory-date" className="map-memory-edit-field-label">日期</label>
-                  <div className="map-memory-edit-field-wrap">
-                    <Calendar className="h-3.5 w-3.5 map-memory-field-icon" aria-hidden="true" />
-                    <input
-                      id="edit-memory-date"
-                      type="date"
-                      value={draftMemory.date.replace(/\./g, '-')}
-                      onChange={(event) => updateDraft('date', event.target.value.replace(/-/g, '.'))}
-                      className="map-memory-edit-field-date"
-                      aria-label="编辑记忆日期"
-                      required
+            /* 无照片记忆时的典雅手绘手帐素描白页 */
+            <div className="map-journal-photo-empty">
+              <div className="map-journal-compass-seal">
+                <Compass className="h-12 w-12 stroke-[1.2] text-amber-900/35" />
+                <span className="font-editorial-serif text-amber-900/50 text-xs tracking-widest uppercase mt-3">
+                  Memory Coordinates
+                </span>
+                <span className="text-[12px] font-mono text-stone-500 mt-1">
+                  {metadataLocation || '纯文字珍藏回忆'}
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 右页：双时态时间轴手帐信笺 */}
+        <section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺">
+          {/* 顶部手帐操作与状态栏 */}
+          <header className="map-journal-header">
+            <div className="map-journal-tagline">
+              <span className="map-journal-tagline-text">
+                {isEditing ? '· 草稿书写中 ·' : saveStatus === 'saved' ? '· 已密文固化 ·' : '· 旅人档案 ·'}
+              </span>
+            </div>
+
+            <div className="map-journal-actions">
+              {!isEditing && onSaveMemory && (
+                <button
+                  type="button"
+                  onClick={beginEditing}
+                  className="map-journal-action-btn is-edit"
+                  aria-label="编辑记忆"
+                  title="编辑这页记忆"
+                >
+                  <PenLine className="h-3.5 w-3.5" strokeWidth={1.7} />
+                  <span>编辑</span>
+                </button>
+              )}
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  disabled={saveStatus === 'saving'}
+                  className="map-journal-action-btn is-cancel"
+                >
+                  取消
+                </button>
+              )}
+              {isEditing && onSaveMemory && (
+                <button
+                  type="button"
+                  onClick={() => void completeEditing()}
+                  disabled={saveStatus === 'saving' || (draftMemory.location?.name.trim() !== '' && locationResolution !== 'resolved')}
+                  className="map-journal-action-btn is-save"
+                >
+                  {saveStatus === 'saving' ? (
+                    <>
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      <span>保存中</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                      <span>保存</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {onDeleteMemory && (
+                <div className="map-memory-more-wrap">
+                  <button
+                    type="button"
+                    className="map-journal-action-btn is-icon"
+                    onClick={() => setMoreOpen((open) => !open)}
+                    aria-label="更多操作"
+                    aria-expanded={moreOpen}
+                    aria-haspopup="menu"
+                    title="更多操作"
+                  >
+                    <MoreHorizontal className="h-4 w-4" strokeWidth={1.6} />
+                  </button>
+                  {moreOpen && (
+                    <div className="map-memory-more-menu" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setMoreOpen(false); setDeleteArmed(true); }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
+                        删除这页记忆
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="合上手帐"
+                title="合上手帐 (Esc)"
+                className="map-journal-action-btn is-icon is-close"
+              >
+                <X className="h-4 w-4" strokeWidth={1.7} />
+              </button>
+            </div>
+          </header>
+
+          {/* 标题与元数据区域 */}
+          <div className="map-journal-intro">
+            {isEditing ? (
+              <input
+                value={draftMemory.title}
+                onChange={(event) => updateDraft('title', event.target.value)}
+                placeholder="给这段记忆起个名字"
+                className="map-journal-title-input font-editorial-serif"
+                aria-label="编辑记忆标题"
+                autoFocus
+              />
+            ) : (
+              <h2 className="map-journal-title font-editorial-serif">
+                {memory.title || '未命名记忆'}
+              </h2>
+            )}
+
+            {!isEditing ? (
+              /* 只读状态下的优雅元数据行：带日历、图钉与主题徽章 */
+              <div className="map-journal-meta-row" aria-label="记忆信息">
+                <span className="map-journal-meta-item">
+                  <Calendar className="h-3.5 w-3.5 text-amber-800/65" aria-hidden="true" />
+                  <time>{displayDate}</time>
+                </span>
+                {metadataLocation && (
+                  <>
+                    <span className="map-journal-meta-dot" aria-hidden="true">·</span>
+                    <span className="map-journal-meta-item">
+                      <MapPin className="h-3.5 w-3.5 text-amber-800/65" aria-hidden="true" />
+                      <span>{metadataLocation}</span>
+                    </span>
+                  </>
+                )}
+                <span className="map-journal-meta-dot" aria-hidden="true">·</span>
+                <span className="map-journal-meta-tag font-sans">
+                  <Tag className="h-3 w-3 text-amber-900/50" aria-hidden="true" />
+                  <span>{categoryLabel(memory.category)}</span>
+                </span>
+              </div>
+            ) : (
+              /* 编辑状态下的结构化表单排版：两行清晰分离 */
+              <div className="map-journal-edit-form">
+                <div className="map-journal-edit-row">
+                  <div className="map-journal-field-group">
+                    <label htmlFor="edit-journal-date" className="map-journal-field-label">日期</label>
+                    <div className="map-journal-input-wrap">
+                      <Calendar className="h-3.5 w-3.5 text-amber-900/50 ml-2.5 shrink-0" aria-hidden="true" />
+                      <input
+                        id="edit-journal-date"
+                        type="date"
+                        value={draftMemory.date.replace(/\./g, '-')}
+                        onChange={(event) => updateDraft('date', event.target.value.replace(/-/g, '.'))}
+                        className="map-journal-input"
+                        aria-label="编辑记忆日期"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="map-journal-field-group">
+                    <label htmlFor="edit-journal-category" className="map-journal-field-label">主题</label>
+                    <div className="map-journal-input-wrap">
+                      <Tag className="h-3.5 w-3.5 text-amber-900/50 ml-2.5 shrink-0" aria-hidden="true" />
+                      <select
+                        id="edit-journal-category"
+                        value={draftMemory.category}
+                        onChange={(event) => updateDraft('category', event.target.value as CategoryType)}
+                        className="map-journal-select"
+                        aria-label="编辑记忆主题"
+                      >
+                        {CATEGORY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="map-journal-field-group is-location">
+                  <div className="flex items-center justify-between">
+                    <label className="map-journal-field-label">地点</label>
+                    {locationResolution === 'resolving' && (
+                      <span className="map-journal-location-badge is-resolving">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        正在解析行政信息…
+                      </span>
+                    )}
+                    {locationResolution === 'error' && (
+                      <span className="map-journal-location-badge is-error">
+                        需在地图上重新选点
+                      </span>
+                    )}
+                    {locationResolution === 'resolved' && draftMemory.location?.name && (
+                      <span className="map-journal-location-badge is-resolved">
+                        已定位到地图
+                      </span>
+                    )}
+                  </div>
+                  <div className="map-journal-input-wrap is-picker">
+                    <LocationPicker
+                      selectedLabel={draftMemory.location?.name ?? ''}
+                      query={locationQuery}
+                      onQueryChange={updateDraftLocationQuery}
+                      onPickOnMap={() => setShowLocationMap(true)}
+                      onSelect={(candidate) => {
+                        const requestId = locationRequestRef.current + 1;
+                        locationRequestRef.current = requestId;
+                        setLocationQuery('');
+                        setDraftMemory((current) => ({
+                          ...current,
+                          location: {
+                            name: candidate.shortName,
+                            mx: current.location?.mx ?? 50,
+                            my: current.location?.my ?? 50,
+                          },
+                          country: candidate.country ?? current.country,
+                          province: undefined,
+                          city: undefined,
+                          district: undefined,
+                          adcode: undefined,
+                          locationProvider: candidate.provider,
+                          locationProviderId: candidate.providerId,
+                          lat: candidate.lat,
+                          lng: candidate.lng,
+                        }));
+                        setLocationResolution('resolving');
+                        void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
+                          if (requestId !== locationRequestRef.current) return;
+                          if (!hasResolvedAdministrativeLocation(reverse)) {
+                            setLocationResolution('error');
+                            return;
+                          }
+                          setDraftMemory((current) => (
+                            current.lat === candidate.lat && current.lng === candidate.lng
+                              ? {
+                                ...current,
+                                country: reverse.country,
+                                province: reverse.province,
+                                city: reverse.city,
+                                district: reverse.district,
+                                adcode: reverse.adcode,
+                                locationProvider: reverse.provider,
+                                detailLocation: current.detailLocation || reverse.district,
+                              }
+                              : current
+                          ));
+                          setLocationResolution('resolved');
+                        });
+                      }}
+                      placeholder="输入地点，或点击右侧图钉在大地图上选择"
+                      inputClassName="map-journal-location-input"
                     />
                   </div>
                 </div>
-
-                <div className="map-memory-edit-input-group map-memory-edit-category-group">
-                  <label htmlFor="edit-memory-category" className="map-memory-edit-field-label">主题</label>
-                  <div className="map-memory-edit-field-wrap">
-                    <Tag className="h-3.5 w-3.5 map-memory-field-icon" aria-hidden="true" />
-                    <select
-                      id="edit-memory-category"
-                      value={draftMemory.category}
-                      onChange={(event) => updateDraft('category', event.target.value as CategoryType)}
-                      className="map-memory-edit-field-select"
-                      aria-label="编辑记忆主题"
-                    >
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
               </div>
-
-              <div className="map-memory-edit-row-location">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="map-memory-edit-field-label">地点</label>
-                  {locationResolution === 'resolving' && (
-                    <span className="map-memory-location-status-badge is-resolving">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      确认行政信息中…
-                    </span>
-                  )}
-                  {locationResolution === 'error' && (
-                    <span className="map-memory-location-status-badge is-error">
-                      需在地图上重新选点
-                    </span>
-                  )}
-                  {locationResolution === 'resolved' && draftMemory.location?.name && (
-                    <span className="map-memory-location-status-badge is-resolved">
-                      已定位到地图
-                    </span>
-                  )}
-                </div>
-                <div className="map-memory-edit-location-picker-wrap">
-                  <LocationPicker
-                    selectedLabel={draftMemory.location?.name ?? ''}
-                    query={locationQuery}
-                    onQueryChange={updateDraftLocationQuery}
-                    onPickOnMap={() => setShowLocationMap(true)}
-                    onSelect={(candidate) => {
-                      const requestId = locationRequestRef.current + 1;
-                      locationRequestRef.current = requestId;
-                      setLocationQuery('');
-                      setDraftMemory((current) => ({
-                        ...current,
-                        location: {
-                          name: candidate.shortName,
-                          mx: current.location?.mx ?? 50,
-                          my: current.location?.my ?? 50,
-                        },
-                        country: candidate.country ?? current.country,
-                        province: undefined,
-                        city: undefined,
-                        district: undefined,
-                        adcode: undefined,
-                        locationProvider: candidate.provider,
-                        locationProviderId: candidate.providerId,
-                        lat: candidate.lat,
-                        lng: candidate.lng,
-                      }));
-                      setLocationResolution('resolving');
-                      void reverseGeocodeCoordinates(candidate.lat, candidate.lng).then((reverse) => {
-                        if (requestId !== locationRequestRef.current) return;
-                        if (!hasResolvedAdministrativeLocation(reverse)) {
-                          setLocationResolution('error');
-                          return;
-                        }
-                        setDraftMemory((current) => (
-                          current.lat === candidate.lat && current.lng === candidate.lng
-                            ? {
-                              ...current,
-                              country: reverse.country,
-                              province: reverse.province,
-                              city: reverse.city,
-                              district: reverse.district,
-                              adcode: reverse.adcode,
-                              locationProvider: reverse.provider,
-                              detailLocation: current.detailLocation || reverse.district,
-                            }
-                            : current
-                        ));
-                        setLocationResolution('resolved');
-                      });
-                    }}
-                    placeholder="输入地点或点击右侧图钉在地图上选择"
-                    inputClassName="map-memory-edit-location-input"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="map-memory-reflections">
-          <section className="map-memory-reflection map-memory-reflection-past">
-            <div className="map-memory-reflection-header">
-              <span className="map-memory-seal-badge is-past" aria-hidden="true">昔</span>
-              <h3 className="map-memory-reflection-heading font-editorial-serif">当时的我</h3>
-            </div>
-            {isEditing ? (
-              <textarea
-                value={draftMemory.pastSelf}
-                onChange={(event) => updateDraft('pastSelf', event.target.value)}
-                placeholder="记下当时发生的事、心情和你看见的风景…"
-                className="map-memory-edit-textarea map-ui-body-text"
-                aria-label="编辑当时的我"
-              />
-            ) : memory.pastSelf ? (
-              <p className="map-ui-body-text">{memory.pastSelf}</p>
-            ) : (
-              <p className="map-memory-reflection-empty font-editorial-serif italic">
-                尚未记录当时的故事与心情…
-              </p>
             )}
-          </section>
+          </div>
 
-          {(readerMode === 'reflection' || isEditing || memory.presentSelf) && (
-            <section className="map-memory-reflection map-memory-reflection-present">
-              <div className="map-memory-reflection-header">
-                <span className="map-memory-seal-badge is-present" aria-hidden="true">今</span>
-                <h3 className="map-memory-reflection-heading font-editorial-serif">现在的我</h3>
-              </div>
-              {isEditing ? (
-                <textarea
-                  value={draftMemory.presentSelf}
-                  onChange={(event) => updateDraft('presentSelf', event.target.value)}
-                  placeholder="此刻回望，这段经历留下了什么？"
-                  className="map-memory-edit-textarea map-ui-body-text"
-                  aria-label="编辑现在的我"
-                />
-              ) : memory.presentSelf ? (
-                <p className="map-ui-body-text">{memory.presentSelf}</p>
-              ) : (
-                <p className="map-memory-reflection-empty font-editorial-serif italic">
-                  尚未留下此刻回望的感想…
-                </p>
+          {/* 双时态时光轴（The Thread） */}
+          <div className="map-journal-thread">
+            {/* 贯穿始终的时空线轨 */}
+            <div className="map-journal-thread-rail" aria-hidden="true">
+              <span className="map-journal-thread-node is-past">昔</span>
+              <span className="map-journal-thread-line" />
+              <span className="map-journal-thread-node is-present">今</span>
+            </div>
+
+            {/* 叙事正文区域 */}
+            <div className="map-journal-thread-content">
+              {/* 当时的我 */}
+              <section className="map-journal-entry">
+                <h3 className="map-journal-entry-heading font-editorial-serif">当时的我</h3>
+                {isEditing ? (
+                  <textarea
+                    value={draftMemory.pastSelf}
+                    onChange={(event) => updateDraft('pastSelf', event.target.value)}
+                    placeholder="记下当时发生的事、心情和你看见的风景…"
+                    className="map-journal-textarea"
+                    aria-label="编辑当时的我"
+                  />
+                ) : memory.pastSelf ? (
+                  <p className="map-journal-entry-text">{memory.pastSelf}</p>
+                ) : (
+                  <p className="map-journal-entry-empty font-editorial-serif italic">
+                    当时未曾留下只字片语…
+                  </p>
+                )}
+              </section>
+
+              {/* 现在的我 */}
+              {(readerMode === 'reflection' || isEditing || memory.presentSelf) && (
+                <section className="map-journal-entry is-present">
+                  <h3 className="map-journal-entry-heading font-editorial-serif">现在的我</h3>
+                  {isEditing ? (
+                    <textarea
+                      value={draftMemory.presentSelf}
+                      onChange={(event) => updateDraft('presentSelf', event.target.value)}
+                      placeholder="此刻回望，这段经历留下了什么？"
+                      className="map-journal-textarea"
+                      aria-label="编辑现在的我"
+                    />
+                  ) : memory.presentSelf ? (
+                    <p className="map-journal-entry-text">{memory.presentSelf}</p>
+                  ) : (
+                    <p className="map-journal-entry-empty font-editorial-serif italic">
+                      时光漫过，你尚未写下此刻的回望…
+                    </p>
+                  )}
+                </section>
               )}
-            </section>
+            </div>
+          </div>
+
+          {isEditing && (
+            <p className={`map-journal-hint ${saveStatus === 'error' ? 'is-error' : ''}`}>
+              {saveStatus === 'error'
+                ? '草稿保存失败，请检查地点是否已完成定位后再重试。'
+                : '修改会即时保存在本地草稿中 · 按 Ctrl + Enter 可快捷保存。'}
+            </p>
           )}
-        </div>
-
-        {isEditing && (
-          <p className={`map-memory-edit-hint ${saveStatus === 'error' ? 'is-error' : ''}`}>
-            {saveStatus === 'error'
-              ? '草稿保存失败，请检查地点是否已完成定位后再重试。'
-              : '修改会即时保存在本地草稿中 · 按 Ctrl + Enter 可快捷保存。'}
-          </p>
-        )}
-      </motion.article>
-
-      <button
-        id="btn-close-map-memory"
-        type="button"
-        onClick={onClose}
-        aria-label="收起记忆"
-        className="map-ui-control pointer-events-auto absolute right-5 top-6 z-30 flex h-10 items-center gap-2 rounded-full border px-3.5 text-[11px] backdrop-blur-md transition-colors cursor-pointer"
-      >
-        <X className="h-4.5 w-4.5" strokeWidth={1.5} />
-        收起记忆
-      </button>
+        </section>
+      </motion.main>
 
       <AnimatePresence>
         {deleteArmed && <motion.div
