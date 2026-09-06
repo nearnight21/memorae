@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Path } from '@shopify/react-native-skia';
+import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -505,13 +505,13 @@ export default function ArcTimeline({
         <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
           <Canvas style={StyleSheet.absoluteFill}>
             <Path
-              color="rgba(255,255,252,0.72)"
+              color="rgba(255,255,255,0.72)"
               path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
               strokeWidth={4}
               style="stroke"
             />
             <Path
-              color="rgba(151,98,49,0.7)"
+              color="rgba(153,194,231,0.82)"
               path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
               strokeWidth={1}
               style="stroke"
@@ -546,6 +546,12 @@ export default function ArcTimeline({
             }}
             style={[styles.lens, lensStyle]}
           >
+            <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Circle cx={33} cy={33} r={30}>
+                <RadialGradient c={vec(23, 17)} r={39} colors={['rgba(255,255,255,0.72)', 'rgba(247,252,255,0.28)', 'rgba(225,240,248,0.14)', 'rgba(198,222,235,0.08)']} positions={[0, 0.34, 0.7, 1]} />
+              </Circle>
+              <Circle cx={33} cy={33} r={29.5} color="rgba(244,252,255,0.9)" style="stroke" strokeWidth={1.2} />
+            </Canvas>
             <Text style={styles.lensYear}>{items[safeDisplayIndex]?.label}</Text>
             <View style={styles.lensInner} />
           </Animated.View>
@@ -591,7 +597,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   yearText: {
-    color: '#4b443a',
+    color: '#536875',
     fontSize: 16,
     lineHeight: 22,
     fontVariant: ['tabular-nums'],
@@ -607,12 +613,12 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(250, 244, 231, 0.94)',
+    backgroundColor: 'rgba(239, 248, 252, 0.86)',
     borderWidth: 2,
-    borderColor: '#956033',
-    shadowColor: '#4c301e',
+    borderColor: 'rgba(255,255,255,0.92)',
+    shadowColor: '#36566b',
     shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 5,
     zIndex: 3,
@@ -621,12 +627,12 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#a86b36',
+    backgroundColor: '#78a6bd',
     borderWidth: 2,
     borderColor: 'rgba(255, 249, 237, 0.82)',
   },
   lensYear: {
-    color: '#50351f',
+    color: '#3c5664',
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '700',

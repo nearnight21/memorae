@@ -4,6 +4,7 @@ import { X, Calendar, MapPin, Edit3, Check, Plus, Image as ImageIcon, Upload } f
 import { Memory } from "../types";
 import { selectLocalPhoto } from '../product/selectPhoto';
 import LocationPicker from "./LocationPicker";
+import LocationMapSelection from './LocationMapSelection';
 
 interface MemoryDetailPanelProps {
   memory: Memory;
@@ -27,12 +28,18 @@ export default function MemoryDetailPanel({
   const [uploading, setUploading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [showLocationMap, setShowLocationMap] = useState(false);
   const [locName, setLocName] = useState<string>(memory.location?.name ?? "");
   const [locMx, setLocMx] = useState<number | "">(memory.location?.mx ?? "");
   const [locMy, setLocMy] = useState<number | "">(memory.location?.my ?? "");
   const [locGeo, setLocGeo] = useState<{
     country?: string;
+    province?: string;
     city?: string;
+    district?: string;
+    adcode?: string;
+    provider?: 'amap' | 'bigdatacloud';
+    providerId?: string;
     lat: number;
     lng: number;
   } | null>(null);
@@ -84,7 +91,12 @@ export default function MemoryDetailPanel({
       ...(locGeo
         ? {
             country: locGeo.country ?? memory.country,
+            province: locGeo.province ?? memory.province,
             city: locGeo.city ?? memory.city,
+            district: locGeo.district ?? memory.district,
+            adcode: locGeo.adcode ?? memory.adcode,
+            locationProvider: locGeo.provider ?? memory.locationProvider,
+            locationProviderId: locGeo.providerId ?? memory.locationProviderId,
             lat: locGeo.lat,
             lng: locGeo.lng,
           }
@@ -92,6 +104,36 @@ export default function MemoryDetailPanel({
     });
     setIsEditingLocation(false);
   };
+
+  if (showLocationMap) {
+    return (
+      <LocationMapSelection
+        initialCoordinates={locGeo
+          ? { lat: locGeo.lat, lng: locGeo.lng }
+          : memory.lat !== undefined && memory.lng !== undefined
+            ? { lat: memory.lat, lng: memory.lng }
+          : null}
+        fallbackName={locName}
+        onCancel={() => setShowLocationMap(false)}
+        onConfirm={(selection) => {
+          setLocName(selection.name);
+          setLocGeo({
+            country: selection.country,
+            province: selection.province,
+            city: selection.city,
+            district: selection.district,
+            adcode: selection.adcode,
+            provider: selection.provider,
+            providerId: selection.providerId,
+            lat: selection.lat,
+            lng: selection.lng,
+          });
+          if (selection.district) setDetailLoc(selection.district);
+          setShowLocationMap(false);
+        }}
+      />
+    );
+  }
 
   const currentImage =
     photoIdx === 0 ? memory.image : memory.gallery[photoIdx - 1];
@@ -180,6 +222,7 @@ export default function MemoryDetailPanel({
                             setLocName(c.shortName);
                             setLocGeo({ country: c.country, city: c.city, lat: c.lat, lng: c.lng });
                           }}
+                          onPickOnMap={() => setShowLocationMap(true)}
                           placeholder="搜索并选择地点（如：大理古城）"
                           inputClassName="w-full text-xs bg-white/70 border border-amber-200/60 rounded px-2 py-1 font-mono focus:outline-none focus:border-amber-400"
                         />

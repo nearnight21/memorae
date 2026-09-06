@@ -82,6 +82,7 @@ import { loadDecryptedMemories } from './src/memory/memoryStore';
 import { filterMemoriesByTimelineYear } from './src/home/timeline/timelineModel';
 import HomeScreen from './src/home/HomeScreen';
 import MemoryDetailOverlay, { type DetailPhotoState } from './src/detail/MemoryDetailOverlay';
+import PhotoViewerOverlay from './src/detail/PhotoViewerOverlay';
 import MemoryEditOverlay from './src/edit/MemoryEditOverlay';
 import MemoryPhotoManageOverlay, { type PhotoManageItem } from './src/edit/MemoryPhotoManageOverlay';
 import MemoryActionsSheet from './src/edit/MemoryActionsSheet';
@@ -154,6 +155,13 @@ interface EditDraftState {
   location: MemoryLocationV2 | null;
   photos: MemoryPhotoV1[];
   pendingPhotos: PendingPhoto[];
+}
+
+interface PhotoViewerState {
+  memoryId: string;
+  photoId: string;
+  previewUri: string;
+  originalUri: string | null;
 }
 
 type Mode = 'loading' | 'account' | 'setup' | 'locked' | 'unlocked';
@@ -240,7 +248,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [detailPhotoStates, setDetailPhotoStates] = useState<DetailPhotoState[]>([]);
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [photoViewer, setPhotoViewer] = useState<PhotoViewerState | null>(null);
   const [deviceUnlockEnabled, setDeviceUnlockEnabled] = useState(false);
   const [syncUrl, setSyncUrl] = useState('http://127.0.0.1:8788');
   const [syncAuthMode, setSyncAuthMode] = useState<SyncAuthMode>('account');
@@ -334,6 +342,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (photoViewer) {
+        setPhotoViewer(null);
+        return true;
+      }
       if (onboardingMode) {
         void completeOnboarding();
         return true;
@@ -377,7 +389,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       return false;
     });
     return () => subscription.remove();
-  }, [appMenuVisible, defaultMapEditorVisible, deleteConfirmVisible, moreActionsVisible, onboardingMode, photoManageVisible, locationPickerVisible, editDraft, draftVisible, selectedMemory, utilityRoute, cancelLocationPicker]);
+  }, [appMenuVisible, defaultMapEditorVisible, deleteConfirmVisible, moreActionsVisible, onboardingMode, photoManageVisible, locationPickerVisible, editDraft, draftVisible, photoViewer, selectedMemory, utilityRoute, cancelLocationPicker]);
 
   useEffect(() => {
     void (async () => {
@@ -698,7 +710,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setLocationPickerVisible(false);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
-    setPreviewUri(null);
+    setPhotoViewer(null);
     setMode(vault ? 'locked' : 'setup');
     setStatus('私密空间已经锁定，内存钥匙已清零。');
   }
@@ -1250,6 +1262,27 @@ export default function App({ testBootstrap }: AppProps = {}) {
     }
   }
 
+  async function loadOriginalPhoto(memoryId: string, photoId: string): Promise<void> {
+    if (!session) return;
+    try {
+      setStatus('正在加载原图……');
+      const encrypted = await readDetailPhotoVariant(photoId, 'original');
+      if (!encrypted) {
+        setStatus('这张照片没有可用的原图。');
+        return;
+      }
+      const photo = await decryptPhoto(nativeCryptoPrimitives, session, encrypted);
+      const uri = `data:${photo.metadata.mimeType};base64,${bytesToBase64(photo.bytes)}`;
+      photo.bytes.fill(0);
+      setPhotoViewer((current) => current?.memoryId === memoryId && current.photoId === photoId
+        ? { ...current, originalUri: uri }
+        : current);
+      setStatus('原图已加载。');
+    } catch (error) {
+      setStatus(`原图加载失败：${errorMessage(error)}`);
+    }
+  }
+
   function markDetailPhotoDisplayed(index: number): void {
     const metric = detailPhotoPerformance.current.get(index);
     if (!metric || metric.displayStartedAt === undefined) return;
@@ -1269,7 +1302,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     const requestId = ++detailLoadId.current;
     detailPhotoPerformance.current.clear();
     setSelectedMemory(memory);
-    setPreviewUri(null);
+    setPhotoViewer(null);
     setDetailPhotoUris(memory.photos.map(() => null));
     setDetailPhotoStates(memory.photos.map(() => 'loading' as DetailPhotoState));
     setStatus(`已打开记忆：${memory.title}。`);
@@ -1284,7 +1317,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setSelectedMemory(null);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
-    setPreviewUri(null);
+    setPhotoViewer(null);
   }
 
   function confirmLocation(next: MemoryLocationV2): void {
@@ -1449,7 +1482,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setSelectedMemory(null);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
-    setPreviewUri(null);
+    setPhotoViewer(null);
     setDeviceUnlockEnabled(false);
     setMode('locked');
     setStatus('加密包已导入，请输入它原来的私密空间密码。');
@@ -1629,7 +1662,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
             setSelectedMemory(null);
             setDetailPhotoUris([]);
             setDetailPhotoStates([]);
-            setPreviewUri(null);
+            setPhotoViewer(null);
             setDeviceUnlockEnabled(false);
             setMode('setup');
             setStatus('本机原型数据已经清空。');
@@ -1724,6 +1757,25 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onClose={closeMemory}
           onMore={() => setMoreActionsVisible(true)}
           onPhotoDisplayed={markDetailPhotoDisplayed}
+          onPhotoPress={(index) => {
+            const photoId = selectedMemory.photos[index]?.id;
+            const previewUri = detailPhotoUris[index];
+            if (!photoId || !previewUri) return;
+            setPhotoViewer({
+              memoryId: selectedMemory.id,
+              photoId,
+              previewUri,
+              originalUri: null,
+            });
+            void loadOriginalPhoto(selectedMemory.id, photoId);
+          }}
+        />
+      )}
+      {photoViewer && (
+        <PhotoViewerOverlay
+          previewUri={photoViewer.previewUri}
+          originalUri={photoViewer.originalUri}
+          onClose={() => setPhotoViewer(null)}
         />
       )}
       {editDraft && draftVisible && !photoManageVisible && !locationPickerVisible && (

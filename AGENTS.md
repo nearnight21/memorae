@@ -27,3 +27,11 @@
 - App 移动后额外确认 Expo Doctor 通过，现有 `app.json` 与 `eas.json` 内容未变化。
 - 运行 `git diff --check`，并在 CI 与边界脚本落地后运行仓库根目录的运行面边界检查。
 - 环境变量只从本地忽略文件、部署机密钥管理或 CI Secret 注入，绝不提交真实值。
+
+## 生产 Web 部署边界
+
+- `/var/www/memorae` 是多站点根目录，不是单一 Web 应用目录。
+- Memorae 主站使用该目录的直属文件；ThinkPad 使用 `/var/www/memorae/thinkpad`，对应 `https://memorae.cn/thinkpad/`。
+- 部署主站时禁止清空、删除或覆盖 `thinkpad/`；禁止对 `/var/www/memorae` 使用递归删除或带 `--delete` 的同步。
+- 部署前必须检查 Caddy 路由和现有子目录；优先使用 `scripts/deploy-web.ps1`，不要手写清理命令。
+- 部署后必须验证 `/`、`/thinkpad/` 和 `/health` 均正常；任一失败都应停止并恢复备份。
