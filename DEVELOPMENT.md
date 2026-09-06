@@ -12,6 +12,7 @@
 - 环境变量清单见 `docs/ENVIRONMENT-SECRETS.md`；边界与 fresh-clone 检查由 `.github/workflows/ci.yml`、
   `scripts/check-runtime-boundaries.ps1` 和 `scripts/verify-fresh-clone.ps1` 维护。
 - Memorae 保持现有 Web、App、Server 部署体系，不引入 ThinkPad/Camp 的 Vercel 或 Worker 配置。
+- Web 根入口契约：`https://memorae.cn/`（及本地开发根路径）默认提供官方 Landing Page（包含产品理念、高保真视窗动效与 Android 下载）；Web 核心应用（账号登录、私密空间解锁与足迹地图）承载于 `/#app`（或 `?app=1`），两者在单页内平滑无刷新切换并实现轻量分包隔离。本地 `npm run dev --prefix web` 支持屏幕左下角一键切换。
 - Mobile 的 Home、LocationPicker 和业务编排只依赖中立 `MemoraeMap`；WebView/高德专有 DTO
   已收口到 Renderer adapter。Android 缺省使用 Local Expo Module + Kotlin `TextureMapView`
   的 Native AMap Renderer 作为显式配置路径；默认使用 WebView + 高德 JS API 2.0，加载自定义样式 ID。
