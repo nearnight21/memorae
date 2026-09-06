@@ -6,7 +6,6 @@ import {
   ImagePlus,
   LoaderCircle,
   Plus,
-  Upload,
   X,
 } from 'lucide-react';
 import type { CategoryType, Memory, MemoryLocationDraft, PinnedBy } from '../types';
@@ -29,7 +28,6 @@ interface AddMemoryDialogProps {
   initialPhoto?: File;
 }
 
-type CreateStep = 'source' | 'photo-review' | 'editor';
 type SaveState = 'idle' | 'saving' | 'error';
 type LocationResolution = 'idle' | 'resolving' | 'resolved' | 'error';
 
@@ -128,7 +126,6 @@ export default function AddMemoryDialog({
 }: AddMemoryDialogProps) {
   const isEditing = Boolean(memory);
   const initialLocation = selectedLocationFromMemory(memory) ?? selectedLocationFromDraft(initialLocationDraft);
-  const [step, setStep] = useState<CreateStep>('editor');
   const [title, setTitle] = useState(memory?.title ?? '');
   const [date, setDate] = useState(() => dateInputValue(memory?.date ?? '', memory?.year));
   const [category, setCategory] = useState<CategoryType>(memory?.category ?? 'travel');
@@ -148,7 +145,6 @@ export default function AddMemoryDialog({
   const [showLocationMap, setShowLocationMap] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [validationMessage, setValidationMessage] = useState('');
-  const sourceInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -161,14 +157,14 @@ export default function AddMemoryDialog({
 
   useEffect(() => {
     const submitWithShortcut = (event: KeyboardEvent) => {
-      if (step !== 'editor' || event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
+      if (showLocationMap || event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) return;
       event.preventDefault();
       formRef.current?.requestSubmit();
     };
 
     window.addEventListener('keydown', submitWithShortcut);
     return () => window.removeEventListener('keydown', submitWithShortcut);
-  }, [step]);
+  }, [showLocationMap]);
 
   useEffect(() => {
     if (!initialLocation || !locationNeedsResolution(initialLocation)) return;
@@ -297,15 +293,12 @@ export default function AddMemoryDialog({
     }
   };
 
-  const selectCover = async (file: File | undefined, nextStep: Extract<CreateStep, 'photo-review' | 'editor'> = 'editor') => {
+  const selectCover = async (file: File | undefined) => {
     if (!file) return;
     setIsCoverUploading(true);
     try {
       setImageUrl(await selectLocalPhoto(file));
-      // The first-memory review must show the settled EXIF values, not values
-      // still being filled asynchronously underneath the next screen.
       await applyPhotoMetadata(file);
-      setStep(nextStep);
     } catch (error) {
       console.error(error);
       window.alert(error instanceof Error ? error.message : '照片处理失败，请重试。');
@@ -316,7 +309,7 @@ export default function AddMemoryDialog({
 
   useEffect(() => {
     if (isEditing || !initialPhoto) return;
-    void selectCover(initialPhoto, 'editor');
+    void selectCover(initialPhoto);
   }, [initialPhoto, isEditing]);
 
   const selectGalleryPhoto = async (file: File | undefined) => {
@@ -448,88 +441,6 @@ export default function AddMemoryDialog({
     );
   }
 
-  if (step === 'source') {
-    return (
-      <section className="memory-create-source" aria-label="添加记忆">
-        <div className="memory-create-source-card">
-          <button type="button" onClick={onClose} className="memory-create-dismiss" aria-label="关闭新增记忆">
-            <X size={18} aria-hidden="true" />
-          </button>
-          <span className="memory-create-source-icon" aria-hidden="true"><Plus size={22} /></span>
-          <h1>{isFirstMemory ? '先选择一张对你有意义的照片' : '添加一段记忆'}</h1>
-          <p>{isFirstMemory
-            ? '如果照片保留了拍摄信息，我们会自动填写时间和地点。'
-            : <>从本地照片开始，或手动添加没有照片的记忆。<br />日期、地点和主题都可以稍后修改。</>}
-          </p>
-          <div className="memory-create-source-actions">
-            <button
-              type="button"
-              className="memory-create-primary"
-              onClick={() => sourceInputRef.current?.click()}
-              disabled={isCoverUploading}
-            >
-              {isCoverUploading ? <LoaderCircle size={16} className="animate-spin" /> : <Upload size={16} />}
-              {isFirstMemory ? '选择照片' : '导入本地照片'}
-            </button>
-            <button type="button" className="memory-create-secondary" onClick={isFirstMemory ? onClose : () => setStep('editor')}>
-              {isFirstMemory ? '稍后再说' : '手动添加'}
-            </button>
-          </div>
-          <p className="memory-create-source-privacy">照片与位置仅在设备内解密处理；离开设备时保持加密。</p>
-          <input
-            ref={sourceInputRef}
-            type="file"
-            accept="image/*"
-            className="memory-create-file-input"
-            onChange={(event) => {
-              void selectCover(event.target.files?.[0], isFirstMemory ? 'photo-review' : 'editor');
-              event.target.value = '';
-            }}
-          />
-        </div>
-      </section>
-    );
-  }
-
-  if (step === 'photo-review') {
-    return (
-      <section className="memory-photo-review" aria-label="确认照片拍摄信息">
-        <div className="memory-photo-review-card">
-          <button type="button" onClick={() => setStep('source')} className="memory-create-dismiss" aria-label="重新选择照片">
-            <X size={18} aria-hidden="true" />
-          </button>
-          <h1>已读到这张照片的拍摄信息</h1>
-          <p>如果照片保留了拍摄信息，我们会先替你填写。确认后才会写入地图。</p>
-
-          <dl className="memory-photo-review-readings">
-            <div>
-              <dt><Check size={16} aria-hidden="true" />拍摄时间</dt>
-              <dd>{date || '未识别，可在下一步填写'}</dd>
-            </div>
-            <div>
-              <dt><Check size={16} aria-hidden="true" />拍摄地点</dt>
-              <dd>{locationName || '未识别，可在地图上选择'}</dd>
-            </div>
-          </dl>
-
-          <div className="memory-photo-review-preview">
-            {imageUrl && <img src={imageUrl} alt="已选择的照片" referrerPolicy="no-referrer" />}
-            <div>
-              <span>已选择 1 张照片</span>
-              <strong>你可以在下一步确认或修改时间和地点</strong>
-            </div>
-          </div>
-
-          <div className="memory-photo-review-actions">
-            <button type="button" className="memory-create-primary" onClick={() => setStep('editor')}>确认后继续</button>
-            <button type="button" className="memory-create-secondary" onClick={() => setShowLocationMap(true)}>地点不对？在地图上选择</button>
-          </div>
-          <small>自动识别仅用于预填，不会直接创建记忆。</small>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="memory-create-editor" aria-label={isEditing ? '修改记忆' : '编辑新记忆'}>
       <header className="memory-editor-header">
@@ -545,7 +456,7 @@ export default function AddMemoryDialog({
             .reduce((label, part) => `${label} / ${part}`, '足迹')}
         </p>
         <div className="memory-editor-header-actions">
-          <button type="button" onClick={isEditing ? onClose : () => setStep('source')} className="memory-editor-back">
+          <button type="button" onClick={onClose} className="memory-editor-back">
             <ArrowLeft size={16} aria-hidden="true" />
             {isEditing ? '返回地图' : '返回'}
           </button>
@@ -684,7 +595,7 @@ export default function AddMemoryDialog({
           </p>
         </article>
 
-        <input ref={coverInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectCover(event.target.files?.[0], 'editor'); event.target.value = ''; }} />
+        <input ref={coverInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectCover(event.target.files?.[0]); event.target.value = ''; }} />
         <input ref={galleryInputRef} type="file" accept="image/*" className="memory-create-file-input" onChange={(event) => { void selectGalleryPhoto(event.target.files?.[0]); event.target.value = ''; }} />
       </form>
     </section>
