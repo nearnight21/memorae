@@ -17,7 +17,6 @@ interface MapMemoryOverlayProps {
   viewport: { width: number; height: number };
   onClose: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
-  onEditMemory?: (memory: Memory) => void;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
@@ -53,7 +52,6 @@ export default function MapMemoryOverlay({
   viewport,
   onClose,
   onSaveMemory,
-  onEditMemory,
   onDeleteMemory,
   onLoadPreviewPhoto,
   onLoadOriginalPhoto,
@@ -388,7 +386,7 @@ export default function MapMemoryOverlay({
           <div className="map-memory-paper-actions">
             {!isEditing && onSaveMemory && <button
               type="button"
-              onClick={() => onEditMemory?.(memory)}
+              onClick={beginEditing}
               className="map-memory-paper-action map-memory-paper-edit"
               aria-label="编辑记忆"
               title="编辑记忆"
