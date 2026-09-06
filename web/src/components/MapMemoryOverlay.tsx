@@ -441,6 +441,36 @@ export default function MapMemoryOverlay({
                 )}
               </div>
 
+              {/* 随附底片画廊缩略条（Filmstrip） */}
+              {availablePhotos.length > 1 && (
+                <div className="map-journal-filmstrip" aria-label="底片画廊" role="tablist">
+                  {availablePhotos.map((photo, index) => {
+                    const isActive = index === photoIdx;
+                    return (
+                      <button
+                        key={`${photo}-${index}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-label={`切换到第 ${index + 1} 张照片`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPhotoIdx(index);
+                        }}
+                        className={`map-journal-film-thumb ${isActive ? 'is-active' : ''}`}
+                      >
+                        <img
+                          src={photo}
+                          alt={`缩略图 ${index + 1}`}
+                          referrerPolicy="no-referrer"
+                          className="map-journal-film-img"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* 翻页切换控制器 */}
               {availablePhotos.length > 1 && (
                 <div className="map-journal-photo-nav" aria-label="翻看随附照片">

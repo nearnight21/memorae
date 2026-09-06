@@ -764,14 +764,14 @@
   transition: opacity 280ms ease;
 }
 
-/* 双页手帐折页主容器 */
+/* 双页手帐折页主容器（大画幅桌面黄金比例） */
 .map-journal-folio {
   display: grid;
-  grid-template-columns: minmax(360px, 46%) minmax(420px, 54%);
-  width: min(1040px, calc(100vw - 48px));
-  height: min(640px, calc(100vh - 64px));
-  max-height: 720px;
-  border-radius: 12px 18px 18px 12px;
+  grid-template-columns: minmax(460px, 48%) minmax(520px, 52%);
+  width: min(1360px, calc(100vw - 56px));
+  height: min(780px, calc(100vh - 64px));
+  max-height: 840px;
+  border-radius: 14px 20px 20px 14px;
   background:
     radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.25) 0 1px, transparent 1.4px),
     linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
@@ -791,8 +791,8 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 46%;
-  width: 24px;
+  left: 48%;
+  width: 26px;
   transform: translateX(-50%);
   background: linear-gradient(
     90deg,
@@ -810,21 +810,21 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 46%;
+  left: 48%;
   width: 8px;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   justify-content: space-around;
   align-items: center;
-  padding: 48px 0;
+  padding: 56px 0;
   pointer-events: none;
   z-index: 16;
 }
 
 .map-journal-stitch {
-  width: 2px;
-  height: 18px;
+  width: 2.5px;
+  height: 22px;
   background: rgba(143, 108, 72, 0.35);
   border-radius: 1px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
@@ -852,12 +852,12 @@
 }
 
 /* --------------------------------------------------------------------------
-   左页：冲印实体相纸台（Photo Stage）
+   左页：冲印实体相纸台（大画幅 Photo Stage）
    -------------------------------------------------------------------------- */
 .map-journal-page-photo {
   justify-content: center;
   align-items: center;
-  padding: 36px 28px 36px 36px;
+  padding: 40px 36px 40px 44px;
   background:
     radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.18) 0%, transparent 70%),
     linear-gradient(135deg, rgba(252, 248, 240, 0.6) 0%, rgba(245, 238, 226, 0.4) 100%);
@@ -871,14 +871,14 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 380px;
+  max-width: 490px;
 }
 
 /* 底层错落相纸微倾斜 */
 .map-journal-photo-stack {
   position: absolute;
   inset: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: rgba(255, 253, 248, 0.82);
   border: 1px solid rgba(215, 204, 188, 0.7);
   box-shadow: 0 6px 16px rgba(45, 35, 25, 0.14);
@@ -886,29 +886,29 @@
 }
 
 .map-journal-photo-stack.is-back {
-  transform: rotate(2.4deg) scale(0.98);
-  top: 6px;
-  left: 3px;
+  transform: rotate(2.2deg) scale(0.98);
+  top: 8px;
+  left: 4px;
 }
 
 .map-journal-photo-stack.is-middle {
-  transform: rotate(-1.8deg) scale(0.99);
-  top: 3px;
-  left: -2px;
+  transform: rotate(-1.6deg) scale(0.99);
+  top: 4px;
+  left: -3px;
 }
 
-/* 主相纸冲印白边卡框 */
+/* 主相纸冲印白边卡框（大画幅沉浸感） */
 .map-journal-photo-paper {
   position: relative;
   width: 100%;
-  padding: 10px 10px 32px 10px;
+  padding: 12px 12px 36px 12px;
   background: #fffdf9;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid rgba(210, 196, 178, 0.85);
   box-shadow:
-    0 16px 36px rgba(42, 32, 22, 0.24),
-    0 4px 8px rgba(42, 32, 22, 0.12);
-  transform: rotate(-0.6deg);
+    0 18px 42px rgba(42, 32, 22, 0.24),
+    0 4px 10px rgba(42, 32, 22, 0.12);
+  transform: rotate(-0.5deg);
   transition: transform 220ms ease, box-shadow 220ms ease;
   z-index: 2;
 }
@@ -916,8 +916,8 @@
 .map-journal-photo-paper:hover {
   transform: rotate(0deg) scale(1.01);
   box-shadow:
-    0 22px 46px rgba(42, 32, 22, 0.3),
-    0 6px 12px rgba(42, 32, 22, 0.14);
+    0 24px 52px rgba(42, 32, 22, 0.3),
+    0 8px 14px rgba(42, 32, 22, 0.15);
 }
 
 .map-journal-photo-inner {
@@ -947,22 +947,75 @@
 /* 相纸右下角暗房编号 */
 .map-journal-photo-badge {
   position: absolute;
-  right: 12px;
-  bottom: 9px;
+  right: 14px;
+  bottom: 11px;
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
-  color: rgba(115, 95, 75, 0.68);
+  color: rgba(115, 95, 75, 0.72);
 }
 
-/* 相纸切换控制器 */
+/* 随附底片画廊（Filmstrip） */
+.map-journal-filmstrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px 6px;
+  scrollbar-width: none;
+  z-index: 5;
+}
+
+.map-journal-filmstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.map-journal-film-thumb {
+  position: relative;
+  width: 54px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: 3px;
+  background: #fffdf9;
+  border: 1px solid rgba(135, 115, 92, 0.32);
+  box-shadow: 0 2px 6px rgba(42, 32, 22, 0.12);
+  cursor: pointer;
+  transition: all 160ms ease;
+  overflow: hidden;
+}
+
+.map-journal-film-thumb:hover {
+  transform: translateY(-2px);
+  border-color: rgba(143, 108, 72, 0.6);
+  box-shadow: 0 4px 10px rgba(42, 32, 22, 0.2);
+}
+
+.map-journal-film-thumb.is-active {
+  border-color: var(--color-accent-fill);
+  box-shadow: 0 0 0 2px rgba(167, 107, 62, 0.28), 0 4px 12px rgba(42, 32, 22, 0.22);
+  transform: translateY(-2px) scale(1.05);
+}
+
+.map-journal-film-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 1px;
+  display: block;
+}
+
+/* 相纸翻页控制器 */
 .map-journal-photo-nav {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 14px;
+  margin-top: 12px;
   z-index: 5;
 }
 
@@ -970,8 +1023,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: 1px solid rgba(143, 108, 72, 0.28);
   background: rgba(255, 253, 248, 0.85);
@@ -988,7 +1041,7 @@
 }
 
 .map-journal-nav-hint {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   color: rgba(115, 95, 75, 0.75);
 }
@@ -1000,7 +1053,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  min-height: 320px;
+  min-height: 360px;
 }
 
 .map-journal-compass-seal {
@@ -1008,17 +1061,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 36px 28px;
-  border: 1px dashed rgba(143, 108, 72, 0.3);
-  border-radius: 12px;
-  background: rgba(255, 253, 248, 0.55);
+  padding: 44px 36px;
+  border: 1px dashed rgba(143, 108, 72, 0.32);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.58);
 }
 
 /* --------------------------------------------------------------------------
-   右页：双时态时间轴手帐信笺（The Thread Letter）
+   右页：双时态时间轴手帐信笺（大画幅文学排版）
    -------------------------------------------------------------------------- */
 .map-journal-page-letter {
-  padding: 32px 36px 32px 30px;
+  padding: 38px 46px 38px 38px;
   background:
     radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.22) 0%, transparent 60%),
     linear-gradient(170deg, rgba(255, 253, 248, 0.95) 0%, rgba(248, 242, 232, 0.95) 100%);
@@ -1116,12 +1169,12 @@
 
 /* 标题与元数据 */
 .map-journal-intro {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .map-journal-title {
   margin: 0;
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1.25;
   color: #3b2c1e;
   font-weight: 600;
@@ -1134,7 +1187,7 @@
   border: 0;
   border-bottom: 1.5px solid rgba(143, 108, 72, 0.45);
   background: transparent;
-  font-size: 26px;
+  font-size: 30px;
   line-height: 1.25;
   color: #3b2c1e;
   font-weight: 600;
@@ -1150,16 +1203,16 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 12px;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 13px;
   color: rgba(115, 95, 75, 0.85);
 }
 
 .map-journal-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .map-journal-meta-dot {
@@ -1169,13 +1222,13 @@
 .map-journal-meta-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
+  gap: 5px;
+  padding: 2px 10px;
   border-radius: 9999px;
   background: rgba(167, 107, 62, 0.1);
   border: 1px solid rgba(167, 107, 62, 0.22);
   color: #8b5229;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
 }
 
@@ -1183,24 +1236,24 @@
 .map-journal-edit-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .map-journal-edit-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .map-journal-field-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .map-journal-field-label {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: rgba(126, 95, 66, 0.85);
   letter-spacing: 0.04em;
@@ -1225,13 +1278,13 @@
 .map-journal-input,
 .map-journal-select {
   width: 100%;
-  height: 30px;
+  height: 34px;
   padding: 0 8px 0 6px;
   border: 0;
   background: transparent;
   color: #3b2c1e;
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   outline: none;
 }
 
@@ -1245,13 +1298,13 @@
 
 .map-journal-location-input {
   width: 100%;
-  height: 32px;
-  padding: 0 36px 0 10px;
+  height: 36px;
+  padding: 0 40px 0 12px;
   border: 0;
   background: transparent;
   color: #3b2c1e;
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   outline: none;
 }
 
@@ -1263,8 +1316,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 10.5px;
+  padding: 1px 7px;
   border-radius: 4px;
 }
 
@@ -1284,13 +1337,13 @@
 }
 
 /* --------------------------------------------------------------------------
-   双时态时光轴（The Thread Rail）
+   双时态时光轴（大画幅 The Thread Rail）
    -------------------------------------------------------------------------- */
 .map-journal-thread {
   display: flex;
-  gap: 14px;
-  margin-top: 22px;
-  padding-top: 18px;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid rgba(143, 108, 72, 0.15);
 }
 
@@ -1298,7 +1351,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 22px;
+  width: 24px;
   padding-top: 2px;
   flex-shrink: 0;
 }
@@ -1307,10 +1360,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   font-family: var(--font-serif, "Noto Serif SC", serif);
@@ -1331,8 +1384,8 @@
 .map-journal-thread-line {
   flex: 1;
   width: 1.5px;
-  min-height: 48px;
-  margin: 6px 0;
+  min-height: 64px;
+  margin: 8px 0;
   background: linear-gradient(180deg, rgba(175, 82, 44, 0.3) 0%, rgba(143, 108, 72, 0.25) 50%, rgba(35, 115, 95, 0.3) 100%);
 }
 
@@ -1340,7 +1393,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .map-journal-entry {
@@ -1350,40 +1403,40 @@
 
 .map-journal-entry-heading {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: #4b3a2a;
   letter-spacing: 0.05em;
 }
 
 .map-journal-entry-text {
-  margin: 6px 0 0 0;
+  margin: 8px 0 0 0;
   color: #3b2c1e;
-  font-size: 13.5px;
-  line-height: 1.85;
+  font-size: 14.5px;
+  line-height: 1.95;
   white-space: pre-wrap;
   text-wrap: pretty;
 }
 
 .map-journal-entry-empty {
-  margin: 6px 0 0 0;
+  margin: 8px 0 0 0;
   color: rgba(143, 108, 72, 0.52);
-  font-size: 12.5px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.85;
 }
 
 .map-journal-textarea {
   width: 100%;
-  min-height: 80px;
+  min-height: 120px;
   margin-top: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 6px;
   border: 1px solid rgba(135, 115, 92, 0.3);
   background: rgba(255, 253, 248, 0.85);
   color: #3b2c1e;
   font: inherit;
-  font-size: 13px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.85;
   outline: none;
   resize: vertical;
   box-sizing: border-box;
@@ -1397,13 +1450,24 @@
 }
 
 .map-journal-hint {
-  margin-top: 12px;
-  font-size: 11px;
+  margin-top: 14px;
+  font-size: 11.5px;
   color: rgba(126, 95, 66, 0.72);
 }
 
 .map-journal-hint.is-error {
   color: #b91c1c;
+}
+
+@media (max-width: 1400px) {
+  .map-journal-folio {
+    width: min(1180px, calc(100vw - 44px));
+    height: min(720px, calc(100vh - 56px));
+  }
+
+  .map-journal-photo-stage {
+    max-width: 420px;
+  }
 }
 
 /* 移动端与平板响应式：转为纵向优雅手帐卷轴 */
