@@ -128,7 +128,7 @@ export default function AddMemoryDialog({
 }: AddMemoryDialogProps) {
   const isEditing = Boolean(memory);
   const initialLocation = selectedLocationFromMemory(memory) ?? selectedLocationFromDraft(initialLocationDraft);
-  const [step, setStep] = useState<CreateStep>(() => isEditing ? 'editor' : 'source');
+  const [step, setStep] = useState<CreateStep>('editor');
   const [title, setTitle] = useState(memory?.title ?? '');
   const [date, setDate] = useState(() => dateInputValue(memory?.date ?? '', memory?.year));
   const [category, setCategory] = useState<CategoryType>(memory?.category ?? 'travel');
@@ -533,7 +533,17 @@ export default function AddMemoryDialog({
   return (
     <section className="memory-create-editor" aria-label={isEditing ? '修改记忆' : '编辑新记忆'}>
       <header className="memory-editor-header">
-        <p>足迹 / {selectedLocation?.country || memory?.country || '未标注地区'}{selectedLocation?.city || memory?.city ? ` / ${selectedLocation?.city || memory?.city}` : ''}{locationName ? ` / ${locationName}` : ''}</p>
+        <p>
+          {[selectedLocation?.country || memory?.country, selectedLocation?.city || memory?.city, locationName]
+            .map((part) => part?.trim())
+            .filter((part, index, list): part is string => Boolean(part)
+              && list.indexOf(part) === index
+              && !list.some((other, otherIndex) => otherIndex !== index
+                && Boolean(other)
+                && other!.length > part!.length
+                && other!.includes(part!)))
+            .reduce((label, part) => `${label} / ${part}`, '足迹')}
+        </p>
         <div className="memory-editor-header-actions">
           <button type="button" onClick={isEditing ? onClose : () => setStep('source')} className="memory-editor-back">
             <ArrowLeft size={16} aria-hidden="true" />

@@ -40,6 +40,7 @@ interface MapViewProps {
   onSelectMemory: (m: Memory) => void;
   onCloseMemory: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
+  onEditMemory?: (memory: Memory) => void;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
@@ -203,6 +204,7 @@ export default function MapView({
   onSelectMemory,
   onCloseMemory,
   onSaveMemory,
+  onEditMemory,
   onDeleteMemory,
   onLoadPreviewPhoto,
   onLoadOriginalPhoto,
@@ -973,9 +975,14 @@ export default function MapView({
         {selectedMemory ? (
           <nav className="map-ui-accent pointer-events-auto flex items-center gap-2 font-editorial-serif text-[13px] tracking-[0.12em]" aria-label="地点层级">
             <button type="button" onClick={onCloseMemory} className="map-ui-accent-hover transition-colors cursor-pointer">足迹</button>
-            {[selectedMemory.country, selectedMemory.city, selectedMemory.detailLocation]
+            {[selectedMemory.country, selectedMemory.city, selectedMemory.location?.name]
               .map((part) => part?.trim())
-              .filter((part, index, list): part is string => Boolean(part) && list.indexOf(part) === index)
+              .filter((part, index, list): part is string => Boolean(part)
+                && list.indexOf(part) === index
+                && !list.some((other, otherIndex) => otherIndex !== index
+                  && Boolean(other)
+                  && other!.length > part!.length
+                  && other!.includes(part!)))
               .map((part) => <span key={part}>/ {part}</span>)}
           </nav>
         ) : (
@@ -1170,6 +1177,7 @@ export default function MapView({
             viewport={mapViewport}
             onClose={onCloseMemory}
             onSaveMemory={onSaveMemory}
+            onEditMemory={onEditMemory}
             onDeleteMemory={onDeleteMemory}
             onLoadPreviewPhoto={onLoadPreviewPhoto}
             onLoadOriginalPhoto={onLoadOriginalPhoto}

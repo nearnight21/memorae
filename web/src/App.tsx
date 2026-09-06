@@ -322,11 +322,17 @@ export default function App({
   const [showAddMemory, setShowAddMemory] = useState<boolean>(false);
   const [createLocationDraft, setCreateLocationDraft] = useState<MemoryLocationDraft | null>(null);
   const [createPhoto, setCreatePhoto] = useState<File | null>(null);
+  const [editMemory, setEditMemory] = useState<Memory | null>(null);
   const [showGuide, setShowGuide] = useState<boolean>(false);
 
   const openAddMemory = (location?: MemoryLocationDraft, photo?: File) => {
     setCreateLocationDraft(location ?? null);
     setCreatePhoto(photo ?? null);
+    setShowAddMemory(true);
+  };
+
+  const openEditMemory = (memory: Memory) => {
+    setEditMemory(memory);
     setShowAddMemory(true);
   };
 
@@ -929,6 +935,7 @@ export default function App({
             onSelectMemory={handleSelectMemory}
             onCloseMemory={() => setSelectedMemory(null)}
             onSaveMemory={handleSaveMemory}
+            onEditMemory={openEditMemory}
             onDeleteMemory={handleDeleteMemory}
             onLoadPreviewPhoto={handleLoadPreviewPhoto}
             onLoadOriginalPhoto={handleLoadOriginalPhoto}
@@ -971,11 +978,13 @@ export default function App({
           <AddMemoryDialog
             onClose={() => {
               setShowAddMemory(false);
+              setEditMemory(null);
               setCreateLocationDraft(null);
               setCreatePhoto(null);
             }}
             onAddMemory={handleAddMemory}
             onSaveMemory={handleSaveMemory}
+            memory={editMemory ?? undefined}
             isFirstMemory={memories.length === 0}
             initialLocation={createLocationDraft ?? undefined}
             initialPhoto={createPhoto ?? undefined}

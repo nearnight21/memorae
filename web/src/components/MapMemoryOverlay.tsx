@@ -17,6 +17,7 @@ interface MapMemoryOverlayProps {
   viewport: { width: number; height: number };
   onClose: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
+  onEditMemory?: (memory: Memory) => void;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
@@ -52,6 +53,7 @@ export default function MapMemoryOverlay({
   viewport,
   onClose,
   onSaveMemory,
+  onEditMemory,
   onDeleteMemory,
   onLoadPreviewPhoto,
   onLoadOriginalPhoto,
@@ -152,10 +154,6 @@ export default function MapMemoryOverlay({
     x: viewport.width * 0.28,
     y: viewport.height * 0.35,
   };
-  const connectorPath = anchor
-    ? `M ${anchor.x} ${anchor.y} C ${anchor.x - 70} ${anchor.y + 4}, ${connectorEnd.x + 80} ${connectorEnd.y - 12}, ${connectorEnd.x} ${connectorEnd.y}`
-    : '';
-
   const goPhoto = (direction: -1 | 1) => {
     if (availablePhotos.length <= 1) return;
     setPhotoIdx((index) => (index + direction + availablePhotos.length) % availablePhotos.length);
@@ -297,30 +295,6 @@ export default function MapMemoryOverlay({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.28 }}
     >
-      {anchor && (
-        <svg className="absolute inset-0 z-[15] h-full w-full overflow-visible" aria-hidden="true">
-          <motion.path
-            d={connectorPath}
-            fill="none"
-            stroke="var(--color-accent-fill)"
-            strokeWidth="1.4"
-            strokeDasharray="3 7"
-            strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 0.78 }}
-            transition={{ duration: 0.65, delay: 0.16, ease: 'easeOut' }}
-          />
-          <circle
-            cx={anchor.x}
-            cy={anchor.y}
-            r="4"
-            fill="var(--color-accent-fill)"
-            stroke="var(--color-bg-surface)"
-            strokeWidth="2"
-          />
-        </svg>
-      )}
-
       <motion.div
         className="absolute left-[64px] top-[12%] z-10 h-[72%] w-[58%] sm:left-[72px] sm:w-[56%]"
         initial={{
@@ -414,7 +388,7 @@ export default function MapMemoryOverlay({
           <div className="map-memory-paper-actions">
             {!isEditing && onSaveMemory && <button
               type="button"
-              onClick={beginEditing}
+              onClick={() => onEditMemory?.(memory)}
               className="map-memory-paper-action map-memory-paper-edit"
               aria-label="编辑记忆"
               title="编辑记忆"
