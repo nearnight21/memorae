@@ -830,6 +830,16 @@ export default function MapMemoryOverlay({
             </div>
           </div>
 
+          {/* 右下角复古旅行档案编码印戳（压住版面视觉重心，杜绝空虚感） */}
+          {!isEditing && (
+            <div className="map-journal-archival-stamp font-editorial-serif" aria-hidden="true">
+              <div className="map-journal-archival-inner">
+                <span className="map-journal-archival-code">ARCHIVE · {memory.year || (memory.date ? memory.date.slice(0, 4) : 'MEM')}</span>
+                <span className="map-journal-archival-loc font-mono">{detailLocation || 'TRAVEL RECORD'}</span>
+              </div>
+            </div>
+          )}
+
           {isEditing && (
             <p className={`map-journal-hint ${saveStatus === 'error' ? 'is-error' : ''}`}>
               {saveStatus === 'error'

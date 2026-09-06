@@ -1415,27 +1415,28 @@
 
 /* 标题与元数据 */
 .map-journal-intro {
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
 .map-journal-title {
   margin: 0;
-  font-size: 32px;
-  line-height: 1.25;
-  color: #3b2c1e;
+  font-size: 42px;
+  line-height: 1.2;
+  color: #2b1e12;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  text-wrap: pretty;
 }
 
 .map-journal-title-input {
   width: 100%;
   padding: 2px 0 6px 0;
   border: 0;
-  border-bottom: 1.5px solid rgba(143, 108, 72, 0.45);
+  border-bottom: 2px solid rgba(143, 108, 72, 0.45);
   background: transparent;
-  font-size: 30px;
-  line-height: 1.25;
-  color: #3b2c1e;
+  font-size: 38px;
+  line-height: 1.2;
+  color: #2b1e12;
   font-weight: 600;
   outline: none;
   box-sizing: border-box;
@@ -1449,10 +1450,10 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-  font-size: 13px;
-  color: rgba(115, 95, 75, 0.85);
+  gap: 12px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  color: rgba(115, 95, 75, 0.88);
 }
 
 .map-journal-meta-item {
@@ -1583,22 +1584,22 @@
 }
 
 /* --------------------------------------------------------------------------
-   双时态时光轴（大画幅 The Thread Rail）
+   双时态时光轴（大画幅文学排版与信笺横格引导线）
    -------------------------------------------------------------------------- */
 .map-journal-thread {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid rgba(143, 108, 72, 0.15);
+  border-top: 1px solid rgba(143, 108, 72, 0.18);
 }
 
 .map-journal-thread-rail {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 24px;
-  padding-top: 2px;
+  width: 28px;
+  padding-top: 4px;
   flex-shrink: 0;
 }
 
@@ -1606,40 +1607,52 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1;
   font-family: var(--font-serif, "Noto Serif SC", serif);
+  box-shadow: 0 1px 3px rgba(45, 30, 16, 0.12);
 }
 
 .map-journal-thread-node.is-past {
-  background: rgba(175, 82, 44, 0.14);
-  border: 1px solid rgba(175, 82, 44, 0.45);
+  background: rgba(175, 82, 44, 0.15);
+  border: 1.5px solid rgba(175, 82, 44, 0.55);
   color: #9c3f1b;
 }
 
 .map-journal-thread-node.is-present {
-  background: rgba(35, 115, 95, 0.14);
-  border: 1px solid rgba(35, 115, 95, 0.45);
+  background: rgba(35, 115, 95, 0.15);
+  border: 1.5px solid rgba(35, 115, 95, 0.55);
   color: #176553;
 }
 
 .map-journal-thread-line {
   flex: 1;
-  width: 1.5px;
-  min-height: 64px;
+  width: 2px;
+  min-height: 80px;
   margin: 8px 0;
-  background: linear-gradient(180deg, rgba(175, 82, 44, 0.3) 0%, rgba(143, 108, 72, 0.25) 50%, rgba(35, 115, 95, 0.3) 100%);
+  background: linear-gradient(180deg, rgba(175, 82, 44, 0.35) 0%, rgba(143, 108, 72, 0.28) 50%, rgba(35, 115, 95, 0.35) 100%);
+  border-radius: 1px;
 }
 
+/* 铺满复古浅琥珀信笺横格引导线，彻底消灭下半截死白空洞 */
 .map-journal-thread-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-height: 320px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 31px,
+    rgba(167, 137, 102, 0.13) 31px,
+    rgba(167, 137, 102, 0.13) 32px
+  );
+  background-position: 0 6px;
 }
 
 .map-journal-entry {
@@ -1649,40 +1662,43 @@
 
 .map-journal-entry-heading {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #4b3a2a;
   letter-spacing: 0.05em;
+  line-height: 32px;
 }
 
 .map-journal-entry-text {
-  margin: 8px 0 0 0;
-  color: #3b2c1e;
-  font-size: 14.5px;
-  line-height: 1.95;
+  margin: 0;
+  color: #281c12;
+  font-size: 17.5px;
+  line-height: 32px;
+  font-weight: 450;
+  letter-spacing: 0.02em;
   white-space: pre-wrap;
   text-wrap: pretty;
 }
 
 .map-journal-entry-empty {
-  margin: 8px 0 0 0;
-  color: rgba(143, 108, 72, 0.52);
-  font-size: 13px;
-  line-height: 1.85;
+  margin: 0;
+  color: rgba(143, 108, 72, 0.58);
+  font-size: 15px;
+  line-height: 32px;
 }
 
 .map-journal-textarea {
   width: 100%;
-  min-height: 120px;
-  margin-top: 8px;
-  padding: 10px 12px;
+  min-height: 130px;
+  margin-top: 6px;
+  padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(135, 115, 92, 0.3);
-  background: rgba(255, 253, 248, 0.85);
-  color: #3b2c1e;
+  border: 1px solid rgba(135, 115, 92, 0.35);
+  background: rgba(255, 253, 248, 0.9);
+  color: #281c12;
   font: inherit;
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: 16px;
+  line-height: 32px;
   outline: none;
   resize: vertical;
   box-sizing: border-box;
@@ -1693,6 +1709,40 @@
   background: #fff;
   border-color: var(--color-accent-fill);
   box-shadow: 0 0 0 2px rgba(167, 107, 62, 0.15);
+}
+
+/* 右下角复古旅行档案编码印戳（压住信笺视觉重心） */
+.map-journal-archival-stamp {
+  align-self: flex-end;
+  margin-top: auto;
+  padding-top: 24px;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.map-journal-archival-inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 6px 12px;
+  border: 1.5px solid rgba(168, 76, 42, 0.38);
+  border-radius: 4px;
+  background: rgba(255, 253, 248, 0.5);
+  color: rgba(168, 76, 42, 0.75);
+}
+
+.map-journal-archival-code {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.map-journal-archival-loc {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  margin-top: 1px;
 }
 
 .map-journal-hint {
