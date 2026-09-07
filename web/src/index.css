@@ -766,6 +766,7 @@
 
 /* 双页手帐折页主容器（大画幅桌面黄金比例与自然光学漫反射阴影） */
 .map-journal-folio {
+  perspective: 1400px;
   display: grid;
   grid-template-columns: minmax(460px, 48%) minmax(520px, 52%);
   width: min(1360px, calc(100vw - 56px));
@@ -954,6 +955,17 @@
 }
 
 /* 页面通用布局 */
+.map-journal-page-motion {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  transform-origin: right center;
+}
+
+.map-journal-page-motion.is-letter {
+  transform-origin: left center;
+}
+
 .map-journal-page {
   position: relative;
   display: flex;
@@ -1768,6 +1780,10 @@
 
 /* 移动端与平板响应式：转为纵向优雅手帐卷轴 */
 @media (max-width: 860px) {
+  .map-journal-page-motion {
+    height: auto;
+  }
+
   .map-journal-folio {
     grid-template-columns: 1fr;
     width: min(520px, calc(100vw - 28px));

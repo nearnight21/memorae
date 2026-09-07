@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   Calendar,
   Check,
@@ -73,6 +73,16 @@ export default function MapMemoryOverlay({
   onLoadOriginalPhoto,
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
+  const reduceMotion = useReducedMotion();
+  const [narrowJournal, setNarrowJournal] = useState(() => window.matchMedia('(max-width: 860px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 860px)');
+    const update = () => setNarrowJournal(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  const pageTransition = { duration: reduceMotion ? 0.12 : 0.5, ease: [0.25, 0.1, 0.25, 1] as const };
+  const pageAngle = reduceMotion || narrowJournal ? 0 : 55;
   const photos = useMemo(
     () => Array.from(new Set(
       (readerMode === 'journal' ? [...memory.gallery, memory.image] : [memory.image, ...memory.gallery])
@@ -352,7 +362,7 @@ export default function MapMemoryOverlay({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.28 }}
+      transition={{ duration: reduceMotion ? 0.12 : 0.18 }}
     >
       {/* 沉静暗色背景蒙层，点击外部随手合上手帐 */}
       <motion.div
@@ -360,6 +370,7 @@ export default function MapMemoryOverlay({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: reduceMotion ? 0.12 : 0.18 }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -367,10 +378,10 @@ export default function MapMemoryOverlay({
       {/* 双页旅行折页手帐主画卷 */}
       <motion.main
         className="map-journal-folio pointer-events-auto relative z-10"
-        initial={{ opacity: 0, scale: 0.94, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 12 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: reduceMotion ? 0 : 8, transition: { duration: reduceMotion ? 0.12 : 0.18 } }}
+        transition={pageTransition}
       >
         {/* 书脊折痕装订线、锁线孔与自然垂落书签丝带 */}
         <div className="map-journal-spine" aria-hidden="true" />
@@ -382,7 +393,11 @@ export default function MapMemoryOverlay({
         </div>
 
         {/* 左页：实体冲印相纸台 */}
-        <section className="map-journal-page map-journal-page-photo" aria-label="照片记忆">
+        <motion.div className="map-journal-page-motion is-photo"
+          initial={{ rotateY: -pageAngle }} animate={{ rotateY: 0 }} transition={pageTransition}>
+        <motion.section className="map-journal-page map-journal-page-photo" aria-label="照片记忆"
+          initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
+          transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>
           {currentPhoto ? (
             <div className="map-journal-photo-stage">
               {/* 底层错落相纸（多图时自然微旋转） */}
@@ -521,10 +536,15 @@ export default function MapMemoryOverlay({
               </div>
             </div>
           )}
-        </section>
+        </motion.section>
+        </motion.div>
 
         {/* 右页：双时态时间轴手帐信笺 */}
-        <section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺">
+        <motion.div className="map-journal-page-motion is-letter"
+          initial={{ rotateY: pageAngle }} animate={{ rotateY: 0 }} transition={pageTransition}>
+        <motion.section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺"
+          initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
+          transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>
           {/* 顶部手帐操作与状态栏 */}
           <header className="map-journal-header">
             <div className="map-journal-tagline">
@@ -847,7 +867,8 @@ export default function MapMemoryOverlay({
                 : '修改会即时保存在本地草稿中 · 按 Ctrl + Enter 可快捷保存。'}
             </p>
           )}
-        </section>
+        </motion.section>
+        </motion.div>
       </motion.main>
 
       <AnimatePresence>
