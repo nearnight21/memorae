@@ -1,6 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-  [Parameter(Mandatory)] [string]$SshKey,
+  [string]$SshKey = '',
   [string]$HostName = '47.100.220.140',
   [string]$UserName = 'admin',
   [string]$WebDist = '',
@@ -8,7 +8,33 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-. D:\DevTools\Use-DevEnvironment.ps1
+$devEnvironment = 'D:\DevTools\Use-DevEnvironment.ps1'
+if (Test-Path -LiteralPath $devEnvironment) {
+  . $devEnvironment
+}
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if (-not $SshKey) {
+  $candidateKeys = @(
+    (Join-Path $repoRoot '.local-data\id_ed25519'),
+    (Join-Path $HOME '.ssh\memorae_ed25519'),
+    (Join-Path $HOME '.ssh\id_ed25519')
+  )
+  foreach ($candidate in $candidateKeys) {
+    if (Test-Path -LiteralPath $candidate) {
+      if ($env:OS -eq 'Windows_NT' -and $candidate.StartsWith($repoRoot)) {
+        try {
+          & icacls.exe $candidate /inheritance:r /grant:r "$($env:USERNAME):(R)" | Out-Null
+        } catch {}
+      }
+      $SshKey = $candidate
+      break
+    }
+  }
+}
+if (-not $SshKey -or -not (Test-Path -LiteralPath $SshKey)) {
+  throw "SSH key not found. Please provide -SshKey or place your key at ~/.ssh/id_ed25519 or .local-data/id_ed25519"
+}
 
 if (-not $WebDist) {
   $WebDist = Join-Path $PSScriptRoot '..\web\dist'

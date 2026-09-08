@@ -164,6 +164,26 @@
   animation: map-bubble-enter 360ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both;
   transform-origin: center;
 }
+
+@keyframes map-bubble-settle {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.92);
+  }
+  70% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.map-bubble.is-settling {
+  animation: map-bubble-settle 400ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
+  z-index: 10;
+}
 .map-editorial-canvas .leaflet-marker-icon {
   overflow: visible;
 }
@@ -742,16 +762,6 @@
   background: color-mix(in srgb, var(--color-nav) 48%, transparent) !important;
 }
 
-/* 记忆详情：照片与纸页是一组叠放关系，不再是后台卡片。 */
-#map-memory-overlay::before {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: rgba(42, 38, 32, 0.2);
-  content: '';
-  pointer-events: none;
-}
-
 /* ==========================================================================
    双页旅行折页手帐（The Open Journal Folio）
    ========================================================================== */
@@ -759,34 +769,26 @@
 /* 全屏沉静暗调背景，让底图后退为氛围舞台 */
 .map-journal-backdrop {
   background: radial-gradient(circle at 50% 48%, rgba(26, 21, 16, 0.45) 0%, rgba(18, 14, 11, 0.65) 100%);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  transition: opacity 280ms ease;
 }
 
-/* 双页手帐折页主容器（大画幅桌面黄金比例与自然光学漫反射阴影） */
+/* 双页手帐折页主容器（纯净 3D 舞台，无残留独立平躺底板） */
 .map-journal-folio {
+  --journal-cover-shadow: 0 0 0 1px rgba(143, 108, 72, 0.14),
+    0 2px 6px rgba(35, 24, 14, 0.14),
+    0 16px 38px rgba(28, 18, 10, 0.22),
+    0 36px 84px rgba(16, 11, 6, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset -1px 0 0 rgba(143, 108, 72, 0.08);
   perspective: 1400px;
   display: grid;
   grid-template-columns: minmax(460px, 48%) minmax(520px, 52%);
   width: min(1360px, calc(100vw - 56px));
   height: min(780px, calc(100vh - 64px));
   max-height: 840px;
-  border-radius: 12px 18px 18px 12px;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.4px),
-    linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
-  background-size: 10px 10px, 100% 100%;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  /* 真实世界三层自然漫反射光学软阴影，彻底消除生硬死黑轮廓 */
-  box-shadow:
-    0 0 0 1px rgba(143, 108, 72, 0.14),
-    0 2px 6px rgba(35, 24, 14, 0.14),
-    0 16px 38px rgba(28, 18, 10, 0.22),
-    0 36px 84px rgba(16, 11, 6, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset -1px 0 0 rgba(143, 108, 72, 0.08);
-  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  overflow: visible;
   isolation: isolate;
 }
 
@@ -959,14 +961,40 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  transform-origin: right center;
   transform-style: preserve-3d;
   backface-visibility: hidden;
   will-change: transform, opacity;
+  box-sizing: border-box;
+}
+
+.map-journal-page-motion.is-photo {
+  transform-origin: right center;
+  border-radius: 12px 0 0 12px;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.4px),
+    linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-right: none;
+  box-shadow:
+    0 0 0 1px rgba(143, 108, 72, 0.12),
+    -10px 18px 38px rgba(28, 18, 10, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  overflow: hidden;
 }
 
 .map-journal-page-motion.is-letter {
   transform-origin: left center;
+  border-radius: 0 18px 18px 0;
+  background:
+    radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.28) 0 1px, transparent 1.4px),
+    linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-left: none;
+  box-shadow:
+    0 0 0 1px rgba(143, 108, 72, 0.12),
+    10px 18px 38px rgba(28, 18, 10, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  overflow: hidden;
 }
 
 .map-journal-page {
@@ -1655,19 +1683,20 @@
 
 /* 铺满复古浅琥珀信笺横格引导线，彻底消灭下半截死白空洞 */
 .map-journal-thread-content {
+  --journal-line-height: 32px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--journal-line-height);
   min-height: 320px;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0px,
-    transparent 31px,
-    rgba(167, 137, 102, 0.13) 31px,
-    rgba(167, 137, 102, 0.13) 32px
+    transparent calc(var(--journal-line-height) - 1px),
+    rgba(167, 137, 102, 0.13) calc(var(--journal-line-height) - 1px),
+    rgba(167, 137, 102, 0.13) var(--journal-line-height)
   );
-  background-position: 0 6px;
+  background-position: 0 0;
 }
 
 .map-journal-entry {
@@ -1681,14 +1710,14 @@
   font-weight: 600;
   color: #4b3a2a;
   letter-spacing: 0.05em;
-  line-height: 32px;
+  line-height: var(--journal-line-height);
 }
 
 .map-journal-entry-text {
   margin: 0;
   color: #281c12;
   font-size: 17.5px;
-  line-height: 32px;
+  line-height: var(--journal-line-height);
   font-weight: 450;
   letter-spacing: 0.02em;
   white-space: pre-wrap;
@@ -1699,7 +1728,7 @@
   margin: 0;
   color: rgba(143, 108, 72, 0.58);
   font-size: 15px;
-  line-height: 32px;
+  line-height: var(--journal-line-height);
 }
 
 .map-journal-textarea {
@@ -1793,6 +1822,17 @@
     height: calc(100vh - 48px);
     max-height: none;
     overflow-y: auto;
+    background: linear-gradient(160deg, #faf6ee 0%, #f4eee2 52%, #ece4d4 100%);
+    box-shadow: 0 16px 38px rgba(28, 18, 10, 0.22);
+    border-radius: 16px;
+  }
+
+  .map-journal-page-motion.is-photo,
+  .map-journal-page-motion.is-letter {
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    border: none;
   }
 
   .map-journal-spine {

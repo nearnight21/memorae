@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useAnimate, usePresence, useReducedMotion } from 'motion/react';
 import {
   Calendar,
   Check,
@@ -21,6 +21,7 @@ import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from '..
 import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
 import { getOrCreatePreviewRequest } from './previewRequests';
+import { journalReturnTransform, type JournalReturnTarget } from './journalReturn';
 
 interface ScreenPoint {
   x: number;
@@ -32,6 +33,8 @@ interface MapMemoryOverlayProps {
   anchor: ScreenPoint | null;
   viewport: { width: number; height: number };
   onClose: () => void;
+  getReturnTarget?: () => JournalReturnTarget | null;
+  onSettled?: () => void;
   onSaveMemory?: (memory: Memory) => Promise<void>;
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
@@ -67,6 +70,8 @@ export default function MapMemoryOverlay({
   anchor,
   viewport,
   onClose,
+  getReturnTarget,
+  onSettled,
   onSaveMemory,
   onDeleteMemory,
   onLoadPreviewPhoto,
@@ -74,6 +79,15 @@ export default function MapMemoryOverlay({
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
   const reduceMotion = useReducedMotion();
+  const [scope, animateExit] = useAnimate<HTMLDivElement>();
+  const [isPresent, safeToRemove] = usePresence();
+  const closeRequested = useRef(false);
+  const exitStarted = useRef(false);
+  const requestClose = () => {
+    if (closeRequested.current || !isPresent) return;
+    closeRequested.current = true;
+    onClose();
+  };
   const [narrowJournal, setNarrowJournal] = useState(() => window.matchMedia('(max-width: 860px)').matches);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 860px)');
@@ -81,14 +95,103 @@ export default function MapMemoryOverlay({
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-  const pageTransition = { duration: reduceMotion ? 0.12 : 0.5, ease: [0.25, 0.1, 0.25, 1] as const };
-  const closeDuration = reduceMotion ? 0.12 : 0.56;
-  const closeTransition = { duration: closeDuration, ease: [0.25, 0.1, 0.25, 1] as const };
-  const closeFadeTransition = {
-    ...closeTransition,
-    opacity: { duration: reduceMotion ? 0.12 : 0.24, delay: reduceMotion ? 0 : closeDuration - 0.24 },
-  };
+  const openDuration = reduceMotion ? 0.08 : 0.35;
+  const pageTransition = { duration: openDuration, ease: [0.25, 0.1, 0.25, 1] as const };
+  const contentFadeDuration = reduceMotion ? 0.08 : 0.17;
   const pageAngle = reduceMotion || narrowJournal ? 0 : 62;
+
+  useLayoutEffect(() => {
+    if (isPresent || exitStarted.current || !scope.current) return;
+    exitStarted.current = true;
+    const root = scope.current;
+    const book = root.querySelector<HTMLElement>('.map-journal-folio');
+    if (!book) {
+      onSettled?.();
+      safeToRemove?.();
+      return;
+    }
+    book.inert = true;
+    if (!reduceMotion && !narrowJournal) {
+      book.style.overflow = 'visible';
+    }
+    root.style.pointerEvents = 'auto';
+    root.style.zIndex = '1005';
+    const destination = journalReturnTransform(
+      getReturnTarget?.() ?? null,
+      { x: book.offsetLeft, y: book.offsetTop, width: book.offsetWidth, height: book.offsetHeight },
+      { width: root.clientWidth, height: root.clientHeight },
+      narrowJournal,
+    );
+    book.style.transformOrigin = narrowJournal ? '50% 50%' : '48% 50%';
+    const ease = [0.25, 0.1, 0.25, 1] as const;
+
+    const finish = async () => {
+      if (reduceMotion) {
+        await animateExit(root, { opacity: 0 }, { duration: 0.08 });
+      } else {
+        // 整个流程放宽约 30% 至 0.40s，更加从容舒展
+        const totalDuration = 0.40;
+        // 合起速度减慢：对折动作放缓至 0.28s，优雅自然合拢
+        const foldDuration = 0.28;
+        const foldEase = [0.25, 0.1, 0.25, 1] as const;
+        // 前半段后退变小速度加快：前 35% 时间(~0.14s)迅速缩小到一半
+        const quickShrinkProgress = 0.35;
+        const flyEase = [0.16, 1, 0.3, 1] as const;
+
+        await Promise.all([
+          // 双扇向中间书脊放缓对折（从容优雅，不仓促撞击）
+          ...(!narrowJournal ? [
+            animateExit('.map-journal-page-motion.is-photo', {
+              rotateY: 86,
+            }, { duration: foldDuration, ease: foldEase }),
+            animateExit('.map-journal-page-motion.is-letter', {
+              rotateY: -86,
+            }, { duration: foldDuration, ease: foldEase }),
+            animateExit('.map-journal-spine', {
+              scaleX: 0.75,
+            }, { duration: foldDuration, ease: foldEase }),
+            animateExit('.map-journal-ribbon', {
+              rotate: -8,
+              opacity: 0.7,
+            }, { duration: foldDuration, ease: foldEase }),
+          ] : []),
+
+          // 前半段快速后退变小(快速缩至 0.50)，随后平滑加速吸入气泡
+          animateExit(book, {
+            x: [0, destination.x * 0.42, destination.x],
+            y: [0, destination.y * 0.42, destination.y],
+            scale: [1, 0.50, destination.scale],
+          }, {
+            duration: totalDuration,
+            times: [0, quickShrinkProgress, 1],
+            ease: flyEase,
+          }),
+
+          // 手帐在最后完全吸入气泡的阶段自然淡出
+          animateExit(book, {
+            opacity: [1, 1, 0],
+          }, {
+            duration: totalDuration,
+            times: [0, 0.78, 1],
+            ease: 'linear',
+          }),
+
+          // 背景暗色蒙层在 0.33s 内平滑软着陆归零（提前平稳完成），彻底消除最后一刻的亮度跳闪
+          animateExit('.map-journal-backdrop', {
+            opacity: 0,
+          }, {
+            duration: 0.33,
+            ease: [0.22, 1, 0.36, 1],
+          }),
+        ]);
+      }
+      if (destination.hasTarget) {
+        onSettled?.();
+      }
+      safeToRemove?.();
+    };
+    void finish();
+  }, [isPresent, safeToRemove, animateExit, scope, getReturnTarget, onSettled, narrowJournal, reduceMotion]);
   const photos = useMemo(
     () => Array.from(new Set(
       (readerMode === 'journal' ? [...memory.gallery, memory.image] : [memory.image, ...memory.gallery])
@@ -269,20 +372,25 @@ export default function MapMemoryOverlay({
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
       if (!isEditing || (!event.ctrlKey && !event.metaKey) || event.key !== 'Enter') return;
       event.preventDefault();
       void completeEditing();
     };
     window.addEventListener('keydown', handleShortcut);
     return () => window.removeEventListener('keydown', handleShortcut);
-  }, [isEditing, draftMemory]);
+  }, [isEditing, draftMemory, isPresent]);
 
   const deleteMemory = async () => {
     if (!onDeleteMemory || isDeleting) return;
     setIsDeleting(true);
     try {
       await onDeleteMemory(memory.id);
-      onClose();
+      requestClose();
     } catch (error) {
       console.error(error);
       setIsDeleting(false);
@@ -363,21 +471,26 @@ export default function MapMemoryOverlay({
 
   return (
     <motion.div
+      ref={scope}
       id="map-memory-overlay"
       className="pointer-events-none absolute inset-0 z-[1001] flex items-center justify-center overflow-hidden"
+      onClickCapture={(event) => {
+        if (!isPresent) { event.preventDefault(); event.stopPropagation(); }
+      }}
+      onPointerDownCapture={(event) => {
+        if (!isPresent) { event.preventDefault(); event.stopPropagation(); }
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={closeTransition}
+      transition={{ duration: reduceMotion ? 0.08 : 0.18 }}
     >
       {/* 沉静暗色背景蒙层，点击外部随手合上手帐 */}
       <motion.div
         className="map-journal-backdrop pointer-events-auto absolute inset-0"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={closeTransition}
-        onClick={onClose}
+        transition={{ duration: reduceMotion ? 0.08 : 0.18 }}
+        onClick={requestClose}
         aria-hidden="true"
       />
 
@@ -386,12 +499,6 @@ export default function MapMemoryOverlay({
         className="map-journal-folio pointer-events-auto relative z-10"
         initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{
-          opacity: 0,
-          scale: reduceMotion || narrowJournal ? 1 : 0.94,
-          y: reduceMotion ? 0 : 14,
-          transition: closeFadeTransition,
-        }}
         transition={pageTransition}
       >
         {/* 书脊折痕装订线、锁线孔与自然垂落书签丝带 */}
@@ -408,12 +515,11 @@ export default function MapMemoryOverlay({
           className="map-journal-page-motion is-photo"
           initial={{ rotateY: -pageAngle }}
           animate={{ rotateY: 0 }}
-          exit={{ rotateY: pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
-          transition={closeFadeTransition}
+          transition={pageTransition}
         >
         <motion.section className="map-journal-page map-journal-page-photo" aria-label="照片记忆"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
-          transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>
+          transition={{ duration: contentFadeDuration }}>
           {currentPhoto ? (
             <div className="map-journal-photo-stage">
               {/* 底层错落相纸（多图时自然微旋转） */}
@@ -560,12 +666,11 @@ export default function MapMemoryOverlay({
           className="map-journal-page-motion is-letter"
           initial={{ rotateY: pageAngle }}
           animate={{ rotateY: 0 }}
-          exit={{ rotateY: -pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
-          transition={closeFadeTransition}
+          transition={pageTransition}
         >
         <motion.section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
-          transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>
+          transition={{ duration: contentFadeDuration }}>
           {/* 顶部手帐操作与状态栏 */}
           <header className="map-journal-header">
             <div className="map-journal-tagline">
@@ -646,7 +751,7 @@ export default function MapMemoryOverlay({
               )}
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 aria-label="合上手帐"
                 title="合上手帐 (Esc)"
                 className="map-journal-action-btn is-icon is-close"

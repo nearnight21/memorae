@@ -18,6 +18,7 @@ import {
   type ViewportRegionCandidate,
 } from '../lib/mapViewportRegion';
 import MapMemoryOverlay from './MapMemoryOverlay';
+import type { JournalReturnTarget } from './journalReturn';
 import CrystalTimeline from './CrystalTimeline';
 
 // 底图模式：'amap' = 高德瓦片（国内直连、中文标注、浅色）；'dark' = CARTO 深色无标注 + 自绘中文标注层
@@ -219,6 +220,49 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const returnMarkersRef = useRef<Array<{ marker: L.Marker; memoryIds: string[] }>>([]);
+  const currentMemoryIds = useRef(new Set<string>());
+  currentMemoryIds.current = new Set(memories.map((memory) => memory.id));
+
+  const getReturnTarget = (memoryId: string): JournalReturnTarget | null => {
+    const container = containerRef.current;
+    if (!container || !currentMemoryIds.current.has(memoryId)) return null;
+    const bounds = container.getBoundingClientRect();
+    const candidates = returnMarkersRef.current
+      .filter(({ memoryIds }) => memoryIds.includes(memoryId))
+      .sort((a, b) => a.memoryIds.length - b.memoryIds.length);
+    for (const { marker } of candidates) {
+      const element = marker.getElement()?.querySelector<HTMLElement>('.map-bubble');
+      if (!element?.isConnected) continue;
+      const photo = element.querySelector('img');
+      const rect = photo && photo.getBoundingClientRect().width > 0
+        ? photo.getBoundingClientRect()
+        : element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2 - bounds.left;
+      const y = rect.top + rect.height / 2 - bounds.top;
+      if (rect.width > 0 && rect.height > 0 && x >= 0 && x <= bounds.width && y >= 0 && y <= bounds.height) {
+        return { x, y, width: rect.width, height: rect.height };
+      }
+    }
+    return null;
+  };
+
+  const triggerBubbleSettle = (memoryId: string) => {
+    const candidates = returnMarkersRef.current
+      .filter(({ memoryIds }) => memoryIds.includes(memoryId))
+      .sort((a, b) => a.memoryIds.length - b.memoryIds.length);
+    for (const { marker } of candidates) {
+      const element = marker.getElement()?.querySelector<HTMLElement>('.map-bubble');
+      if (!element?.isConnected) continue;
+      element.classList.remove('is-settling');
+      void element.offsetWidth;
+      element.classList.add('is-settling');
+      window.setTimeout(() => {
+        element.classList.remove('is-settling');
+      }, 450);
+      break;
+    }
+  };
   const [baseMapReady, setBaseMapReady] = useState(false);
   const [selectedAnchor, setSelectedAnchor] = useState<{ x: number; y: number } | null>(null);
   const [mapViewport, setMapViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -673,11 +717,17 @@ export default function MapView({
     if (!map) return;
     const previousLayer = layerRef.current;
     const nextLayer = L.layerGroup();
+    const nextReturnMarkers: Array<{ marker: L.Marker; memoryIds: string[] }> = [];
 
     let cancelled = false;
 
     const build = async () => {
       const zoom = map.getZoom();
+      const memoryMarker = (coords: L.LatLngExpression, options: L.MarkerOptions, list: Memory[]) => {
+        const marker = L.marker(coords, options);
+        nextReturnMarkers.push({ marker, memoryIds: list.map((memory) => memory.id) });
+        return marker;
+      };
       const handleCountryClick = async (coords: L.LatLngExpression, list: Memory[]) => {
         // The viewport idle handler owns currentRegion. Marker clicks only
         // move the map, so manual drill-down and hand panning share one path.
@@ -709,7 +759,7 @@ export default function MapView({
         );
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) }, list)
             .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
@@ -735,7 +785,7 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) })
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) }, list)
             .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
@@ -783,7 +833,7 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          L.marker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) })
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) }, list)
             .on('click', () => {
               map.flyTo(coords, POINT_ZOOM, { duration: 0.8 });
               // 城市只有一条当前筛选结果时，进入城市层级即可直接阅读；
@@ -845,7 +895,7 @@ export default function MapView({
         for (const [key, list] of byCoord) {
           const [lat, lng] = key.split(',').map(Number);
           if (list.length === 1) {
-            L.marker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) })
+            memoryMarker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) }, list)
               .on('click', () => {
                 setIsResultListOpen(false);
                 onSelectMemory(list[0]);
@@ -862,7 +912,7 @@ export default function MapView({
             const a = startAngle + i * angleStep;
             const dLat = Math.cos(a) * spreadDeg;
             const dLng = (Math.sin(a) * spreadDeg) / lngScale;
-            L.marker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) })
+            memoryMarker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) }, [m])
               .on('click', () => {
                 setIsResultListOpen(false);
                 onSelectMemory(m);
@@ -881,6 +931,7 @@ export default function MapView({
 
       nextLayer.addTo(map);
       layerRef.current = nextLayer;
+      returnMarkersRef.current = nextReturnMarkers;
       if (previousLayer && map.hasLayer(previousLayer)) {
         map.removeLayer(previousLayer);
         previousLayer.clearLayers();
@@ -1174,6 +1225,8 @@ export default function MapView({
             anchor={selectedAnchor}
             viewport={mapViewport}
             onClose={onCloseMemory}
+            getReturnTarget={() => getReturnTarget(selectedMemory.id)}
+            onSettled={() => triggerBubbleSettle(selectedMemory.id)}
             onSaveMemory={onSaveMemory}
             onDeleteMemory={onDeleteMemory}
             onLoadPreviewPhoto={onLoadPreviewPhoto}
