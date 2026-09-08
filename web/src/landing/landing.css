@@ -1,39 +1,59 @@
 /* ==========================================================================
    Memorae Official Landing Page Stylesheet
-   Design Philosophy: Arc.net Aesthetic (Pure Dark Canvas + Ambient Glow + Clean Typography)
+   设计语义契约（严格落实用户指示）：
+   1. 内容展示（网页背景、展台、卡片、羊皮纸）：地图陆地主体色 / 旅行手账纸色 (#EFE4CC / #EBDCB4 / #F4EDDE)
+   2. 控件按钮类（按键、时间轴、徽章、指示器）：水晶时间轴海蓝色 (#6C99AD / #3A667B / #8CB9CC)
+   彻底杜绝现代苍白惨白，彻底杜绝死黑发乌。
    ========================================================================== */
 
-/* 1. 全局设计变量与深邃暗空底色 */
+/* 1. 全局设计变量（手账陆地复古羊皮色系 + 水晶时间轴海蓝控件） */
 .landing-shell {
-  --canvas-bg: #0A0B0E;
-  --canvas-surface: rgba(255, 255, 255, 0.03);
-  --canvas-surface-hover: rgba(255, 255, 255, 0.06);
-  --canvas-border: rgba(255, 255, 255, 0.08);
-  --canvas-border-focus: rgba(255, 255, 255, 0.2);
-  --text-primary: #FFFFFF;
-  --text-secondary: #9CA3AF;
-  --text-tertiary: #6B7280;
-  --accent-blue: #38BDF8;
-  --accent-indigo: #818CF8;
-  --accent-amber: #F59E0B;
-  --glow-radial: radial-gradient(circle at 50% -10%, rgba(99, 102, 241, 0.18) 0%, rgba(56, 189, 248, 0.08) 35%, rgba(10, 11, 14, 0) 70%);
+  /* 1.1 内容展示：地图陆地与旅行手账主体色（源自 AdventureMap 的 #ebdcb4 与 photo-backing 的 #F4EDDE） */
+  --canvas-bg: #EFE4CC;                       /* 网页主基调：温润手账羊皮纸色（绝非惨白） */
+  --theme-land-stage: #EBDCB4;                /* 展台与舞台大容器：地图陆地主体色 */
+  --theme-land-paper: #F4EDDE;                /* 手账内页 / 拍立得复古相纸底色 */
+  --theme-land-subtle: #DFCEAA;               /* 手账暗纸底 / 副衬底色 */
+  --theme-land-border: rgba(138, 94, 60, 0.35);   /* 大地暖棕墨线边框 */
+  --theme-land-border-soft: rgba(138, 94, 60, 0.2);
+  --theme-land-shadow: 0 16px 36px -8px rgba(70, 45, 20, 0.16), 0 2px 6px rgba(70, 45, 20, 0.06);
+  --theme-land-shadow-deep: 0 24px 50px -10px rgba(70, 45, 20, 0.22), inset 0 0 50px rgba(160, 110, 60, 0.08);
+
+  /* 手账墨黑与大地文字 */
+  --text-primary: #2C2016;                    /* 毛笔手账深墨黑（标题） */
+  --text-secondary: #5C4633;                  /* 典雅深褐墨字（正文与描述） */
+  --text-tertiary: #8A6D52;                   /* 弱化小字与辅助标 */
+  --theme-journal-earth: #8A5E3C;             /* 大地陶土等高线色 */
+  --theme-journal-brass: #B3823E;             /* 暖金黄铜印 */
+
+  /* 1.2 控件按钮类：以水晶时间轴海蓝为主（Ocean Crystal & Glass） */
+  --theme-crystal: #6C99AD;                   /* 水晶时间轴标准海蓝 */
+  --theme-crystal-bright: #8CB9CC;            /* 水晶透亮冰晶高光 */
+  --theme-crystal-deep: #3A667B;              /* 水晶深色主按键色 */
+  --theme-crystal-surface: rgba(108, 153, 173, 0.18); /* 控件透光背衬 */
+  --theme-crystal-border: rgba(108, 153, 173, 0.45);  /* 水晶按键细边框 */
+  --theme-crystal-shadow: 0 8px 22px -4px rgba(58, 102, 123, 0.4);
+
+  /* 漫反射顶光（手账温暖晨曦与极淡海青微光） */
+  --glow-radial: radial-gradient(circle at 50% -5%, rgba(108, 153, 173, 0.15) 0%, rgba(239, 228, 204, 0) 65%);
 
   min-height: 100vh;
   background-color: var(--canvas-bg);
+  background-image: radial-gradient(rgba(138, 94, 60, 0.04) 1px, transparent 0);
+  background-size: 6px 6px;
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "PingFang SC", "Noto Sans SC", sans-serif;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   letter-spacing: -0.01em;
 }
 
-/* 顶部与环境光晕 */
+/* 顶部与环境漫反射 */
 .landing-ambient-glow {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 1000px;
+  height: 900px;
   background: var(--glow-radial);
   pointer-events: none;
   z-index: 0;
@@ -46,7 +66,7 @@
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 18px 24px;
+  padding: 16px 24px;
 }
 
 .landing-navbar {
@@ -55,13 +75,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(18, 20, 26, 0.75);
+  background: rgba(244, 237, 222, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--canvas-border);
+  border: 1.5px solid var(--theme-land-border);
   border-radius: 9999px;
-  padding: 8px 14px 8px 22px;
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.5);
+  padding: 8px 14px 8px 20px;
+  box-shadow: var(--theme-land-shadow);
 }
 
 .navbar-brand-group {
@@ -76,20 +96,21 @@
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: linear-gradient(135deg, #38BDF8, #818CF8);
+  background: linear-gradient(135deg, var(--theme-crystal-bright), var(--theme-crystal-deep));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0A0B0E;
+  color: #FFFFFF;
   font-weight: 800;
   font-size: 13px;
+  box-shadow: 0 2px 8px rgba(108, 153, 173, 0.45);
 }
 
 .brand-logotype {
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: 0.04em;
-  color: #FFFFFF;
+  letter-spacing: 0.03em;
+  color: var(--text-primary);
 }
 
 .navbar-center-links {
@@ -101,89 +122,87 @@
 .nav-link-anchor {
   color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .nav-link-anchor:hover {
-  color: #FFFFFF;
+  color: var(--theme-crystal-deep);
 }
 
+/* 控件按钮：时间轴海蓝主按钮 */
 .navbar-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #FFFFFF;
-  color: #0A0B0E;
+  background: linear-gradient(135deg, var(--theme-crystal) 0%, var(--theme-crystal-deep) 100%);
+  color: #FFFFFF;
   padding: 8px 18px;
   border-radius: 9999px;
   font-size: 13px;
   font-weight: 600;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-decoration: none;
+  box-shadow: var(--theme-crystal-shadow);
 }
 
 .navbar-action-btn:hover {
   transform: translateY(-1px);
-  background: #F3F4F6;
-  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, var(--theme-crystal-bright) 0%, var(--theme-crystal) 100%);
+  box-shadow: 0 10px 24px -2px rgba(58, 102, 123, 0.5);
 }
 
 .navbar-action-btn.is-active-session {
-  background: linear-gradient(135deg, #38BDF8, #818CF8);
-  color: #0A0B0E;
+  background: linear-gradient(135deg, var(--theme-crystal-bright) 0%, var(--theme-crystal-deep) 100%);
 }
 
-/* 3. 第一屏：Hero（宽幅大地图为背景/主体） */
+/* 3. 第一屏：Hero（大画幅地图与手账画卷） */
 .hero-canvas-section {
   position: relative;
   z-index: 1;
-  min-height: 90vh;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 60px 24px 80px;
+  padding: 48px 24px 80px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
 }
 
+/* 控件徽章：水晶时间轴微蓝标签 */
 .hero-tag-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 16px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--canvas-border);
-  color: #D1D5DB;
+  background: var(--theme-crystal-surface);
+  border: 1.5px solid var(--theme-crystal-border);
+  color: var(--theme-crystal-deep);
   font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
 }
 
 .hero-main-title {
-  font-size: clamp(38px, 6vw, 68px);
+  font-size: clamp(38px, 6vw, 66px);
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.03em;
-  color: #FFFFFF;
+  color: var(--text-primary);
   max-width: 900px;
-  margin: 0 auto 24px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #D1D5DB 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  margin: 0 auto 20px;
 }
 
 .hero-sub-text {
-  font-size: clamp(16px, 2vw, 20px);
-  line-height: 1.6;
+  font-size: clamp(16px, 2vw, 19px);
+  line-height: 1.65;
   color: var(--text-secondary);
-  max-width: 640px;
-  margin: 0 auto 40px;
+  max-width: 660px;
+  margin: 0 auto 36px;
 }
 
 .hero-actions-row {
@@ -191,62 +210,71 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  margin-bottom: 56px;
+  margin-bottom: 48px;
   flex-wrap: wrap;
 }
 
+/* 主行动按钮：水晶时间轴海蓝色 */
 .btn-hero-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #FFFFFF;
-  color: #0A0B0E;
-  padding: 14px 28px;
+  background: linear-gradient(135deg, var(--theme-crystal) 0%, var(--theme-crystal-deep) 100%);
+  color: #FFFFFF;
+  padding: 13px 28px;
   border-radius: 9999px;
   font-size: 15px;
   font-weight: 600;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 12px 28px -4px rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 28px -4px rgba(58, 102, 123, 0.42);
   text-decoration: none;
 }
 
 .btn-hero-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 36px -4px rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, var(--theme-crystal-bright) 0%, var(--theme-crystal) 100%);
+  box-shadow: 0 16px 36px -4px rgba(58, 102, 123, 0.55);
 }
 
+/* 次行动按钮：手账纸质感 */
 .btn-hero-secondary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #FFFFFF;
-  border: 1px solid var(--canvas-border);
-  padding: 14px 26px;
+  background: var(--theme-land-paper);
+  color: var(--text-primary);
+  border: 1.5px solid var(--theme-land-border);
+  padding: 13px 26px;
   border-radius: 9999px;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(70, 45, 20, 0.08);
 }
 
 .btn-hero-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--canvas-border-focus);
+  background: var(--theme-land-subtle);
+  border-color: var(--theme-crystal-deep);
+  color: var(--theme-crystal-deep);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(70, 45, 20, 0.12);
 }
 
-/* 沉浸式大地图展台 */
+/* 沉浸式大地图展台（地图陆地主体色 #EBDCB4） */
 .hero-map-stage {
   width: 100%;
   height: 520px;
-  border-radius: 28px;
-  border: 1px solid var(--canvas-border);
+  border-radius: 24px;
+  border: 1.5px solid var(--theme-land-border);
   position: relative;
   overflow: hidden;
-  background: #0E1015;
-  box-shadow: 0 32px 80px -16px rgba(0, 0, 0, 0.7);
+  background: var(--theme-land-stage);
+  background-image: radial-gradient(rgba(138, 94, 60, 0.06) 1px, transparent 0);
+  background-size: 5px 5px;
+  box-shadow: var(--theme-land-shadow-deep);
 }
 
 .hero-map-bg {
@@ -255,34 +283,34 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0.5;
-  filter: saturate(0.8) contrast(1.1);
+  opacity: 0.35;
 }
 
 .hero-map-grid-mesh {
   position: absolute;
   inset: 0;
   background-image: 
-    radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 0);
+    radial-gradient(rgba(138, 94, 60, 0.16) 1px, transparent 0);
   background-size: 32px 32px;
 }
 
-/* 地图上的错落浮动拍立得照片卡片 */
+/* 地图上的浮动拍立得照片（复古相纸底色 #F4EDDE，绝非惨白） */
 .hero-floating-card {
   position: absolute;
-  background: #FAF8F5;
-  border-radius: 10px;
+  background: var(--theme-land-paper);
+  border-radius: 12px;
   padding: 10px 10px 14px;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6);
-  color: #1F2937;
+  box-shadow: 0 20px 42px -10px rgba(70, 45, 20, 0.25), 0 0 0 1px var(--theme-land-border);
+  color: var(--text-primary);
   text-align: left;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 10;
 }
 
 .hero-floating-card:hover {
   transform: scale(1.05) rotate(0deg) !important;
   z-index: 20;
+  box-shadow: 0 26px 54px -10px rgba(70, 45, 20, 0.3), 0 0 0 2px var(--theme-crystal);
 }
 
 .card-polaroid-frame {
@@ -290,7 +318,7 @@
   height: 130px;
   border-radius: 6px;
   overflow: hidden;
-  background: #111827;
+  background: #2C2016;
   position: relative;
 }
 
@@ -308,27 +336,28 @@
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .card-polaroid-meta p {
   margin: 2px 0 0 0;
   font-size: 10px;
-  color: #6B7280;
+  color: var(--theme-journal-earth);
+  font-family: monospace;
 }
 
 /* 4. 通用真机模型视窗 (PhoneViewport) */
 .phone-device-shell {
   width: 320px;
   height: 660px;
-  background: #181A20;
+  background: #2C2621;
   border-radius: 46px;
   padding: 11px;
   position: relative;
   box-shadow: 
-    0 32px 80px -16px rgba(0, 0, 0, 0.85),
-    0 0 0 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 0 2px #262933;
+    0 32px 80px -16px rgba(70, 45, 20, 0.35),
+    0 0 0 1.5px rgba(138, 94, 60, 0.3),
+    inset 0 0 0 2px #3E362F;
   user-select: none;
   flex-shrink: 0;
 }
@@ -336,7 +365,7 @@
 .phone-screen-container {
   width: 100%;
   height: 100%;
-  background: #0D0E12;
+  background: var(--theme-land-paper);
   border-radius: 36px;
   overflow: hidden;
   position: relative;
@@ -351,7 +380,7 @@
   transform: translateX(-50%);
   width: 88px;
   height: 24px;
-  background: #000000;
+  background: #1C1510;
   border-radius: 16px;
   z-index: 30;
   display: flex;
@@ -365,8 +394,8 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #111827;
-  border: 1px solid #1F2937;
+  background: #000000;
+  border: 1px solid #333;
 }
 
 .phone-media-fill {
@@ -382,12 +411,11 @@
   transform: translateX(-50%);
   width: 120px;
   height: 4px;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(44, 32, 22, 0.4);
   border-radius: 2px;
   z-index: 30;
 }
 
-/* 占位线框骨架 */
 .phone-placeholder-box {
   width: 100%;
   height: 100%;
@@ -396,7 +424,7 @@
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
-  background: radial-gradient(circle at 50% 30%, #161922 0%, #0D0E12 100%);
+  background: radial-gradient(circle at 50% 30%, var(--theme-land-paper) 0%, var(--theme-land-stage) 100%);
   color: var(--text-secondary);
   text-align: center;
 }
@@ -405,81 +433,45 @@
   width: 48px;
   height: 48px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--canvas-border);
+  background: var(--theme-crystal-surface);
+  border: 1.5px solid var(--theme-crystal-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-blue);
+  color: var(--theme-crystal-deep);
   margin-bottom: 16px;
 }
 
 .phone-placeholder-box h5 {
   font-size: 15px;
-  font-weight: 600;
-  color: #FFFFFF;
+  font-weight: 700;
+  color: var(--text-primary);
   margin: 0 0 6px 0;
 }
 
 .phone-placeholder-box p {
   font-size: 12px;
   line-height: 1.5;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   margin: 0 0 16px 0;
 }
 
 .placeholder-badge {
   font-size: 10px;
   font-family: monospace;
-  color: var(--accent-blue);
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-weight: 700;
+  color: var(--theme-crystal-deep);
+  background: var(--theme-crystal-surface);
+  border: 1px solid var(--theme-crystal-border);
   padding: 4px 10px;
   border-radius: 9999px;
 }
 
-/* 5. 第二屏：移动端初亮相 (PhoneDemoSection) */
-.phone-demo-section {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 100px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.section-eyebrow {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--accent-blue);
-  margin-bottom: 16px;
-}
-
-.section-headline {
-  font-size: clamp(32px, 4.5vw, 48px);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #FFFFFF;
-  margin: 0 auto 20px;
-  max-width: 720px;
-}
-
-.section-description {
-  font-size: 17px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  max-width: 580px;
-  margin: 0 auto 56px;
-}
-
-/* 6. 第三屏：Sticky 联动展示 (StickyStorySection) */
+/* 5. 第二屏：Sticky 核心特性联动 (StickyStorySection) */
 .sticky-story-section {
-  max-width: 1120px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 60px 24px 120px;
+  padding: 60px 24px 140px;
   position: relative;
 }
 
@@ -487,13 +479,14 @@
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 80px;
-  align-items: start;
+  align-items: stretch;
+  position: relative;
 }
 
 .story-scroll-col {
   display: flex;
   flex-direction: column;
-  gap: 120px;
+  gap: 60px;
   padding: 40px 0;
 }
 
@@ -501,113 +494,301 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 32px 0;
-  transition: opacity 0.3s ease;
+  padding: 60px 0;
+  min-height: 48vh;
+  justify-content: center;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
+/* 控件类序号：水晶蓝 */
 .step-numeral {
   font-size: 13px;
   font-weight: 700;
   font-family: monospace;
-  color: var(--accent-blue);
+  color: var(--theme-crystal-deep);
   letter-spacing: 0.1em;
 }
 
 .step-heading {
-  font-size: 32px;
-  font-weight: 700;
-  color: #FFFFFF;
+  font-size: clamp(28px, 3.5vw, 36px);
+  font-weight: 800;
+  color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.02em;
 }
 
 .step-body {
   font-size: 16px;
-  line-height: 1.7;
+  line-height: 1.8;
   color: var(--text-secondary);
   margin: 0;
-  max-width: 500px;
+  max-width: 520px;
 }
 
+/* 右侧 Sticky 保持在视口中央的固定手机容器 */
 .story-sticky-col {
+  position: relative;
+  height: 100%;
+}
+
+.story-sticky-phone-shell {
+  position: -webkit-sticky;
   position: sticky;
-  top: 100px;
+  top: max(80px, calc(50vh - 330px));
   display: flex;
   justify-content: center;
+  align-items: center;
+  will-change: transform;
 }
 
-/* 7. 第四屏：原生交互时光轴 (TimelinePlayground) */
+/* 6. 第三屏：原生交互水晶时光轴展台 (TimelinePlayground)
+   【核心修正】：展台全面采用手账/地图陆地颜色 #EBDCB4，彻底抛弃白色！ */
 .timeline-interactive-section {
-  max-width: 1120px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 80px 24px 120px;
+  padding: 60px 24px 120px;
   text-align: center;
 }
 
+.section-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--theme-crystal-deep);
+  margin-bottom: 14px;
+}
+
+.section-headline {
+  font-size: clamp(30px, 4.5vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin: 0 auto 16px;
+  max-width: 720px;
+}
+
+.section-description {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  max-width: 600px;
+  margin: 0 auto 48px;
+}
+
+/* 展台大容器：地图陆地主体颜色 #EBDCB4（带复古纸纹，绝非白背景！） */
 .timeline-stage-box {
-  background: var(--canvas-surface);
-  border: 1px solid var(--canvas-border);
-  border-radius: 32px;
-  padding: 48px 36px;
-  margin-top: 48px;
+  background: var(--theme-land-stage);
+  background-image: radial-gradient(rgba(138, 94, 60, 0.06) 1px, transparent 0);
+  background-size: 5px 5px;
+  border: 1.5px solid var(--theme-land-border);
+  border-radius: 28px;
+  padding: 44px 32px 52px;
+  margin-top: 24px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  box-shadow: var(--theme-land-shadow-deep);
 }
 
-.timeline-slider-rail {
+/* 嵌入式真实水晶时间轴容器 */
+.landing-crystal-timeline-box {
+  position: relative;
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-  position: relative;
-  margin: 40px 0 24px;
+  height: 120px;
+  min-height: 120px;
+  margin: 36px 0 8px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
-.timeline-slider-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
-  border-radius: 3px;
-  transition: width 0.3s ease;
+.landing-crystal-timeline-box .crystal-timeline-formal,
+.landing-crystal-timeline-box .crystal-timeline-formal.is-expanded {
+  position: relative !important;
+  left: 0 !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 1040px !important;
+  height: 120px !important;
+  min-height: 120px !important;
+  max-height: 120px !important;
+  pointer-events: auto !important;
+  margin: 0 auto;
+}
+
+.landing-crystal-timeline-box .crystal-timeline-formal-body {
+  transform: none !important;
+}
+
+.landing-crystal-timeline-box .crystal-formal-clear {
+  position: absolute;
+  right: 18px;
+  bottom: -4px;
+  color: var(--theme-journal-earth);
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.landing-crystal-timeline-box .crystal-formal-clear:hover {
+  color: var(--theme-crystal-deep);
 }
 
 .timeline-year-buttons-row {
   display: flex;
-  justify-content: space-between;
-  position: relative;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
 }
 
+/* 年份控件按钮：未激活时为手账暗色刻度纸底，激活时为水晶蓝实体高亮 */
 .year-node-btn {
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  font-size: 14px;
+  background: var(--theme-land-subtle);
+  border: 1px solid var(--theme-land-border-soft);
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 600;
+  font-family: monospace;
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 6px 16px;
+  border-radius: 9999px;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .year-node-btn:hover {
-  color: #FFFFFF;
+  color: var(--theme-crystal-deep);
+  border-color: var(--theme-crystal);
+  background: var(--theme-crystal-surface);
 }
 
 .year-node-btn.is-active-year {
-  color: var(--accent-blue);
-  background: rgba(56, 189, 248, 0.1);
-  transform: translateY(-2px);
+  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--theme-crystal) 0%, var(--theme-crystal-deep) 100%);
+  border-color: var(--theme-crystal-deep);
+  box-shadow: 0 4px 14px rgba(58, 102, 123, 0.35);
+  transform: translateY(-1px);
 }
 
 .timeline-active-display {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  gap: 32px;
-  margin-top: 40px;
+  gap: 40px;
+  margin-top: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
+  text-align: left;
 }
 
-/* 8. 第五屏：尾声与极简下载 (DownloadFooter) */
+/* 左侧：手账羊皮相纸卡片 (#F4EDDE，绝非白卡纸) */
+.timeline-photo-card {
+  background: var(--theme-land-paper);
+  border-radius: 14px;
+  padding: 12px 12px 18px;
+  box-shadow: 0 20px 42px -10px rgba(70, 45, 20, 0.22), 0 0 0 1px var(--theme-land-border);
+  color: var(--text-primary);
+  width: 300px;
+  flex-shrink: 0;
+  transform: rotate(-1deg);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.timeline-photo-card:hover {
+  transform: rotate(0deg) scale(1.02);
+  box-shadow: 0 26px 54px -10px rgba(70, 45, 20, 0.28), 0 0 0 2px var(--theme-crystal);
+}
+
+.timeline-photo-frame {
+  width: 100%;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #2C2016;
+  position: relative;
+}
+
+.timeline-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-time-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(44, 32, 22, 0.85);
+  color: #FFFFFF;
+  font-size: 9px;
+  font-family: monospace;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.polaroid-tag {
+  font-size: 9px;
+  background: rgba(138, 94, 60, 0.18);
+  color: var(--theme-journal-earth);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+/* 右侧：产品功能深度解读与岁月回声 */
+.timeline-feature-card {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.timeline-feature-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--theme-crystal-deep);
+  background: var(--theme-crystal-surface);
+  border: 1px solid var(--theme-crystal-border);
+  width: fit-content;
+}
+
+.timeline-feature-heading {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.timeline-feature-desc {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.timeline-memory-snippet {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  background: var(--theme-land-subtle);
+  border-left: 3px solid var(--theme-crystal);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+  margin: 0;
+}
+
+/* 7. 第四屏：尾声与极简下载 (DownloadFooter) */
 .download-footer-section {
   max-width: 1120px;
   margin: 0 auto;
@@ -615,37 +796,39 @@
 }
 
 .download-cta-card {
-  background: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.12) 0%, rgba(24, 26, 32, 0.6) 70%);
-  border: 1px solid var(--canvas-border);
-  border-radius: 32px;
+  background: var(--theme-land-stage);
+  background-image: radial-gradient(rgba(138, 94, 60, 0.06) 1px, transparent 0);
+  background-size: 5px 5px;
+  border: 1.5px solid var(--theme-land-border);
+  border-radius: 28px;
   padding: 64px 36px;
   text-align: center;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--theme-land-shadow-deep);
 }
 
 .download-cta-card h3 {
-  font-size: clamp(28px, 4vw, 42px);
-  font-weight: 700;
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 800;
   letter-spacing: -0.02em;
-  color: #FFFFFF;
+  color: var(--text-primary);
   margin: 0 0 16px 0;
 }
 
 .download-cta-card p {
   font-size: 16px;
   color: var(--text-secondary);
-  max-width: 540px;
+  max-width: 560px;
   margin: 0 auto 36px;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .landing-site-footer {
   max-width: 1120px;
   margin: 0 auto;
   padding: 32px 24px;
-  border-top: 1px solid var(--canvas-border);
+  border-top: 1.5px solid var(--theme-land-border-soft);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -667,10 +850,10 @@
 }
 
 .footer-nav-links a:hover {
-  color: #FFFFFF;
+  color: var(--theme-crystal-deep);
 }
 
-/* 9. 响应式规则 */
+/* 8. 响应式规则 */
 @media (max-width: 900px) {
   .sticky-story-grid {
     grid-template-columns: 1fr;
@@ -678,12 +861,26 @@
   }
   .story-sticky-col {
     position: static;
+    height: auto;
     margin-top: 24px;
+  }
+  .story-sticky-phone-shell {
+    position: static;
   }
   .navbar-center-links {
     display: none;
   }
   .hero-map-stage {
     height: 400px;
+  }
+  .timeline-active-display {
+    flex-direction: column;
+    align-items: center;
+  }
+  .timeline-feature-card {
+    text-align: center;
+  }
+  .timeline-feature-pill {
+    margin: 0 auto;
   }
 }

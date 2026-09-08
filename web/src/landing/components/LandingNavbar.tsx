@@ -39,17 +39,14 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
 
         {/* 中间导航链接 */}
         <div className="navbar-center-links">
-          <a href="#mobile-showcase" className="nav-link-anchor">
-            随行真机
-          </a>
           <a href="#features" className="nav-link-anchor">
             核心特性
           </a>
           <a href="#timeline" className="nav-link-anchor">
-            时光轴
+            水晶时光轴
           </a>
           <a href="#download" className="nav-link-anchor">
-            客户端
+            多端体验
           </a>
         </div>
 
@@ -63,12 +60,12 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
             {hasActiveSession ? (
               <>
                 <Sparkles size={13} />
-                <span>返回空间</span>
+                <span>返回 Web 空间</span>
                 <ArrowRight size={13} />
               </>
             ) : (
               <>
-                <span>进入所忆</span>
+                <span>进入 Web 空间</span>
                 <ArrowRight size={13} />
               </>
             )}

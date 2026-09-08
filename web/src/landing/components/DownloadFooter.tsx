@@ -15,7 +15,7 @@ export const DownloadFooter: FC<DownloadFooterProps> = ({ onEnterApp }) => {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            color: '#38BDF8',
+            color: 'var(--theme-crystal-bright)',
             fontSize: '12px',
             fontWeight: 600,
             marginBottom: '16px',
@@ -27,26 +27,26 @@ export const DownloadFooter: FC<DownloadFooterProps> = ({ onEnterApp }) => {
 
         <h3>给未来的自己，留一座随时可重温的时光庭院。</h3>
         <p>
-          Memorae 支持 Android 原生端与现代 Web 浏览器。
-          随时随地记录眼前的风景与心境，在大屏上回溯一生的漫游足迹。
+          Memorae 支持现代 Web 浏览器与 Android 原生随行版。
+          在宽屏电脑上沉浸回溯一生的足迹与双页手账，在手机端随时定格旅途中的风景与心境。
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={onEnterApp} className="btn-hero-primary">
+            <Globe size={16} />
+            <span>进入 Web 空间 (免安装体验)</span>
+            <ArrowRight size={14} />
+          </button>
+
           <a
             href="https://github.com/nearnight21/memorae/releases"
             target="_blank"
             rel="noreferrer"
-            className="btn-hero-primary"
+            className="btn-hero-secondary"
           >
             <Download size={16} />
             <span>下载 Android 原生 APK</span>
           </a>
-
-          <button type="button" onClick={onEnterApp} className="btn-hero-secondary">
-            <Globe size={16} />
-            <span>在 Web 端开启所忆</span>
-            <ArrowRight size={14} />
-          </button>
         </div>
       </div>
 
