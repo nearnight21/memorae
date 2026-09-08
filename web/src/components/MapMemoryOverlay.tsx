@@ -82,6 +82,7 @@ export default function MapMemoryOverlay({
     return () => media.removeEventListener('change', update);
   }, []);
   const pageTransition = { duration: reduceMotion ? 0.12 : 0.5, ease: [0.25, 0.1, 0.25, 1] as const };
+  const closeTransition = { duration: reduceMotion ? 0.12 : 0.38, ease: [0.32, 0, 0.24, 1] as const };
   const pageAngle = reduceMotion || narrowJournal ? 0 : 55;
   const photos = useMemo(
     () => Array.from(new Set(
@@ -362,7 +363,7 @@ export default function MapMemoryOverlay({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: reduceMotion ? 0.12 : 0.18 }}
+      transition={closeTransition}
     >
       {/* 沉静暗色背景蒙层，点击外部随手合上手帐 */}
       <motion.div
@@ -370,7 +371,7 @@ export default function MapMemoryOverlay({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: reduceMotion ? 0.12 : 0.18 }}
+        transition={closeTransition}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -379,8 +380,13 @@ export default function MapMemoryOverlay({
       <motion.main
         className="map-journal-folio pointer-events-auto relative z-10"
         initial={{ opacity: 0, y: reduceMotion ? 0 : 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: reduceMotion ? 0 : 8, transition: { duration: reduceMotion ? 0.12 : 0.18 } }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{
+          opacity: 0,
+          scale: reduceMotion || narrowJournal ? 1 : 0.94,
+          y: reduceMotion ? 0 : 12,
+          transition: closeTransition,
+        }}
         transition={pageTransition}
       >
         {/* 书脊折痕装订线、锁线孔与自然垂落书签丝带 */}
@@ -392,9 +398,14 @@ export default function MapMemoryOverlay({
           <span className="map-journal-stitch" />
         </div>
 
-        {/* 左页：实体冲印相纸台 */}
-        <motion.div className="map-journal-page-motion is-photo"
-          initial={{ rotateY: -pageAngle }} animate={{ rotateY: 0 }} transition={pageTransition}>
+        {/* 左页：实体冲印相纸台（向内对折闭合） */}
+        <motion.div
+          className="map-journal-page-motion is-photo"
+          initial={{ rotateY: -pageAngle }}
+          animate={{ rotateY: 0 }}
+          exit={{ rotateY: pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
+          transition={closeTransition}
+        >
         <motion.section className="map-journal-page map-journal-page-photo" aria-label="照片记忆"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
           transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>
@@ -539,9 +550,14 @@ export default function MapMemoryOverlay({
         </motion.section>
         </motion.div>
 
-        {/* 右页：双时态时间轴手帐信笺 */}
-        <motion.div className="map-journal-page-motion is-letter"
-          initial={{ rotateY: pageAngle }} animate={{ rotateY: 0 }} transition={pageTransition}>
+        {/* 右页：双时态时间轴手帐信笺（向内对折闭合） */}
+        <motion.div
+          className="map-journal-page-motion is-letter"
+          initial={{ rotateY: pageAngle }}
+          animate={{ rotateY: 0 }}
+          exit={{ rotateY: -pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
+          transition={closeTransition}
+        >
         <motion.section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
           transition={{ duration: reduceMotion ? 0.12 : 0.24 }}>

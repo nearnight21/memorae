@@ -960,6 +960,9 @@
   min-height: 0;
   height: 100%;
   transform-origin: right center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 .map-journal-page-motion.is-letter {
