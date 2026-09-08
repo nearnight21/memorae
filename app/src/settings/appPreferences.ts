@@ -8,20 +8,34 @@ import {
 
 const DEFAULT_MAP_CAMERA_KEY = 'memorae-default-map-camera-v1';
 const ONBOARDING_COMPLETED_KEY = 'memorae-onboarding-completed-v1';
+const PROFILE_KEY = 'memorae-app-profile-v1';
+const LOCATION_NETWORK_CONSENT_KEY = 'memorae-location-network-consent-v1';
 
 export async function loadAppPreferences(): Promise<AppPreferences> {
   try {
-    const [cameraValue, onboardingValue] = await Promise.all([
+    const [cameraValue, onboardingValue, profileValue, locationConsentValue] = await Promise.all([
       SecureStore.getItemAsync(DEFAULT_MAP_CAMERA_KEY),
       SecureStore.getItemAsync(ONBOARDING_COMPLETED_KEY),
+      SecureStore.getItemAsync(PROFILE_KEY),
+      SecureStore.getItemAsync(LOCATION_NETWORK_CONSENT_KEY),
     ]);
     return {
       defaultMapCamera: parseDefaultMapCamera(cameraValue),
       onboardingCompleted: onboardingValue === '1',
+      profile: profileValue === 'local' || profileValue === 'cloud' ? profileValue : null,
+      locationNetworkConsent: locationConsentValue === '1',
     };
   } catch {
     return { ...DEFAULT_APP_PREFERENCES };
   }
+}
+
+export async function saveAppProfile(profile: 'local' | 'cloud'): Promise<void> {
+  await SecureStore.setItemAsync(PROFILE_KEY, profile);
+}
+
+export async function saveLocationNetworkConsent(): Promise<void> {
+  await SecureStore.setItemAsync(LOCATION_NETWORK_CONSENT_KEY, '1');
 }
 
 export async function saveDefaultMapCamera(camera: CameraState | null): Promise<void> {

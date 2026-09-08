@@ -20,6 +20,7 @@ export default function WebViewMemoraeMapAdapter({
   onMarkerPress,
   onClusterPress,
   onCameraIdle,
+  onMapPress,
 }: MemoraeMapProps) {
   const [webViewMarkers, setWebViewMarkers] = useState<AmapWebViewMarker[]>(
     () => markers.map((marker) => toWebViewMarker(marker)),
@@ -69,6 +70,7 @@ export default function WebViewMemoraeMapAdapter({
         lastCamera.current = event.camera;
         onCameraIdle?.(event);
       }}
+      onMapPressed={(coordinate) => onMapPress?.({ latitude: coordinate.lat, longitude: coordinate.lng })}
     />
   );
 }

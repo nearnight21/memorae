@@ -4,11 +4,17 @@ import { HOME_CHINA_CAMERA, HOME_MAP_MAX_ZOOM, HOME_MAP_MIN_ZOOM } from '../map/
 export interface AppPreferences {
   defaultMapCamera: CameraState | null;
   onboardingCompleted: boolean;
+  profile: AppProfile | null;
+  locationNetworkConsent: boolean;
 }
+
+export type AppProfile = 'local' | 'cloud';
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultMapCamera: null,
   onboardingCompleted: false,
+  profile: null,
+  locationNetworkConsent: false,
 };
 
 export function normalizeDefaultMapCamera(value: unknown): CameraState | null {

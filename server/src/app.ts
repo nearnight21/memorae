@@ -194,6 +194,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       pathname === '/health'
       || request.method === 'OPTIONS'
       || (pathname === '/v1/auth/login' && request.method === 'POST')
+      || pathname.startsWith('/v1/location/public/')
     ) {
       return;
     }
@@ -271,6 +272,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       if (response) return response;
       throw error;
     }
+  });
+
+  // Anonymous, privacy-preserving location proxy for local-mode clients.
+  // These endpoints accept only search text or coordinates and never access account data.
+  app.get<{ Querystring: LocationSuggestQuery }>('/v1/location/public/suggest', { schema: { querystring: locationSuggestSchema } }, async (request, reply) => {
+    try { return await requireLocationService().suggest(request.query.q, request.query.adcode); }
+    catch (error) { const response = sendLocationError(error, reply); if (response) return response; throw error; }
+  });
+  app.get<{ Querystring: LocationReverseQuery }>('/v1/location/public/reverse', { schema: { querystring: locationReverseSchema } }, async (request, reply) => {
+    try { return await requireLocationService().reverse({ lat: request.query.lat, lng: request.query.lng }); }
+    catch (error) { const response = sendLocationError(error, reply); if (response) return response; throw error; }
+  });
+  app.post<{ Body: ConvertGpsBody }>('/v1/location/public/convert-gps', { schema: { body: locationReverseSchema } }, async (request, reply) => {
+    try { return await requireLocationService().convertGps(request.body); }
+    catch (error) { const response = sendLocationError(error, reply); if (response) return response; throw error; }
   });
 
   app.put<{ Body: VaultEnvelopeV1 }>('/v1/vault', {

@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
 import { androidTopInset } from '../ui/layout';
 
-export type AuthEntryPhase = 'booting' | 'account' | 'locked' | 'setup';
+export type AuthEntryPhase = 'booting' | 'select' | 'account' | 'locked' | 'setup';
 
 interface AuthEntryScreenProps {
   phase: AuthEntryPhase;
@@ -36,6 +36,8 @@ interface AuthEntryScreenProps {
   onTogglePrivatePassword: () => void;
   onTogglePrivatePasswordConfirmation: () => void;
   onSubmit: () => void;
+  onSelectLocal: () => void;
+  onSelectCloud: () => void;
 }
 
 const mapCanvas = require('../../assets/login/figma-map-canvas.png');
@@ -264,6 +266,8 @@ export default function AuthEntryScreen({
   onTogglePrivatePassword,
   onTogglePrivatePasswordConfirmation,
   onSubmit,
+  onSelectLocal,
+  onSelectCloud,
 }: AuthEntryScreenProps) {
   const { width, height } = useWindowDimensions();
 
@@ -305,6 +309,22 @@ export default function AuthEntryScreen({
                 <ActivityIndicator size="small" color="#a76b3e" />
                 <Text style={styles.loading}>正在校验加密记忆空间状态……</Text>
               </View>
+            ) : phase === 'select' ? (
+              <>
+                <View style={styles.formHeader}>
+                  <Text style={styles.title}>选择使用方式</Text>
+                  <Text style={styles.subtitle}>本地模式不上传私人数据；地点搜索与反向地点需要联网。</Text>
+                </View>
+                <View style={styles.privacyNotice}>
+                  <Text style={styles.privacyTitle}>本地模式</Text>
+                  <Text style={styles.privacyBody}>记忆、照片、标题和地点内容只保存在这台设备，不登录、不同步。</Text>
+                  <Text style={styles.privacyBody}>地图搜索、反向地点和照片地点识别会联网并产生服务费用，内测/公测期间由 Memorae 承担。</Text>
+                </View>
+                <PrimaryButton label="本地使用" busy={busy} onPress={onSelectLocal} />
+                <Pressable accessibilityRole="button" onPress={onSelectCloud} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>登录云端账号</Text>
+                </Pressable>
+              </>
             ) : phase === 'account' ? (
               <>
                 <View style={styles.formHeader}>
@@ -560,6 +580,11 @@ const styles = StyleSheet.create({
   formGapSmall: {
     height: 4,
   },
+  privacyNotice: { marginBottom: 18, padding: 16, borderRadius: 12, backgroundColor: 'rgba(255,250,242,0.88)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(167,107,62,0.28)' },
+  privacyTitle: { color: '#754f31', fontSize: 15, fontWeight: '600', lineHeight: 22 },
+  privacyBody: { marginTop: 8, color: '#75695c', fontSize: 12, lineHeight: 19 },
+  secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: '#754f31', fontSize: 14, fontWeight: '600' },
 
   /* 输入控件 */
   field: {
@@ -720,4 +745,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

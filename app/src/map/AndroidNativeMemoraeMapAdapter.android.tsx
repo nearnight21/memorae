@@ -45,6 +45,7 @@ export default function AndroidNativeMemoraeMapAdapter({
   onMarkerPress,
   onClusterPress,
   onCameraIdle,
+  onMapPress,
 }: MemoraeMapProps) {
   const [nativeMarkers, setNativeMarkers] = useState<NativeMapMarker[]>(() => (
     updatesPaused ? [] : materializeMarkers(markers)
@@ -121,6 +122,7 @@ export default function AndroidNativeMemoraeMapAdapter({
         onMarkerPress={({ nativeEvent }) => onMarkerPress?.(fromNativeMarkerPress(nativeEvent.id))}
         onClusterPress={({ nativeEvent }) => handleClusterPress(nativeEvent)}
         onCameraIdle={({ nativeEvent }) => handleCameraIdle(nativeEvent)}
+        onMapPress={({ nativeEvent }) => onMapPress?.({ latitude: nativeEvent.latitude, longitude: nativeEvent.longitude })}
         onNativeError={({ nativeEvent }) => handleNativeError(nativeEvent)}
       />
       {showStatus && (

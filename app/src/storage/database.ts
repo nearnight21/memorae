@@ -10,17 +10,30 @@ import {
 } from '../crypto';
 import type { UploadPlan } from '../sync/syncActions';
 
-const DATABASE_NAME = 'memory-recall-vmk.db';
-const PHOTO_DIRECTORY_NAME = 'encrypted-photos-v1';
+const DATABASE_NAMES = {
+  cloud: 'memory-recall-vmk.db',
+  local: 'memory-recall-local-vmk.db',
+} as const;
+const PHOTO_DIRECTORY_NAMES = {
+  cloud: 'encrypted-photos-v1',
+  local: 'encrypted-photos-local-v1',
+} as const;
 const VAULT_META_KEY = 'vault-envelope-v1';
 const DEVICE_UNLOCK_META_KEY = 'device-unlock-v1';
 const PENDING_UPLOAD_PLAN_META_KEY = 'pending-upload-plan-v1';
 const STORAGE_SCHEMA_VERSION = 2;
 
 let databasePromise: Promise<SQLiteDatabase> | null = null;
+let activeProfile: 'cloud' | 'local' = 'cloud';
+
+export function configureStorageProfile(profile: 'cloud' | 'local'): void {
+  if (activeProfile === profile) return;
+  databasePromise = null;
+  activeProfile = profile;
+}
 
 function encryptedPhotoDirectory(): Directory {
-  return new Directory(Paths.document, PHOTO_DIRECTORY_NAME);
+  return new Directory(Paths.document, PHOTO_DIRECTORY_NAMES[activeProfile]);
 }
 
 function photoFileName(photo: Pick<EncryptedPhotoV1, 'id' | 'kind'>): string {
@@ -33,7 +46,7 @@ function photoFileName(photo: Pick<EncryptedPhotoV1, 'id' | 'kind'>): string {
 
 async function openDatabase(): Promise<SQLiteDatabase> {
   if (!databasePromise) {
-    databasePromise = openDatabaseAsync(DATABASE_NAME).then(async (database) => {
+    databasePromise = openDatabaseAsync(DATABASE_NAMES[activeProfile]).then(async (database) => {
       await database.execAsync(`
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = ON;

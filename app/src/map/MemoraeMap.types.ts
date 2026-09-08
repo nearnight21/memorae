@@ -56,4 +56,5 @@ export interface MemoraeMapProps {
   onMarkerPress?: (event: MapMarkerPressEvent) => void;
   onClusterPress?: (event: MapClusterPressEvent) => void;
   onCameraIdle?: (event: MapCameraIdleEvent) => void;
+  onMapPress?: (coordinate: Coordinate) => void;
 }

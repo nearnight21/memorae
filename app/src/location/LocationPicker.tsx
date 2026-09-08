@@ -21,6 +21,7 @@ import {
   type LocationReverseResult,
   type LocationSuggestion,
   type SelectedLocation,
+  type LocationClient,
 } from './locationClient';
 
 interface Props {
@@ -31,7 +32,9 @@ interface Props {
   cameraIdle?: CameraState | null;
   camera?: CameraState | null;
   onCameraChange?: (camera: CameraState) => void;
-  locationClient?: MobileLocationClient;
+  onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
+  locationClient?: LocationClient;
+  onNetworkRequired?: () => Promise<boolean>;
   onCancel: () => void;
   onConfirm: (location: MemoryLocationV2) => void;
 }
@@ -62,7 +65,9 @@ export default function LocationPicker({
   cameraIdle,
   camera: controlledCamera,
   onCameraChange,
+  onMapPress,
   locationClient,
+  onNetworkRequired,
   onCancel,
   onConfirm,
 }: Props) {
@@ -107,6 +112,7 @@ export default function LocationPicker({
     ));
     if (reverseTimer.current) clearTimeout(reverseTimer.current);
     reverseTimer.current = setTimeout(() => {
+      void (async () => {
       const id = ++requestId.current;
       if (!locationClient) {
         setSelectedLocation(locationFallback(next));
@@ -115,18 +121,31 @@ export default function LocationPicker({
         return;
       }
       setResolving(true);
-      void locationClient.reverse({ lat: next.latitude, lng: next.longitude }).then((result) => {
+      try {
+        if (onNetworkRequired && !(await onNetworkRequired())) {
+          if (id === requestId.current) {
+            setResolving(false);
+            setSelectedLocation(locationFallback(next));
+          }
+          return;
+        }
+        const result = await locationClient.reverse({ lat: next.latitude, lng: next.longitude });
         if (id !== requestId.current) return;
         setResolving(false);
         setReverseResult(result);
         if (result) setSelectedLocation(normalizeLocationResult(result, selectedLocation));
-        else setError('暂时无法获取地点名称');
-      }).catch(() => {
+        else {
+          setSelectedLocation(locationFallback(next));
+          setError('暂时无法获取地点名称');
+        }
+      } catch {
         if (id !== requestId.current) return;
         setResolving(false);
         setReverseResult(null);
+        setSelectedLocation(locationFallback(next));
         setError('暂时无法获取地点名称');
-      });
+      }
+      })();
     }, 350);
   }
 
@@ -134,6 +153,12 @@ export default function LocationPicker({
     setQuery('');
     setSuggestions([]);
     const target = { latitude: candidate.lat, longitude: candidate.lng, zoom: CENTER_ZOOM };
+    setCamera(target);
+    resolveCenter(target);
+  }
+
+  function handleMapPress(coordinate: { latitude: number; longitude: number }): void {
+    const target = { latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: CENTER_ZOOM };
     setCamera(target);
     resolveCenter(target);
   }
@@ -149,7 +174,10 @@ export default function LocationPicker({
     searchTimer.current = setTimeout(() => {
       const id = ++searchRequestId.current;
       setSearching(true);
-      void locationClient.suggest(value).then((results) => {
+      void (async () => {
+        if (onNetworkRequired && !(await onNetworkRequired())) return [];
+        return locationClient.suggest(value);
+      })().then((results) => {
         if (id !== searchRequestId.current) return;
         setSuggestions(results);
       }).catch(() => {
@@ -163,7 +191,7 @@ export default function LocationPicker({
 
   const region = reverseResult ? locationRegionLabel(reverseResult) : selectedLocation
     ? [selectedLocation.province, selectedLocation.city, selectedLocation.district].filter(Boolean).join(' · ') || selectedLocation.name
-    : center ? '正在获取地点…' : '移动地图选择地点';
+    : resolving ? '正在获取地点…' : error || (center ? '地图选点' : '移动地图选择地点');
   const place = reverseResult ? locationPlaceLabel(reverseResult) : selectedLocation?.name ?? '';
 
   return (
@@ -173,6 +201,7 @@ export default function LocationPicker({
         initialCamera={initialCamera ?? undefined}
         camera={effectiveCamera}
         onCameraIdle={(event) => resolveCenter(event.camera)}
+        onMapPress={handleMapPress}
         showStatus={false}
       />}
       <View pointerEvents="none" style={styles.mapDim} />
@@ -213,11 +242,11 @@ export default function LocationPicker({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="确定地点"
-            disabled={!center || resolving}
+            disabled={!center}
             onPress={() => onConfirm(selectedLocation && center
               ? { ...selectedLocation, lat: center.latitude, lng: center.longitude }
               : center ? locationFallback(center) : { name: '地图选点', mx: 50, my: 50 })}
-            style={({ pressed }) => [styles.confirmButton, (!center || resolving) && styles.disabled, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.confirmButton, !center && styles.disabled, pressed && styles.pressed]}
           >
             <Text style={styles.confirmText}>确定</Text>
           </Pressable>

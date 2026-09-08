@@ -95,7 +95,7 @@ import {
   removedPhotoIds,
 } from './src/edit/editLifecycle';
 import LocationPicker from './src/location/LocationPicker';
-import { MobileLocationClient, normalizeLocationResult } from './src/location/locationClient';
+import { LocalAmapLocationClient, MobileLocationClient, normalizeLocationResult } from './src/location/locationClient';
 import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
 import type { EphemeralTestBootstrap } from './src/testing/ephemeralTestRuntime';
@@ -110,7 +110,8 @@ import {
   SupportScreen,
   type UtilityRoute,
 } from './src/settings/SettingsScreens';
-import { loadAppPreferences, saveDefaultMapCamera, saveOnboardingCompleted } from './src/settings/appPreferences';
+import { loadAppPreferences, saveAppProfile, saveDefaultMapCamera, saveLocationNetworkConsent, saveOnboardingCompleted } from './src/settings/appPreferences';
+import type { AppProfile } from './src/settings/settingsModel';
 import { currentAppVersion, currentBuildVersion } from './src/settings/appVersion';
 import { effectiveDefaultMapCamera, normalizeDefaultMapCamera } from './src/settings/settingsModel';
 import { checkForAppUpdate, SUPPORT_PROJECT_URL, type UpdateCheckResult } from './src/settings/updateService';
@@ -129,6 +130,7 @@ import {
   saveEncryptedPhoto,
   savePendingUploadPlan,
   saveVaultEnvelope,
+  configureStorageProfile,
 } from './src/storage/database';
 
 interface PendingPhoto {
@@ -164,7 +166,7 @@ interface PhotoViewerState {
   originalUri: string | null;
 }
 
-type Mode = 'loading' | 'account' | 'setup' | 'locked' | 'unlocked';
+type Mode = 'loading' | 'select' | 'account' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
@@ -259,6 +261,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('正在检查本地密文库……');
   const [accountSession, setAccountSession] = useState<MobileAccountSession | null>(null);
+  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const [locationNetworkConsent, setLocationNetworkConsent] = useState(false);
   const [accountLoginName, setAccountLoginName] = useState('');
   const [accountLoginPassword, setAccountLoginPassword] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
@@ -305,6 +309,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   const stateLabel = useMemo(() => ({
     loading: '启动中',
+    select: '选择模式',
     account: '账号登录',
     setup: '未创建',
     locked: '已锁定',
@@ -328,10 +333,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
     [homeViewport, visibleMemories],
   );
   const mobileLocationClient = useMemo(
-    () => accountSession
-      ? new MobileLocationClient(new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }))
-      : undefined,
-    [accountSession],
+    () => profile === 'local'
+      ? new LocalAmapLocationClient()
+      : accountSession
+        ? new MobileLocationClient(new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }))
+        : undefined,
+    [accountSession, profile],
   );
   const activeDefaultMapCamera = useMemo(
     () => effectiveDefaultMapCamera(defaultMapCamera),
@@ -395,8 +402,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
     void (async () => {
       try {
         resetMapThumbnailCache();
-        await initializeStorage();
         const storedPreferences = await loadAppPreferences();
+        setProfile(storedPreferences.profile);
+        setLocationNetworkConsent(storedPreferences.locationNetworkConsent);
+        configureStorageProfile(storedPreferences.profile === 'local' ? 'local' : 'cloud');
+        await initializeStorage();
         const storedDefaultCamera = effectiveDefaultMapCamera(storedPreferences.defaultMapCamera);
         setDefaultMapCamera(storedPreferences.defaultMapCamera);
         setOnboardingCompleted(storedPreferences.onboardingCompleted);
@@ -415,6 +425,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
           );
           return;
         }
+        if (!storedPreferences.profile) {
+          setMode('select');
+          setStatus('请选择本地使用或云端账号。');
+          return;
+        }
         const [storedVault, storedAccount, storedUploadPlan] = await Promise.all([
           getVaultEnvelope(),
           getStoredAccountSession(),
@@ -423,6 +438,13 @@ export default function App({ testBootstrap }: AppProps = {}) {
         if (storedUploadPlan) pendingAccountUploadPlan.current = storedUploadPlan;
         setVault(storedVault);
         setDeviceUnlockEnabled(await hasDeviceUnlock());
+        if (storedPreferences.profile === 'local') {
+          await disableDeviceUnlock();
+          setDeviceUnlockEnabled(false);
+          setMode(storedVault ? 'locked' : 'setup');
+          setStatus(storedVault ? '本地私密空间已就绪，等待解锁。' : '请建立本地私密空间。');
+          return;
+        }
         if (!storedAccount || !isAccountSessionActive(storedAccount)) {
           if (storedAccount) await clearStoredAccountSession();
           setMode('account');
@@ -650,7 +672,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     let syncWarning = '';
     let readyResolve: (() => void) | undefined;
     const memoryReady = new Promise<void>((resolve) => { readyResolve = resolve; });
-    const syncPromise = downloadAccountMemories(activeSession, (diagnostics) => {
+    const syncPromise = profile === 'cloud' ? downloadAccountMemories(activeSession, (diagnostics) => {
       remoteDiagnosticsRef.current = diagnostics;
     }, async () => {
       await refreshMemories(activeSession, { loadThumbnails: false });
@@ -659,7 +681,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       downloadedCount = downloadResult.count;
       remoteConflictIds = downloadResult.conflictIds;
       return refreshMemories(activeSession);
-    }).catch((error) => {
+    }) : Promise.resolve().catch((error) => {
       syncWarning = `远端记忆暂时未同步：${errorMessage(error)}`;
       logMemoryDiagnostics('remote-sync-error', { errorType: memoryDiagnosticErrorType(error) });
     }).finally(() => {
@@ -678,7 +700,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
         : `诊断：远端同步未返回数量；${latestLocalDiagnostics}`;
       setStatus(`${message}${details ? ` ${details}。` : ''}${syncWarning ? ` ${syncWarning}` : ' 同步完成。'} ${diagnosticSummary}`);
     });
-    if (currentAccountSyncClient() && (pendingAccountUploadPlan.current.memoryIds.length > 0
+    if (profile === 'cloud' && currentAccountSyncClient() && (pendingAccountUploadPlan.current.memoryIds.length > 0
       || pendingAccountUploadPlan.current.photoRefs.length > 0)) {
       queueAccountUpload(
         { memoryIds: [], photoRefs: [] },
@@ -726,7 +748,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     const startedAt = performance.now();
     const created = await createVault(nativeCryptoPrimitives, password);
     await saveVaultEnvelope(created.envelope);
-    if (accountSession) {
+    if (profile === 'cloud' && accountSession) {
       await new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }).putVault(created.envelope);
     }
     setVault(created.envelope);
@@ -801,6 +823,20 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   async function resolvePhotoLocation(coordinates: PhotoCoordinates): Promise<MemoryLocationV2> {
+    if (profile === 'local' && !locationNetworkConsent) {
+      const choice = await new Promise<'allow' | 'deny'>((resolve) => Alert.alert(
+        '地点功能需要联网',
+        '地图搜索、反向地点和照片地点识别会发送必要的查询或坐标，并产生高德服务费用。内测/公测期间由 Memorae 承担；记忆正文和照片不会上传。',
+        [
+          { text: '暂不联网', style: 'cancel', onPress: () => resolve('deny') },
+          { text: '允许并记住', onPress: () => resolve('allow') },
+        ],
+      ));
+      if (choice === 'allow') {
+        await saveLocationNetworkConsent();
+        setLocationNetworkConsent(true);
+      }
+    }
     if (!mobileLocationClient) return fallbackPhotoLocation(coordinates);
     try {
       const converted = await mobileLocationClient.convertGps(coordinates);
@@ -811,6 +847,22 @@ export default function App({ testBootstrap }: AppProps = {}) {
     } catch {
       return fallbackPhotoLocation(coordinates);
     }
+  }
+
+  async function requestLocationNetwork(): Promise<boolean> {
+    if (profile !== 'local' || locationNetworkConsent) return true;
+    const choice = await new Promise<'allow' | 'deny'>((resolve) => Alert.alert(
+      '地点功能需要联网',
+      '地图搜索、反向地点和照片地点识别会发送必要的查询或坐标，并产生高德服务费用。内测/公测期间由 Memorae 承担；记忆正文和照片不会上传。',
+      [
+        { text: '暂不联网', style: 'cancel', onPress: () => resolve('deny') },
+        { text: '允许并记住', onPress: () => resolve('allow') },
+      ],
+    ));
+    if (choice !== 'allow') return false;
+    await saveLocationNetworkConsent();
+    setLocationNetworkConsent(true);
+    return true;
   }
 
   async function beginCreateMemory(): Promise<void> {
@@ -1677,6 +1729,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
       ? 'booting'
       : mode === 'account'
         ? 'account'
+        : mode === 'select'
+          ? 'select'
         : mode === 'locked'
           ? 'locked'
           : 'setup';
@@ -1701,6 +1755,26 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onTogglePrivatePassword={() => setShowPrivatePassword((value) => !value)}
           onTogglePrivatePasswordConfirmation={() => setShowPrivatePassword((value) => !value)}
           onSubmit={() => void runTask(submitAuthEntry)}
+          onSelectLocal={() => void runTask(async () => {
+            await disableDeviceUnlock();
+            await saveAppProfile('local');
+            configureStorageProfile('local');
+            await initializeStorage();
+            setProfile('local');
+            setMode((await getVaultEnvelope()) ? 'locked' : 'setup');
+            setStatus('本地模式已启用：数据只保存在本机。');
+          })}
+          onSelectCloud={() => void runTask(async () => {
+            await disableDeviceUnlock();
+            await saveAppProfile('cloud');
+            configureStorageProfile('cloud');
+            await initializeStorage();
+            setProfile('cloud');
+            const storedVault = await getVaultEnvelope();
+            setVault(storedVault);
+            setMode('account');
+            setStatus('等待云端账号登录。');
+          })}
         />
       </>
     );
@@ -1736,13 +1810,14 @@ export default function App({ testBootstrap }: AppProps = {}) {
         locationMode={locationPickerVisible}
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
-            mapAlreadyMounted
+            mapAlreadyMounted={false}
             active={locationPickerVisible}
             initialLocation={editDraft?.location ?? null}
             initialCamera={homeViewport.camera}
             cameraIdle={homeViewport.camera}
             camera={locationCameraTarget}
             locationClient={mobileLocationClient}
+            onNetworkRequired={requestLocationNetwork}
             onCameraChange={setLocationCameraTarget}
             onCancel={cancelLocationPicker}
             onConfirm={confirmLocation}
@@ -1826,6 +1901,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       )}
       {utilityRoute === 'settings' && (
         <SettingsScreen
+          profile={profile}
           userCamera={defaultMapCamera}
           effectiveCamera={activeDefaultMapCamera}
           onEditMap={beginDefaultMapEditor}

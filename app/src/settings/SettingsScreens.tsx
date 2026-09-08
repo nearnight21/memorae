@@ -93,12 +93,14 @@ export function MoreMenuSheet({
 }
 
 export function SettingsScreen({
+  profile,
   userCamera,
   effectiveCamera,
   onEditMap,
   onRestoreMap,
   onBack,
 }: {
+  profile?: 'local' | 'cloud' | null;
   userCamera: CameraState | null;
   effectiveCamera: CameraState;
   onEditMap: () => void;
@@ -119,6 +121,10 @@ export function SettingsScreen({
         <Row label="在地图上重新设置" onPress={onEditMap} />
         <View style={styles.divider} />
         <Row label="恢复系统默认" detail="中国全景 · Zoom 3.5" onPress={onRestoreMap} />
+        {profile === 'local' ? <>
+          <View style={styles.divider} />
+          <Row label="注册并上传" detail="后续开放云端保存，本版本不会上传本地数据" />
+        </> : null}
       </View>
       <Text style={styles.footnote}>首次进入地图和时间轴下拉回到全景时使用此视图。</Text>
     </Page>

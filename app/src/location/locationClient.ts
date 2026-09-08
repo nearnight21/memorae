@@ -35,6 +35,12 @@ export type LocationResult = LocationSuggestion | LocationReverseResult;
 
 export type SelectedLocation = MemoryLocationV2;
 
+export interface LocationClient {
+  suggest(query: string, adcode?: string): Promise<LocationSuggestion[]>;
+  reverse(coordinates: LocationCoordinates): Promise<LocationReverseResult | null>;
+  convertGps(coordinates: LocationCoordinates): Promise<LocationCoordinates | null>;
+}
+
 export function normalizeLocationResult(
   result: LocationResult,
   previous?: Pick<MemoryLocationV2, 'mx' | 'my'> | null,
@@ -76,7 +82,7 @@ export function locationPlaceLabel(location: Partial<LocationResult> | null): st
   return value.shortName || value.placeName || value.label || value.formattedAddress || '';
 }
 
-export class MobileLocationClient {
+export class MobileLocationClient implements LocationClient {
   constructor(private readonly client: MemoryRecallSyncClient) {}
 
   suggest(query: string, adcode?: string): Promise<LocationSuggestion[]> {
@@ -89,5 +95,38 @@ export class MobileLocationClient {
 
   convertGps(coordinates: LocationCoordinates): Promise<LocationCoordinates | null> {
     return this.client.convertGpsCoordinates(coordinates);
+  }
+}
+
+export class LocalAmapLocationClient {
+  private readonly baseUrl = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
+
+  private async request<T>(url: string, init?: RequestInit): Promise<T | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}${url}`, init);
+      if (!response.ok) return null;
+      return await response.json() as T;
+    } catch {
+      return null;
+    }
+  }
+
+  async suggest(query: string, _adcode?: string): Promise<LocationSuggestion[]> {
+    const params = new URLSearchParams({ keywords: query.trim(), output: 'json' });
+    const result = await this.request<LocationSuggestion[]>(`/v1/location/public/suggest?${new URLSearchParams({ q: query.trim() }).toString()}`,
+    );
+    return result ?? [];
+  }
+
+  async reverse(coordinates: LocationCoordinates): Promise<LocationReverseResult | null> {
+    const params = new URLSearchParams({ lat: String(coordinates.lat), lng: String(coordinates.lng) });
+    const result = await this.request<LocationReverseResult>(`/v1/location/public/reverse?${params.toString()}`,
+    );
+    return result;
+  }
+
+  async convertGps(coordinates: LocationCoordinates): Promise<LocationCoordinates | null> {
+    const params = new URLSearchParams({ locations: `${coordinates.lng},${coordinates.lat}`, coordsys: 'gps', output: 'json' });
+    return this.request<LocationCoordinates>('/v1/location/public/convert-gps', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(coordinates) });
   }
 }

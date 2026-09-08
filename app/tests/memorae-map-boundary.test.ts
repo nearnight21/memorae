@@ -188,5 +188,8 @@ test('LocationPicker 继续由 Camera idle 中心点驱动且不引入屏幕投�
   assert.match(source, /cameraIdle\?\.latitude/);
   assert.match(source, /onCameraIdle=\{\(event\) => resolveCenter\(event\.camera\)\}/);
   assert.match(source, /locationClient\.reverse\(\{ lat: next\.latitude, lng: next\.longitude \}\)/);
+  assert.match(source, /setSelectedLocation\(locationFallback\(next\)\)/);
+  assert.match(source, /setResolving\(false\);[\s\S]*setError\('暂时无法获取地点名称'\)/);
+  assert.match(source, /resolving \? '正在获取地点…' : error/);
   assert.doesNotMatch(source, /latLngToScreen|screenToLatLng|AmapJsWebViewMap/);
 });

@@ -119,8 +119,8 @@ interface Props {
   markers: AmapWebViewMarker[];
   onMarkerPressed?: (id: string) => void;
   onClusterPressed?: (cluster: AmapMapClusterPress) => void;
-  onMapPressed?: (coordinates: { lat: number; lng: number }) => void;
   onCameraIdle?: (coordinates: AmapMapCamera) => void;
+  onMapPressed?: (coordinate: { lat: number; lng: number }) => void;
   initialCamera?: AmapMapCamera;
   cameraTarget?: AmapMapCamera | null;
   markerUpdatesPaused?: boolean;
@@ -173,8 +173,8 @@ export default function AmapJsWebViewMap({
   markers,
   onMarkerPressed,
   onClusterPressed,
-  onMapPressed,
   onCameraIdle,
+  onMapPressed,
   initialCamera,
   cameraTarget,
   markerUpdatesPaused = false,
