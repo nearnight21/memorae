@@ -82,8 +82,13 @@ export default function MapMemoryOverlay({
     return () => media.removeEventListener('change', update);
   }, []);
   const pageTransition = { duration: reduceMotion ? 0.12 : 0.5, ease: [0.25, 0.1, 0.25, 1] as const };
-  const closeTransition = { duration: reduceMotion ? 0.12 : 0.38, ease: [0.32, 0, 0.24, 1] as const };
-  const pageAngle = reduceMotion || narrowJournal ? 0 : 55;
+  const closeDuration = reduceMotion ? 0.12 : 0.56;
+  const closeTransition = { duration: closeDuration, ease: [0.25, 0.1, 0.25, 1] as const };
+  const closeFadeTransition = {
+    ...closeTransition,
+    opacity: { duration: reduceMotion ? 0.12 : 0.24, delay: reduceMotion ? 0 : closeDuration - 0.24 },
+  };
+  const pageAngle = reduceMotion || narrowJournal ? 0 : 62;
   const photos = useMemo(
     () => Array.from(new Set(
       (readerMode === 'journal' ? [...memory.gallery, memory.image] : [memory.image, ...memory.gallery])
@@ -384,8 +389,8 @@ export default function MapMemoryOverlay({
         exit={{
           opacity: 0,
           scale: reduceMotion || narrowJournal ? 1 : 0.94,
-          y: reduceMotion ? 0 : 12,
-          transition: closeTransition,
+          y: reduceMotion ? 0 : 14,
+          transition: closeFadeTransition,
         }}
         transition={pageTransition}
       >
@@ -404,7 +409,7 @@ export default function MapMemoryOverlay({
           initial={{ rotateY: -pageAngle }}
           animate={{ rotateY: 0 }}
           exit={{ rotateY: pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
-          transition={closeTransition}
+          transition={closeFadeTransition}
         >
         <motion.section className="map-journal-page map-journal-page-photo" aria-label="照片记忆"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
@@ -556,7 +561,7 @@ export default function MapMemoryOverlay({
           initial={{ rotateY: pageAngle }}
           animate={{ rotateY: 0 }}
           exit={{ rotateY: -pageAngle, opacity: reduceMotion || narrowJournal ? 0 : 0.15 }}
-          transition={closeTransition}
+          transition={closeFadeTransition}
         >
         <motion.section className="map-journal-page map-journal-page-letter" aria-label="回忆信笺"
           initial={{ opacity: reduceMotion || narrowJournal ? 0 : 0.85 }} animate={{ opacity: 1 }}
