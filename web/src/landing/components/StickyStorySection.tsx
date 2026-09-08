@@ -49,7 +49,8 @@ export const StickyStorySection: FC = () => {
         });
       },
       {
-        threshold: 0.5,
+        threshold: 0.3,
+        rootMargin: "-20% 0px -20% 0px",
       },
     );
 
@@ -75,7 +76,10 @@ export const StickyStorySection: FC = () => {
               }}
               data-step-index={idx}
               className="story-card-step"
-              style={{ opacity: activeStep === idx ? 1 : 0.35 }}
+              style={{
+                opacity: activeStep === idx ? 1 : 0.28,
+                transform: activeStep === idx ? 'translateX(0px)' : 'translateX(-8px)',
+              }}
             >
               <span className="step-numeral">{step.numeral}</span>
               <h3 className="step-heading">{step.title}</h3>
@@ -86,10 +90,12 @@ export const StickyStorySection: FC = () => {
 
         {/* 右侧 Sticky 保持在视口的手机模型 */}
         <div className="story-sticky-col">
-          <PhoneViewport
-            placeholderTitle={current.screenTitle}
-            placeholderSubtitle={current.screenDesc}
-          />
+          <div className="story-sticky-phone-shell">
+            <PhoneViewport
+              placeholderTitle={current.screenTitle}
+              placeholderSubtitle={current.screenDesc}
+            />
+          </div>
         </div>
       </div>
     </section>

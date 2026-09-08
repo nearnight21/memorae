@@ -11,8 +11,8 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
     <section className="hero-canvas-section" id="top">
       {/* 极简标签 */}
       <div className="hero-tag-pill">
-        <Sparkles size={13} style={{ color: '#38BDF8' }} />
-        <span>端到端加密的时空足迹地图 · Android & Web 原生随行</span>
+        <Sparkles size={13} style={{ color: 'var(--theme-crystal-bright)' }} />
+        <span>端到端加密的时空足迹地图 · Web 沉浸大屏 & Android 原生随行</span>
       </div>
 
       {/* 强对比大标题（Arc 风格） */}
@@ -25,13 +25,13 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
       {/* 副标题 */}
       <p className="hero-sub-text">
         Memorae 将散落在各处的照片与文字，串连成生命轨迹中的时空长卷。
-        出境即密文，唯有您的钥匙能够唤醒回忆。
+        Web 网站端大画幅沉浸漫游，手机随行即刻记录。出境即密文，唯有您的钥匙能够唤醒回忆。
       </p>
 
       {/* 核心行动按钮 */}
       <div className="hero-actions-row">
         <button type="button" onClick={onEnterApp} className="btn-hero-primary">
-          <span>开始体验</span>
+          <span>进入 Web 空间 (免安装)</span>
           <ArrowRight size={15} />
         </button>
         <a href="#download" className="btn-hero-secondary">
@@ -54,7 +54,7 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
           <path
             d="M 180 340 C 350 200, 550 360, 820 180"
             fill="none"
-            stroke="rgba(56, 189, 248, 0.35)"
+            stroke="rgba(108, 153, 173, 0.45)"
             strokeWidth="2"
             strokeDasharray="6 6"
           />
@@ -71,7 +71,7 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
           <div className="card-polaroid-meta">
             <h6>清水舞台的晚蝉与暮色</h6>
             <p>
-              <MapPin size={10} style={{ display: 'inline', marginRight: 2 }} />
+              <MapPin size={10} style={{ display: 'inline', marginRight: 2, color: 'var(--theme-journal-earth)' }} />
               2018.07 · 京都
             </p>
           </div>
@@ -88,7 +88,7 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
           <div className="card-polaroid-meta">
             <h6>月亮湾的第一场初雪</h6>
             <p>
-              <MapPin size={10} style={{ display: 'inline', marginRight: 2 }} />
+              <MapPin size={10} style={{ display: 'inline', marginRight: 2, color: 'var(--theme-journal-earth)' }} />
               2022.10 · 阿勒泰
             </p>
           </div>
@@ -109,23 +109,25 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
         >
           <div
             style={{
-              width: '16px',
-              height: '16px',
+              width: '14px',
+              height: '14px',
               borderRadius: '50%',
-              background: '#38BDF8',
-              boxShadow: '0 0 20px #38BDF8',
-              border: '3px solid #FFFFFF',
+              background: 'var(--theme-crystal-deep)',
+              boxShadow: '0 0 16px var(--theme-crystal)',
+              border: '2.5px solid var(--theme-land-paper)',
             }}
           />
           <span
             style={{
               fontSize: '11px',
               fontFamily: 'monospace',
-              color: '#38BDF8',
-              background: 'rgba(0, 0, 0, 0.7)',
+              fontWeight: 600,
+              color: 'var(--theme-crystal-deep)',
+              background: 'rgba(255, 253, 249, 0.95)',
               padding: '2px 8px',
               borderRadius: '4px',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              border: '1px solid var(--theme-crystal-border)',
+              boxShadow: '0 2px 8px rgba(70, 50, 30, 0.08)',
             }}
           >
             31.2053° N, 121.4398° E

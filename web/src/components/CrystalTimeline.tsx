@@ -14,6 +14,7 @@ interface CrystalTimelineProps {
   filters: MemoryFilters;
   onFiltersChange: (filters: MemoryFilters) => void;
   onAddMemory?: () => void;
+  collapsible?: boolean;
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
@@ -32,7 +33,13 @@ const progressForPointer = (element: HTMLElement, clientX: number): number => {
   return clamp((clientX - rect.left - TRACK_START_INSET) / width);
 };
 
-export default function CrystalTimeline({ memories, filters, onFiltersChange, onAddMemory }: CrystalTimelineProps) {
+export default function CrystalTimeline({
+  memories,
+  filters,
+  onFiltersChange,
+  onAddMemory,
+  collapsible = true,
+}: CrystalTimelineProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const pointerStartX = useRef<number | null>(null);
   const movedPointer = useRef(false);
@@ -225,7 +232,9 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
             movedPointer.current = false;
             return;
           }
-          setExpanded((value) => !value);
+          if (collapsible) {
+            setExpanded((value) => !value);
+          }
         }}
       >
         <div className="crystal-formal-glass" aria-hidden="true" />
@@ -300,7 +309,9 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
           onClick={(event) => {
             event.stopPropagation();
             onFiltersChange({ ...filters, dateRange: null });
-            setExpanded(false);
+            if (collapsible) {
+              setExpanded(false);
+            }
           }}
         >
           清除时间
