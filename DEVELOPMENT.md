@@ -37,6 +37,8 @@
 
 ## 本地开发与验证
 
+后续提交涉及的 `README.md` 文件默认使用中文撰写；代码、命令、环境变量和协议字段保持原有格式。
+
 ```powershell
 npm.cmd ci --prefix web
 npm.cmd ci --prefix app
