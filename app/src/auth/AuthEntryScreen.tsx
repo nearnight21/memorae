@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -36,6 +36,8 @@ interface AuthEntryScreenProps {
   onTogglePrivatePassword: () => void;
   onTogglePrivatePasswordConfirmation: () => void;
   onSubmit: () => void;
+  onBiometricUnlock?: () => void;
+  biometricUnlockEnabled?: boolean;
   onSelectLocal: () => void;
   onSelectCloud: () => void;
 }
@@ -266,11 +268,24 @@ export default function AuthEntryScreen({
   onTogglePrivatePassword,
   onTogglePrivatePasswordConfirmation,
   onSubmit,
+  onBiometricUnlock,
+  biometricUnlockEnabled,
   onSelectLocal,
   onSelectCloud,
 }: AuthEntryScreenProps) {
   const { width, height } = useWindowDimensions();
   const [noticeMode, setNoticeMode] = useState<'none' | 'local' | 'cloud'>('none');
+  const biometricTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock && !biometricTriggeredRef.current) {
+      biometricTriggeredRef.current = true;
+      const timer = setTimeout(() => {
+        onBiometricUnlock();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, biometricUnlockEnabled, onBiometricUnlock]);
 
   return (
     <View style={styles.safeArea}>
@@ -479,6 +494,26 @@ export default function AuthEntryScreen({
                 />
                 <ErrorSlot message={error} />
                 <PrimaryButton label="解锁并进入" busy={busy} onPress={onSubmit} />
+                {biometricUnlockEnabled && onBiometricUnlock ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="点击使用指纹解锁"
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onBiometricUnlock();
+                    }}
+                    style={({ pressed }) => [
+                      styles.fingerprintButton,
+                      pressed && styles.fingerprintButtonPressed,
+                    ]}
+                  >
+                    <View style={styles.fingerprintGlyph}>
+                      <View style={styles.fingerprintOuter} />
+                      <View style={styles.fingerprintInner} />
+                    </View>
+                    <Text style={styles.fingerprintText}>点击使用指纹解锁</Text>
+                  </Pressable>
+                ) : null}
                 <SecurityBadge text="钥匙仅保存在本机内存，所忆服务器无法解密您的回忆" />
               </>
             ) : (
@@ -488,7 +523,7 @@ export default function AuthEntryScreen({
                     <Text style={styles.statusPillText}>第二步 · 初始设置</Text>
                   </View>
                   <Text style={styles.title}>建立私密空间</Text>
-                  <Text style={styles.subtitle}>设置仅在本机解密使用的密码，此密码不可重置</Text>
+                  <Text style={styles.subtitle}>设置仅在本机解密使用的密码，至少 4 个字符且不可重置</Text>
                 </View>
                 <View style={styles.formGapSmall} />
                 <PasswordField
@@ -711,6 +746,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '500',
+  },
+  fingerprintButton: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 107, 62, 0.32)',
+    backgroundColor: 'rgba(255, 250, 242, 0.88)',
+    marginBottom: 10,
+  },
+  fingerprintButtonPressed: {
+    backgroundColor: 'rgba(245, 235, 222, 0.96)',
+    transform: [{ scale: 0.985 }],
+  },
+  fingerprintGlyph: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  fingerprintOuter: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#936437',
+    borderBottomColor: 'transparent',
+  },
+  fingerprintInner: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#936437',
+    borderTopColor: 'transparent',
+  },
+  fingerprintText: {
+    color: '#8b552b',
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
 
   /* 输入控件 */

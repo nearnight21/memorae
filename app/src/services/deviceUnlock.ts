@@ -31,6 +31,10 @@ export async function hasDeviceUnlock(): Promise<boolean> {
   return (await getDeviceUnlockRecord()) !== null;
 }
 
+export function canUseDeviceUnlock(): boolean {
+  return SecureStore.canUseBiometricAuthentication();
+}
+
 export async function enableDeviceUnlock(session: VaultSessionV1): Promise<void> {
   if (!SecureStore.canUseBiometricAuthentication()) {
     throw new Error('当前设备没有可用的指纹或安全生物识别。');

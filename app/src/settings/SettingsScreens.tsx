@@ -98,6 +98,9 @@ export function SettingsScreen({
   effectiveCamera,
   onEditMap,
   onRestoreMap,
+  deviceUnlockEnabled,
+  deviceUnlockAvailable,
+  onToggleDeviceUnlock,
   onBack,
 }: {
   profile?: 'local' | 'cloud' | null;
@@ -105,6 +108,9 @@ export function SettingsScreen({
   effectiveCamera: CameraState;
   onEditMap: () => void;
   onRestoreMap: () => void;
+  deviceUnlockEnabled: boolean;
+  deviceUnlockAvailable: boolean;
+  onToggleDeviceUnlock: () => void;
   onBack: () => void;
 }) {
   return (
@@ -127,6 +133,11 @@ export function SettingsScreen({
         </> : null}
       </View>
       <Text style={styles.footnote}>首次进入地图和时间轴下拉回到全景时使用此视图。</Text>
+      <Text style={styles.sectionLabel}>私密空间</Text>
+      <View style={styles.listSection}>
+        <Row label="指纹解锁" detail={deviceUnlockAvailable ? (deviceUnlockEnabled ? '已开启' : '关闭') : '当前设备不可用'} onPress={deviceUnlockAvailable ? onToggleDeviceUnlock : undefined} />
+      </View>
+      <Text style={styles.footnote}>指纹只保存在本机安全区域，私密空间密码仍是主恢复方式。</Text>
     </Page>
   );
 }

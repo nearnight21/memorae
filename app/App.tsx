@@ -8,6 +8,7 @@ import {
   Button,
   Linking,
   Pressable,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -37,6 +38,7 @@ import {
   disableDeviceUnlock,
   enableDeviceUnlock,
   hasDeviceUnlock,
+  canUseDeviceUnlock,
   unlockWithDevice,
 } from './src/services/deviceUnlock';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
@@ -439,8 +441,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
         setVault(storedVault);
         setDeviceUnlockEnabled(await hasDeviceUnlock());
         if (storedPreferences.profile === 'local') {
-          await disableDeviceUnlock();
-          setDeviceUnlockEnabled(false);
+          setDeviceUnlockEnabled(await hasDeviceUnlock());
           if (!storedPreferences.locationNetworkConsent) {
             await saveLocationNetworkConsent();
             setLocationNetworkConsent(true);
@@ -692,12 +693,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
       downloadedCount = downloadResult.count;
       remoteConflictIds = downloadResult.conflictIds;
       return refreshMemories(activeSession);
-    }) : Promise.resolve().catch((error) => {
+    }).catch((error) => {
       syncWarning = `远端记忆暂时未同步：${errorMessage(error)}`;
       logMemoryDiagnostics('remote-sync-error', { errorType: memoryDiagnosticErrorType(error) });
     }).finally(() => {
       readyResolve?.();
-    });
+    }) : Promise.resolve();
 
     await memoryReady;
     setStatus(`${message}${migratedCount > 0 ? ` 已将 ${migratedCount} 条旧记忆升级为 MemoryV2。` : ''}正在后台同步远端照片。诊断：${latestLocalDiagnostics}`);
@@ -749,8 +750,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   async function createPrivateSpace(): Promise<void> {
-    if (password.length < 8) {
-      throw new Error('私密空间密码至少需要 8 个字符。');
+    if (password.length < 4) {
+      throw new Error('私密空间密码至少需要 4 个字符。');
     }
     if (password !== passwordConfirmation) {
       throw new Error('两次输入的密码不一致。');
@@ -768,6 +769,18 @@ export default function App({ testBootstrap }: AppProps = {}) {
       created.session,
       `私密空间创建完成，用时 ${Math.round(performance.now() - startedAt)} ms。`,
     );
+    if (Platform.OS === 'android' && canUseDeviceUnlock() && !deviceUnlockEnabled) {
+      setTimeout(() => {
+        Alert.alert(
+          '开启指纹解锁',
+          '是否开启本机指纹快速解锁私密空间？钥匙仅保存在本机 Android Keystore。',
+          [
+            { text: '暂不开启', style: 'cancel' },
+            { text: '开启指纹', onPress: () => void runTask(async () => { await enableDeviceUnlock(created.session); setDeviceUnlockEnabled(true); setStatus('指纹解锁已启用。'); }) },
+          ],
+        );
+      }, 500);
+    }
   }
 
   async function unlockWithPassword(): Promise<void> {
@@ -797,6 +810,16 @@ export default function App({ testBootstrap }: AppProps = {}) {
     await enableDeviceUnlock(session);
     setDeviceUnlockEnabled(true);
     setStatus('设备钥匙已写入 Android Keystore；VMK 本身没有直接保存。');
+  }
+
+  async function toggleDeviceUnlock(): Promise<void> {
+    if (deviceUnlockEnabled) {
+      await disableDeviceUnlock();
+      setDeviceUnlockEnabled(false);
+      setStatus('指纹解锁已关闭。');
+      return;
+    }
+    await rememberThisDevice();
   }
 
   async function pickPendingPhotos(): Promise<PendingPhotoSelection | null> {
@@ -1788,15 +1811,19 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onTogglePrivatePassword={() => setShowPrivatePassword((value) => !value)}
           onTogglePrivatePasswordConfirmation={() => setShowPrivatePassword((value) => !value)}
           onSubmit={() => void runTask(submitAuthEntry)}
+          biometricUnlockEnabled={Platform.OS === 'android' && deviceUnlockEnabled}
+          onBiometricUnlock={() => void runTask(quickUnlock)}
           onSelectLocal={() => void runTask(async () => {
-            await disableDeviceUnlock();
             await saveAppProfile('local');
             await saveLocationNetworkConsent();
             setLocationNetworkConsent(true);
             configureStorageProfile('local');
             await initializeStorage();
             setProfile('local');
-            setMode((await getVaultEnvelope()) ? 'locked' : 'setup');
+            const storedVault = await getVaultEnvelope();
+            setVault(storedVault);
+            setDeviceUnlockEnabled(await hasDeviceUnlock());
+            setMode(storedVault ? 'locked' : 'setup');
             setStatus('本地模式已启用：数据只保存在本机。');
           })}
           onSelectCloud={() => void runTask(async () => {
@@ -1942,6 +1969,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
           effectiveCamera={activeDefaultMapCamera}
           onEditMap={beginDefaultMapEditor}
           onRestoreMap={() => void runTask(restoreDefaultMapView)}
+          deviceUnlockEnabled={deviceUnlockEnabled}
+          deviceUnlockAvailable={Platform.OS === 'android' && Boolean(session) && canUseDeviceUnlock()}
+          onToggleDeviceUnlock={() => void runTask(toggleDeviceUnlock)}
           onBack={() => setUtilityRoute(null)}
         />
       )}

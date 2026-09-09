@@ -66,3 +66,20 @@ test('AuthEntryScreen 登录页主按钮为登录，下方为无边框纯文字�
   assert.match(source, /完整模式说明/);
   assert.match(source, /端到端加密与多端密文同步/);
 });
+
+test('AuthEntryScreen 支持指纹解锁自动唤起与高质感指纹快捷入口', () => {
+  const source = readFileSync(new URL('../src/auth/AuthEntryScreen.tsx', import.meta.url), 'utf8');
+
+  // 指纹解锁属性支持
+  assert.match(source, /biometricUnlockEnabled/);
+  assert.match(source, /onBiometricUnlock/);
+
+  // 指纹自动唤起
+  assert.match(source, /biometricTriggeredRef/);
+  assert.match(source, /phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock/);
+
+  // 指纹解锁专属按钮与视觉
+  assert.match(source, /accessibilityLabel="点击使用指纹解锁"/);
+  assert.match(source, /styles\.fingerprintButton/);
+  assert.match(source, /点击使用指纹解锁/);
+});
