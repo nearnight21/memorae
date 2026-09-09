@@ -138,7 +138,8 @@ export default function LocationPicker({
           setSelectedLocation(locationFallback(next));
           setError('暂时无法获取地点名称');
         }
-      } catch {
+      } catch (err) {
+        console.warn('[location-reverse-error]', err);
         if (id !== requestId.current) return;
         setResolving(false);
         setReverseResult(null);
@@ -153,6 +154,8 @@ export default function LocationPicker({
     setQuery('');
     setSuggestions([]);
     const target = { latitude: candidate.lat, longitude: candidate.lng, zoom: CENTER_ZOOM };
+    // 保留搜索结果中的 POI 名称；随后坐标反查可能只返回直辖市级别的行政名称。
+    setSelectedLocation(normalizeLocationResult(candidate, selectedLocation));
     setCamera(target);
     resolveCenter(target);
   }
@@ -190,7 +193,7 @@ export default function LocationPicker({
   }
 
   const region = reverseResult ? locationRegionLabel(reverseResult) : selectedLocation
-    ? [selectedLocation.province, selectedLocation.city, selectedLocation.district].filter(Boolean).join(' · ') || selectedLocation.name
+    ? [selectedLocation.province, selectedLocation.city, selectedLocation.district].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ') || selectedLocation.name
     : resolving ? '正在获取地点…' : error || (center ? '地图选点' : '移动地图选择地点');
   const place = reverseResult ? locationPlaceLabel(reverseResult) : selectedLocation?.name ?? '';
 
@@ -259,7 +262,7 @@ export default function LocationPicker({
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
+  root: { ...StyleSheet.absoluteFill, zIndex: 10, backgroundColor: 'transparent' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.24)' },
   centerMarkerWrap: { position: 'absolute', width: 28, height: 44, left: '50%', top: '50%', marginLeft: -14, marginTop: -22, zIndex: 5 },
   centerMarker: { width: 28, height: 44 },

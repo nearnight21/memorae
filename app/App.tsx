@@ -1125,6 +1125,17 @@ export default function App({ testBootstrap }: AppProps = {}) {
   function openEditLocation(): void {
     locationPickerOriginCamera.current = homeViewport.camera;
     setHomeCameraTarget(null);
+    const initialLocation = editDraft?.location;
+    if (initialLocation && typeof initialLocation.lat === 'number' && typeof initialLocation.lng === 'number') {
+      const target = {
+        latitude: initialLocation.lat,
+        longitude: initialLocation.lng,
+        zoom: Math.max(homeViewport.camera.zoom, 14),
+      };
+      setLocationCameraTarget(target);
+    } else {
+      setLocationCameraTarget(null);
+    }
     setLocationPickerVisible(true);
   }
 
@@ -1438,6 +1449,17 @@ export default function App({ testBootstrap }: AppProps = {}) {
   function handleHomeCameraIdle(event: MapCameraIdleEvent): void {
     setHomeViewport(event);
     setHomeCameraTarget(null);
+    setLocationCameraTarget(null);
+  }
+
+  function handleMapPointPress(coordinate: { latitude: number; longitude: number }): void {
+    if (!locationPickerVisible) return;
+    const target = {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      zoom: Math.max(homeViewport.camera.zoom, 14),
+    };
+    setLocationCameraTarget(target);
   }
 
   function selectHomeRegion(region: HomeRegionOption): void {
@@ -1813,6 +1835,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
             : `已展开 ${count} 段记忆：${coordinate.latitude.toFixed(3)}, ${coordinate.longitude.toFixed(3)}。`,
         )}
         onCameraIdle={handleHomeCameraIdle}
+        onMapPress={locationPickerVisible ? handleMapPointPress : undefined}
         onCreateMemory={() => void runTask(beginCreateMemory)}
         onResetMapView={resetHomeMapView}
         onOpenMore={() => setAppMenuVisible(true)}

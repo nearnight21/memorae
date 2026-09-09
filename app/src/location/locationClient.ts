@@ -72,7 +72,7 @@ export function locationRegionLabel(location: Partial<LocationResult> | null): s
   const value = location as Partial<LocationSuggestion & LocationReverseResult>;
   const parts = [location.province, location.city, location.district].filter(
     (value): value is string => typeof value === 'string' && value.trim().length > 0,
-  );
+  ).filter((value, index, values) => values.indexOf(value) === index);
   return parts.join(' · ') || value.placeName || value.shortName || '已选择地点';
 }
 

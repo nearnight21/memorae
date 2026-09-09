@@ -37,7 +37,7 @@ interface Props extends MemoryEditValues {
 
 function locationLabel(location: MemoryLocationV2 | null): string {
   if (!location) return '选择地点';
-  return [location.city, location.district, location.name].filter(Boolean).join(' · ');
+  return [location.city, location.district, location.name].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ');
 }
 
 function PhotoSheet({ uri, style }: { uri: string | null; style?: object }) {

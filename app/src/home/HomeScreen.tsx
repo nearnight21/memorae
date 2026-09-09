@@ -24,6 +24,7 @@ import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
 import { CREATE_OVERLAY_MAX_OPACITY, RESET_OVERLAY_MAX_OPACITY } from './timeline/timelineModel';
 
 const TIMELINE_VERTICAL_OFFSET = 50;
+const EMPTY_MARKERS: readonly MemoryMapMarker[] = [];
 
 interface Props {
   markers: readonly MemoryMapMarker[];
@@ -38,6 +39,7 @@ interface Props {
   onMarkerPress?: (event: MapMarkerPressEvent) => void;
   onClusterPress?: (event: MapClusterPressEvent) => void;
   onCameraIdle?: (event: MapCameraIdleEvent) => void;
+  onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
   initialCamera?: CameraState;
   camera?: CameraState | null;
   mapUpdatesPaused?: boolean;
@@ -62,6 +64,7 @@ export default function HomeScreen({
   onMarkerPress,
   onClusterPress,
   onCameraIdle,
+  onMapPress,
   initialCamera,
   camera,
   mapUpdatesPaused = false,
@@ -123,10 +126,11 @@ export default function HomeScreen({
     <View style={styles.root}>
       <View style={styles.map}>
         <MemoraeMap
-          markers={markers}
+          markers={locationMode ? EMPTY_MARKERS : markers}
           onMarkerPress={onMarkerPress}
           onClusterPress={onClusterPress}
           onCameraIdle={onCameraIdle}
+          onMapPress={onMapPress}
           initialCamera={initialCamera}
           camera={camera}
           updatesPaused={mapUpdatesPaused}

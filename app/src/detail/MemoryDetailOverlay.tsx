@@ -39,7 +39,7 @@ function formatDate(date: string): string {
 function locationLabel(memory: MemoryV2): string {
   const location = memory.location;
   if (!location) return '未设置地点';
-  return [location.city, location.district, location.name].filter(Boolean).join(' · ');
+  return [location.city, location.district, location.name].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ');
 }
 
 export default function MemoryDetailOverlay({
