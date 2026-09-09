@@ -64,7 +64,6 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
     const dates = memories.map(memoryDateValue);
     const min = dates.length ? new Date(Math.min(...dates.map((date) => date.getTime()))) : new Date(Date.UTC(2021, 0, 1));
     const max = dates.length ? new Date(Math.max(...dates.map((date) => date.getTime()))) : new Date(Date.UTC(2025, 11, 31));
-    if (max.getTime() <= min.getTime()) max.setUTCDate(max.getUTCDate() + 1);
     return { min, max };
   }, [memories]);
 
@@ -75,11 +74,14 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
     return Number.isFinite(timestamp) ? new Date(timestamp) : bounds.max;
   }, [bounds.max, filters.dateRange?.end]);
 
-  const totalDays = Math.max(1, (bounds.max.getTime() - bounds.min.getTime()) / DAY_MS);
-  const committedProgress = clamp((committedDate.getTime() - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+  const timelineSpan = Math.max(1, bounds.max.getTime() - bounds.min.getTime());
+  const totalDays = Math.max(1, timelineSpan / DAY_MS);
+  const committedProgress = bounds.max.getTime() === bounds.min.getTime()
+    ? 1
+    : clamp((committedDate.getTime() - bounds.min.getTime()) / timelineSpan);
   const progress = dragProgress ?? committedProgress;
   const currentDate = useMemo(
-    () => new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * progress) / DAY_MS) * DAY_MS),
+    () => new Date(Math.round((bounds.min.getTime() + timelineSpan * progress) / DAY_MS) * DAY_MS),
     [bounds.max, bounds.min, progress],
   );
   const timelineTicks = useMemo(() => {
@@ -93,7 +95,7 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
   const currentYear = hasDateSelection ? currentDate.getUTCFullYear() : null;
 
   const commitProgress = (nextProgress: number) => {
-    const nextDate = new Date(Math.round((bounds.min.getTime() + (bounds.max.getTime() - bounds.min.getTime()) * clamp(nextProgress)) / DAY_MS) * DAY_MS);
+    const nextDate = new Date(Math.round((bounds.min.getTime() + timelineSpan * clamp(nextProgress)) / DAY_MS) * DAY_MS);
     if (nextProgress >= 0.9995) {
       onFiltersChange({ ...filters, dateRange: null });
       return;
@@ -261,11 +263,15 @@ export default function CrystalTimeline({ memories, filters, onFiltersChange, on
           </button>
           <div className="crystal-formal-years" aria-hidden="true">
             {timelineTicks.minorYears.map((year) => {
-              const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+              const yearProgress = bounds.max.getTime() === bounds.min.getTime()
+                ? 1
+                : clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / timelineSpan);
               return <span key={`minor-${year}`} className="crystal-formal-minor-tick" style={{ left: positionFor(yearProgress) }} />;
             })}
             {timelineTicks.majorYears.map((year) => {
-              const yearProgress = clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / (bounds.max.getTime() - bounds.min.getTime()));
+              const yearProgress = bounds.max.getTime() === bounds.min.getTime()
+                ? 1
+                : clamp((Date.UTC(year, 0, 1) - bounds.min.getTime()) / timelineSpan);
               const className = [
                 year === currentYear ? 'is-current-major' : '',
                 year === bounds.max.getUTCFullYear() ? 'is-end-major' : '',

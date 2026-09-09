@@ -265,6 +265,7 @@ export default function MapView({
   };
   const [baseMapReady, setBaseMapReady] = useState(false);
   const [selectedAnchor, setSelectedAnchor] = useState<{ x: number; y: number } | null>(null);
+  const selectedDisplayCoordsRef = useRef<L.LatLng | null>(null);
   const [mapViewport, setMapViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   const [focusedRegion, setFocusedRegion] = useState<RegionFocus | null>(null);
@@ -673,6 +674,7 @@ export default function MapView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedMemory) {
+      selectedDisplayCoordsRef.current = null;
       setSelectedAnchor(null);
       return;
     }
@@ -689,7 +691,9 @@ export default function MapView({
     };
 
     const prepareAnchor = async () => {
-      if (Number.isFinite(selectedMemory.lat) && Number.isFinite(selectedMemory.lng)) {
+      if (selectedDisplayCoordsRef.current) {
+        selectedLatLng = selectedDisplayCoordsRef.current;
+      } else if (Number.isFinite(selectedMemory.lat) && Number.isFinite(selectedMemory.lng)) {
         selectedLatLng = L.latLng(selectedMemory.lat as number, selectedMemory.lng as number);
       } else {
         const fallback = await resolvePlace(countryOf(selectedMemory), cityOf(selectedMemory));
@@ -728,6 +732,17 @@ export default function MapView({
         nextReturnMarkers.push({ marker, memoryIds: list.map((memory) => memory.id) });
         return marker;
       };
+      const resolveCountryMarkerCoords = async (country: string, list: Memory[]): Promise<L.LatLngExpression | null> => {
+        if (list.length === 1) {
+          const memory = list[0];
+          return averageMemoryCoordinates(list)
+            || await resolvePlace(countryOf(memory), cityOf(memory))
+            || await resolvePlace(country);
+        }
+        return isChinaCountry(country)
+          ? await resolvePlace(country)
+          : averageMemoryCoordinates(list) || await resolvePlace(country);
+      };
       const handleCountryClick = async (coords: L.LatLngExpression, list: Memory[]) => {
         // The viewport idle handler owns currentRegion. Marker clicks only
         // move the map, so manual drill-down and hand panning share one path.
@@ -736,18 +751,12 @@ export default function MapView({
           return;
         }
 
-        // A unique country result must actually reach its city/point view,
-        // not just the country threshold where overseas bubbles remain grouped.
+        // A unique country result reaches its concrete point, but leaves the
+        // memory closed so the user can inspect the location before opening it.
         const memory = list[0];
         const memoryCoords = averageMemoryCoordinates(list)
           || await resolvePlace(countryOf(memory), cityOf(memory))
           || coords;
-        map.once('moveend', () => {
-          const country = countryOf(memory);
-          const city = cityOf(memory);
-          if (country && city) setFocusedRegion({ name: city, scope: 'city', country });
-          onSelectMemory(memory);
-        });
         map.flyTo(memoryCoords, POINT_ZOOM, { duration: 0.8 });
       };
 
@@ -755,7 +764,7 @@ export default function MapView({
         const foreignCountries = groupBy(filtered.filter((memory) => !isChinaCountry(countryOf(memory))), countryOf);
         const resolvedCountries = await mapWithConcurrency(
           Object.entries(foreignCountries),
-          async ([country, list]) => ({ country, list, coords: averageMemoryCoordinates(list) || await resolvePlace(country) }),
+          async ([country, list]) => ({ country, list, coords: await resolveCountryMarkerCoords(country, list) }),
         );
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
@@ -774,9 +783,7 @@ export default function MapView({
           async ([country, list]) => ({
             country,
             list,
-            coords: isChinaCountry(country)
-              ? await resolvePlace(country)
-              : averageMemoryCoordinates(list) || await resolvePlace(country),
+            coords: await resolveCountryMarkerCoords(country, list),
           }),
         );
         for (const { country, list, coords } of resolvedCountries) {
@@ -895,8 +902,9 @@ export default function MapView({
         for (const [key, list] of byCoord) {
           const [lat, lng] = key.split(',').map(Number);
           if (list.length === 1) {
-            memoryMarker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) }, list)
-              .on('click', () => {
+            const marker = memoryMarker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) }, list);
+            marker.on('click', () => {
+                selectedDisplayCoordsRef.current = marker.getLatLng();
                 setIsResultListOpen(false);
                 onSelectMemory(list[0]);
               })
@@ -912,8 +920,9 @@ export default function MapView({
             const a = startAngle + i * angleStep;
             const dLat = Math.cos(a) * spreadDeg;
             const dLng = (Math.sin(a) * spreadDeg) / lngScale;
-            memoryMarker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) }, [m])
-              .on('click', () => {
+            const marker = memoryMarker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) }, [m]);
+            marker.on('click', () => {
+                selectedDisplayCoordsRef.current = marker.getLatLng();
                 setIsResultListOpen(false);
                 onSelectMemory(m);
               })
