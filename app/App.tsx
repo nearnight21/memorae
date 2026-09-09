@@ -334,7 +334,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   );
   const mobileLocationClient = useMemo(
     () => profile === 'local'
-      ? new LocalAmapLocationClient()
+      ? new LocalAmapLocationClient(AUTH_API_URL)
       : accountSession
         ? new MobileLocationClient(new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }))
         : undefined,
@@ -426,8 +426,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
           return;
         }
         if (!storedPreferences.profile) {
-          setMode('select');
-          setStatus('请选择本地使用或云端账号。');
+          setMode('account');
+          setStatus('等待账号登录。');
           return;
         }
         const [storedVault, storedAccount, storedUploadPlan] = await Promise.all([
@@ -441,6 +441,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
         if (storedPreferences.profile === 'local') {
           await disableDeviceUnlock();
           setDeviceUnlockEnabled(false);
+          if (!storedPreferences.locationNetworkConsent) {
+            await saveLocationNetworkConsent();
+            setLocationNetworkConsent(true);
+          }
           setMode(storedVault ? 'locked' : 'setup');
           setStatus(storedVault ? '本地私密空间已就绪，等待解锁。' : '请建立本地私密空间。');
           return;
@@ -526,6 +530,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
     });
     const remoteVault = await readRemoteVault(login);
     await saveStoredAccountSession(login);
+    await saveAppProfile('cloud');
+    configureStorageProfile('cloud');
+    setProfile('cloud');
     setAccountSession(login);
     setAccountLoginPassword('');
     setAuthError('');
@@ -666,6 +673,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setMode('unlocked');
     setPassword('');
     const migratedCount = await refreshMemories(activeSession);
+    if (profile === 'local') {
+      setStatus(`${message}${migratedCount > 0 ? ` 已将 ${migratedCount} 条旧记忆升级为 MemoryV2。` : ''} 本地模式已就绪。`);
+      return;
+    }
     let downloadedCount = 0;
     let remoteConflictIds: string[] = [];
     const remoteDiagnosticsRef = { current: null as CipherSyncDiagnostics | null };
@@ -1758,6 +1769,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onSelectLocal={() => void runTask(async () => {
             await disableDeviceUnlock();
             await saveAppProfile('local');
+            await saveLocationNetworkConsent();
+            setLocationNetworkConsent(true);
             configureStorageProfile('local');
             await initializeStorage();
             setProfile('local');
@@ -1810,7 +1823,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
         locationMode={locationPickerVisible}
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
-            mapAlreadyMounted={false}
+            mapAlreadyMounted
             active={locationPickerVisible}
             initialLocation={editDraft?.location ?? null}
             initialCamera={homeViewport.camera}

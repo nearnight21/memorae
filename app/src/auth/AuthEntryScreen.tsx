@@ -270,6 +270,7 @@ export default function AuthEntryScreen({
   onSelectCloud,
 }: AuthEntryScreenProps) {
   const { width, height } = useWindowDimensions();
+  const [noticeMode, setNoticeMode] = useState<'none' | 'local' | 'cloud'>('none');
 
   return (
     <View style={styles.safeArea}>
@@ -310,41 +311,154 @@ export default function AuthEntryScreen({
                 <Text style={styles.loading}>正在校验加密记忆空间状态……</Text>
               </View>
             ) : phase === 'select' ? (
-              <>
-                <View style={styles.formHeader}>
-                  <Text style={styles.title}>选择使用方式</Text>
-                  <Text style={styles.subtitle}>本地模式不上传私人数据；地点搜索与反向地点需要联网。</Text>
-                </View>
-                <View style={styles.privacyNotice}>
-                  <Text style={styles.privacyTitle}>本地模式</Text>
-                  <Text style={styles.privacyBody}>记忆、照片、标题和地点内容只保存在这台设备，不登录、不同步。</Text>
-                  <Text style={styles.privacyBody}>地图搜索、反向地点和照片地点识别会联网并产生服务费用，内测/公测期间由 Memorae 承担。</Text>
-                </View>
-                <PrimaryButton label="本地使用" busy={busy} onPress={onSelectLocal} />
-                <Pressable accessibilityRole="button" onPress={onSelectCloud} style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>登录云端账号</Text>
-                </Pressable>
-              </>
+              noticeMode === 'local' ? (
+                <>
+                  <View style={styles.formHeader}>
+                    <Text style={styles.title}>本地模式说明</Text>
+                    <Text style={styles.subtitle}>无须账号，数据仅保存在当前设备</Text>
+                  </View>
+                  <View style={styles.privacyNotice}>
+                    <Text style={styles.privacyTitle}>离线与隐私保护</Text>
+                    <Text style={styles.privacyBody}>记忆、照片、标题和地点内容只保存在这台设备，不登录、不同步。</Text>
+                    <Text style={styles.privacyBody}>地图搜索、反向地点和照片地点识别会联网并产生服务费用，内测/公测期间由 Memorae 承担。</Text>
+                  </View>
+                  <PrimaryButton label="进入本地模式" busy={busy} onPress={onSelectLocal} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="返回登录"
+                    hitSlop={12}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('none');
+                    }}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>返回登录</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.formHeader}>
+                    <Text style={styles.title}>账号登录</Text>
+                    <Text style={styles.subtitle}>登录所忆账号以获取云端密文记忆</Text>
+                  </View>
+                  <View style={styles.formGap} />
+                  <PrimaryButton label="登录" busy={busy} onPress={onSelectCloud} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="本地模式"
+                    hitSlop={12}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('local');
+                    }}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>本地模式</Text>
+                  </Pressable>
+                </>
+              )
             ) : phase === 'account' ? (
-              <>
-                <View style={styles.formHeader}>
-                  <Text style={styles.title}>账号登录</Text>
-                  <Text style={styles.subtitle}>登录所忆账号以获取云端密文记忆</Text>
-                </View>
-                <View style={styles.formGap} />
-                <AccountInputField value={accountValue} onChangeText={onAccountChange} />
-                <PasswordField
-                  placeholder="账号密码"
-                  value={accountPassword}
-                  visible={showAccountPassword}
-                  onChangeText={onAccountPasswordChange}
-                  onToggle={onToggleAccountPassword}
-                  onSubmitEditing={onSubmit}
-                />
-                <ErrorSlot message={error} />
-                <PrimaryButton label="登录所忆" busy={busy} onPress={onSubmit} />
-                <SecurityBadge text="仅限受邀用户 · 登录密码用于账号验证与密文同步" />
-              </>
+              noticeMode === 'local' ? (
+                <>
+                  <View style={styles.formHeader}>
+                    <Text style={styles.title}>本地模式说明</Text>
+                    <Text style={styles.subtitle}>无须账号，数据仅保存在当前设备</Text>
+                  </View>
+                  <View style={styles.privacyNotice}>
+                    <Text style={styles.privacyTitle}>离线与隐私保护</Text>
+                    <Text style={styles.privacyBody}>记忆、照片、标题和地点内容只保存在这台设备，不登录、不同步。</Text>
+                    <Text style={styles.privacyBody}>地图搜索、反向地点和照片地点识别会联网并产生服务费用，内测/公测期间由 Memorae 承担。</Text>
+                  </View>
+                  <PrimaryButton label="进入本地模式" busy={busy} onPress={onSelectLocal} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="返回登录"
+                    hitSlop={12}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('none');
+                    }}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>返回登录</Text>
+                  </Pressable>
+                </>
+              ) : noticeMode === 'cloud' ? (
+                <>
+                  <View style={styles.formHeader}>
+                    <Text style={styles.title}>完整模式说明</Text>
+                    <Text style={styles.subtitle}>端到端加密与多端密文同步</Text>
+                  </View>
+                  <View style={styles.privacyNotice}>
+                    <Text style={styles.privacyTitle}>云端密文同步</Text>
+                    <Text style={styles.privacyBody}>支持受邀账号登录，记忆与照片在多设备间自动同步并提供云端密文备份。</Text>
+                    <Text style={styles.privacyBody}>零知识端到端加密体系：私密密钥仅保存在本机内存，服务器无法解密您的照片与文字回忆。</Text>
+                  </View>
+                  <PrimaryButton
+                    label="继续登录"
+                    busy={busy}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('none');
+                    }}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="返回登录"
+                    hitSlop={12}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('none');
+                    }}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>返回登录</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.formHeader}>
+                    <Text style={styles.title}>账号登录</Text>
+                    <Text style={styles.subtitle}>登录所忆账号以获取云端密文记忆</Text>
+                  </View>
+                  <View style={styles.formGap} />
+                  <AccountInputField value={accountValue} onChangeText={onAccountChange} />
+                  <PasswordField
+                    placeholder="账号密码"
+                    value={accountPassword}
+                    visible={showAccountPassword}
+                    onChangeText={onAccountPasswordChange}
+                    onToggle={onToggleAccountPassword}
+                    onSubmitEditing={onSubmit}
+                  />
+                  <ErrorSlot message={error} />
+                  <PrimaryButton label="登录" busy={busy} onPress={onSubmit} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="本地模式"
+                    hitSlop={12}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('local');
+                    }}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>本地模式</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="完整模式说明"
+                    hitSlop={8}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setNoticeMode('cloud');
+                    }}
+                  >
+                    <SecurityBadge text="仅限受邀用户 · 登录密码用于账号验证与密文同步" />
+                  </Pressable>
+                </>
+              )
             ) : phase === 'locked' ? (
               <>
                 <View style={styles.formHeader}>
@@ -585,6 +699,19 @@ const styles = StyleSheet.create({
   privacyBody: { marginTop: 8, color: '#75695c', fontSize: 12, lineHeight: 19 },
   secondaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: '#754f31', fontSize: 14, fontWeight: '600' },
+  textLinkButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  textLinkButtonText: {
+    color: '#8c7d6b',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
 
   /* 输入控件 */
   field: {

@@ -98,15 +98,23 @@ export class MobileLocationClient implements LocationClient {
   }
 }
 
-export class LocalAmapLocationClient {
-  private readonly baseUrl = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
+export class LocalAmapLocationClient implements LocationClient {
+  private readonly baseUrl: string;
+
+  constructor(baseUrl?: string) {
+    this.baseUrl = baseUrl?.trim() || process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
+  }
 
   private async request<T>(url: string, init?: RequestInit): Promise<T | null> {
     try {
       const response = await fetch(`${this.baseUrl}${url}`, init);
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.warn('[location-client-error]', `HTTP ${response.status} from ${url}`);
+        return null;
+      }
       return await response.json() as T;
-    } catch {
+    } catch (error) {
+      console.warn('[location-client-fetch-error]', error);
       return null;
     }
   }

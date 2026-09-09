@@ -205,7 +205,9 @@ export default function LocationPicker({
         showStatus={false}
       />}
       <View pointerEvents="none" style={styles.mapDim} />
-      <Image source={require('../../assets/location/fixed-center-marker.png')} style={styles.centerMarker} resizeMode="contain" />
+      <View pointerEvents="none" style={styles.centerMarkerWrap}>
+        <Image source={require('../../assets/location/fixed-center-marker.png')} style={styles.centerMarker} resizeMode="contain" />
+      </View>
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="取消地点选择" onPress={onCancel} style={styles.cancelButton}>
@@ -259,7 +261,8 @@ export default function LocationPicker({
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.24)' },
-  centerMarker: { position: 'absolute', width: 28, height: 44, left: '50%', top: '50%', marginLeft: -14, marginTop: -22, zIndex: 5 },
+  centerMarkerWrap: { position: 'absolute', width: 28, height: 44, left: '50%', top: '50%', marginLeft: -14, marginTop: -22, zIndex: 5 },
+  centerMarker: { width: 28, height: 44 },
   overlay: { flex: 1, paddingTop: androidTopInset(), justifyContent: 'space-between', zIndex: 6 },
   topRow: { paddingTop: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
   cancelButton: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
