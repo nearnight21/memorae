@@ -46,7 +46,7 @@ Debug APK、正式 App 真机 Home/Create/Edit/Delete/LocationPicker、筛选、
 
 | 范围 | 状态 | 当前真实状态 | 主要证据 |
 | --- | --- | --- | --- |
-| 生产 Web | `已实现` | `https://memorae.cn/` 默认提供官方 Landing Page（包含产品理念、高保真视窗动效与 Android 下载）；`https://memorae.cn/#app` 提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认页面正常渲染，`/health` 返回 `200 {"ok":true}`。 | `web/src/main.tsx`；`web/src/landing/landingRouting.ts`；`web/src/product/ProductGate.tsx` |
+| 生产 Web | `已实现` | `https://memorae.cn/` 已提供账号登录、私密空间解锁、真实记忆足迹地图、筛选、时间轴、详情、创建、编辑、删除和按需照片读取。本次只读观察确认正式页面可打开、解锁后由 Leaflet 渲染，`/health` 返回 `200 {"ok":true}`。 | `projects/memorae/web/src/main.tsx:4-25`；`projects/memorae/web/src/product/ProductGate.tsx:90-213`；`archive/deployment-pilot-2026-08-22:DEVELOPMENT.md:63-68` |
 | Mobile App | `部分实现` | Expo/RN 加密、SQLite、照片分级、设备解锁和手动同步链路可运行；正式 Home、Detail、Create/Edit/Delete、LocationPicker 与 Native AMap 已完成真实数据和真机验收，完整产品导航仍按独立路线维护。 | `DEVELOPMENT.md`；`app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` |
 | Mobile 地图 | `已实现` | Android 正式 App 默认使用 WebView + 高德 JS API 2.0 及自定义样式 ID；Native AMap 为显式配置路径。 | `DEVELOPMENT.md`；`app/src/map/mapRendererSelection.ts`；`app/src/map/amapRuntimeHtml.ts` |
 | API | `已实现` | Fastify 提供账号会话、钥匙信封、记忆密文、照片授权/直传、地点搜索/反查/转换；生产 API 与 Web 同源。 | `projects/memorae/server/src/app.ts:189-311,313-408`；`archive/deployment-pilot-2026-08-22:memory-recall-server/docs/DEPLOYMENT-RUNBOOK.md:59-71` |
