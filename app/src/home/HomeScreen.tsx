@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import MemoraeMap, {
   type CameraState,
@@ -24,6 +26,10 @@ import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
 import { CREATE_OVERLAY_MAX_OPACITY, RESET_OVERLAY_MAX_OPACITY } from './timeline/timelineModel';
 
 const TIMELINE_VERTICAL_OFFSET = 50;
+const CHROME_ENTER_DURATION = 340;
+const CHROME_EXIT_DURATION = 180;
+const CHROME_BOTTOM_DRIFT_Y = 28;
+const CHROME_TOP_DRIFT_Y = -10;
 const EMPTY_MARKERS: readonly MemoryMapMarker[] = [];
 
 interface Props {
@@ -79,6 +85,7 @@ export default function HomeScreen({
   const [regionMenuOpen, setRegionMenuOpen] = useState(false);
   const createPullProgress = useSharedValue(0);
   const resetPullProgress = useSharedValue(0);
+  const chromeProgress = useSharedValue(chromeVisible ? 1 : 0);
   const homeStatus = status?.includes('诊断：') ? undefined : status;
   const years = useMemo(() => Array.from(new Set(
     memories.map((memory) => memory.date.slice(0, 4)).filter((year) => /^\d{4}$/.test(year)),
@@ -91,6 +98,53 @@ export default function HomeScreen({
       resetPullProgress.value = 0;
     }
   }, [chromeVisible, createPullProgress, locationMode, resetPullProgress]);
+
+  useEffect(() => {
+    if (chromeVisible) {
+      chromeProgress.value = withTiming(1, {
+        duration: CHROME_ENTER_DURATION,
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      });
+    } else {
+      chromeProgress.value = withTiming(0, {
+        duration: CHROME_EXIT_DURATION,
+        easing: Easing.out(Easing.quad),
+      });
+    }
+  }, [chromeProgress, chromeVisible]);
+
+  const quietZoneAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: chromeProgress.value,
+  }), [chromeProgress]);
+
+  const topRowAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: chromeProgress.value,
+    transform: [{
+      translateY: interpolate(
+        chromeProgress.value,
+        [0, 1],
+        [CHROME_TOP_DRIFT_Y, 0],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }), [chromeProgress]);
+
+  const bottomAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      chromeProgress.value,
+      [0, 0.25, 1],
+      [0, 0.45, 1],
+      Extrapolation.CLAMP,
+    ),
+    transform: [{
+      translateY: interpolate(
+        chromeProgress.value,
+        [0, 1],
+        [CHROME_BOTTOM_DRIFT_Y, 0],
+        Extrapolation.CLAMP,
+      ),
+    }],
+  }), [chromeProgress]);
 
   const createShadeStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -137,95 +191,105 @@ export default function HomeScreen({
           showStatus={false}
         />
       </View>
-      {!locationMode && chromeVisible && <TimelineQuietZone />}
-      {!locationMode && chromeVisible && <View pointerEvents="box-none" style={styles.overlay}>
-        <View pointerEvents="box-none" style={styles.topRow}>
-          <View style={styles.regionArea}>
-            <RegionControl
-              label={regionLabel}
-              expanded={regionMenuOpen}
-              onPress={() => setRegionMenuOpen((open) => !open)}
-            />
-            {regionMenuOpen && (
-              <View accessibilityRole="menu" style={styles.regionMenu}>
-                <ScrollView bounces={false} contentContainerStyle={styles.regionMenuContent}>
-                  {regionOptions.map((region) => (
-                    <Pressable
-                      key={region.key}
-                      accessibilityRole="menuitem"
-                      accessibilityLabel={`${region.label}，${region.memoryCount} 段记忆`}
-                      onPress={() => selectRegion(region)}
-                      style={({ pressed }) => [styles.regionOption, pressed && styles.regionOptionPressed]}
-                    >
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.regionOptionLabel,
-                          region.scope === 'province' && styles.regionProvince,
-                          region.scope === 'city' && styles.regionCity,
-                        ]}
-                      >
-                        {region.label}
-                      </Text>
-                      <Text style={styles.regionOptionCount}>{region.memoryCount} 段</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="打开更多菜单"
-            onPress={() => {
-              setRegionMenuOpen(false);
-              onOpenMore?.();
-            }}
-            style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}
-          >
-            <View pointerEvents="none" style={styles.moreGlyph}>
-              <View style={styles.moreDot} />
-              <View style={styles.moreDot} />
-              <View style={styles.moreDot} />
-            </View>
-          </Pressable>
-        </View>
-        {(loading || homeStatus || (memories.length === 0 && !loading)) && (
-          <View pointerEvents="none" style={styles.messageSlot}>
-            {loading && <ActivityIndicator size="small" color="#b5814b" />}
-            <Text style={styles.message}>
-              {loading ? '正在整理加密记忆…' : homeStatus ?? (memories.length === 0 ? '还没有带地点的记忆' : '')}
-            </Text>
-          </View>
-        )}
-        <View pointerEvents="none" style={styles.createOverlay}>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.createShade, createShadeStyle]} />
-          <Animated.Text style={[styles.createTargetLabel, createLabelStyle]}>新建记忆</Animated.Text>
-        </View>
-        <View pointerEvents="none" style={styles.resetOverlay}>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.resetShade, resetShadeStyle]} />
-          <Animated.Text style={[styles.resetTargetLabel, resetLabelStyle]}>回到全景</Animated.Text>
-        </View>
+      {!locationMode && (
+        <Animated.View pointerEvents="none" style={quietZoneAnimatedStyle}>
+          <TimelineQuietZone />
+        </Animated.View>
+      )}
+      {!locationMode && (
         <View
-          pointerEvents="box-none"
-          style={[
-            styles.bottomArea,
-            { paddingBottom: Math.max(ARC_HOME_BOTTOM_PADDING, insets.bottom + 16) },
-          ]}
+          pointerEvents={chromeVisible ? 'box-none' : 'none'}
+          style={styles.overlay}
         >
-          <View style={styles.timelineWrap}>
-            <MobileTimeline
-              years={years}
-              selectedYear={selectedYear}
-              onSelect={onYearChange}
-              onCreateMemory={onCreateMemory}
-              createPullProgress={createPullProgress}
-              onResetMapView={onResetMapView}
-              resetPullProgress={resetPullProgress}
-            />
+          <Animated.View pointerEvents="box-none" style={[styles.topRow, topRowAnimatedStyle]}>
+            <View style={styles.regionArea}>
+              <RegionControl
+                label={regionLabel}
+                expanded={regionMenuOpen}
+                onPress={() => setRegionMenuOpen((open) => !open)}
+              />
+              {regionMenuOpen && (
+                <View accessibilityRole="menu" style={styles.regionMenu}>
+                  <ScrollView bounces={false} contentContainerStyle={styles.regionMenuContent}>
+                    {regionOptions.map((region) => (
+                      <Pressable
+                        key={region.key}
+                        accessibilityRole="menuitem"
+                        accessibilityLabel={`${region.label}，${region.memoryCount} 段记忆`}
+                        onPress={() => selectRegion(region)}
+                        style={({ pressed }) => [styles.regionOption, pressed && styles.regionOptionPressed]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.regionOptionLabel,
+                            region.scope === 'province' && styles.regionProvince,
+                            region.scope === 'city' && styles.regionCity,
+                          ]}
+                        >
+                          {region.label}
+                        </Text>
+                        <Text style={styles.regionOptionCount}>{region.memoryCount} 段</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="打开更多菜单"
+              onPress={() => {
+                setRegionMenuOpen(false);
+                onOpenMore?.();
+              }}
+              style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}
+            >
+              <View pointerEvents="none" style={styles.moreGlyph}>
+                <View style={styles.moreDot} />
+                <View style={styles.moreDot} />
+                <View style={styles.moreDot} />
+              </View>
+            </Pressable>
+          </Animated.View>
+          {(loading || homeStatus || (memories.length === 0 && !loading)) && (
+            <View pointerEvents="none" style={styles.messageSlot}>
+              {loading && <ActivityIndicator size="small" color="#b5814b" />}
+              <Text style={styles.message}>
+                {loading ? '正在整理加密记忆…' : homeStatus ?? (memories.length === 0 ? '还没有带地点的记忆' : '')}
+              </Text>
+            </View>
+          )}
+          <View pointerEvents="none" style={styles.createOverlay}>
+            <Animated.View style={[StyleSheet.absoluteFill, styles.createShade, createShadeStyle]} />
+            <Animated.Text style={[styles.createTargetLabel, createLabelStyle]}>新建记忆</Animated.Text>
           </View>
+          <View pointerEvents="none" style={styles.resetOverlay}>
+            <Animated.View style={[StyleSheet.absoluteFill, styles.resetShade, resetShadeStyle]} />
+            <Animated.Text style={[styles.resetTargetLabel, resetLabelStyle]}>回到全景</Animated.Text>
+          </View>
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              styles.bottomArea,
+              { paddingBottom: Math.max(ARC_HOME_BOTTOM_PADDING, insets.bottom + 16) },
+              bottomAnimatedStyle,
+            ]}
+          >
+            <View style={styles.timelineWrap}>
+              <MobileTimeline
+                years={years}
+                selectedYear={selectedYear}
+                onSelect={onYearChange}
+                onCreateMemory={onCreateMemory}
+                createPullProgress={createPullProgress}
+                onResetMapView={onResetMapView}
+                resetPullProgress={resetPullProgress}
+              />
+            </View>
+          </Animated.View>
         </View>
-      </View>}
+      )}
       {locationMode && locationOverlay}
     </View>
   );

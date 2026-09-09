@@ -234,6 +234,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
   const [editDraft, setEditDraft] = useState<EditDraftState | null>(null);
   const [draftVisible, setDraftVisible] = useState(false);
   const [photoManageVisible, setPhotoManageVisible] = useState(false);
@@ -1399,6 +1400,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     const requestId = ++detailLoadId.current;
     detailPhotoPerformance.current.clear();
     setSelectedMemory(memory);
+    setDetailClosing(false);
     setPhotoViewer(null);
     setDetailPhotoUris(memory.photos.map(() => null));
     setDetailPhotoStates(memory.photos.map(() => 'loading' as DetailPhotoState));
@@ -1412,6 +1414,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     detailLoadId.current += 1;
     detailPhotoPerformance.current.clear();
     setSelectedMemory(null);
+    setDetailClosing(false);
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
     setPhotoViewer(null);
@@ -1866,10 +1869,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
         onCreateMemory={() => void runTask(beginCreateMemory)}
         onResetMapView={resetHomeMapView}
         onOpenMore={() => setAppMenuVisible(true)}
-        chromeVisible={!selectedMemory && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible}
+        chromeVisible={(!selectedMemory || detailClosing) && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible}
         initialCamera={activeDefaultMapCamera}
         camera={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
-        mapUpdatesPaused={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
+        mapUpdatesPaused={Boolean((selectedMemory && !detailClosing) || draftVisible || locationPickerVisible)}
         locationMode={locationPickerVisible}
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
@@ -1893,6 +1896,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
           photoUris={detailPhotoUris}
           photoStates={detailPhotoStates}
           onClose={closeMemory}
+          onDismissStart={() => setDetailClosing(true)}
           onMore={() => setMoreActionsVisible(true)}
           onPhotoDisplayed={markDetailPhotoDisplayed}
           onPhotoPress={(index) => {

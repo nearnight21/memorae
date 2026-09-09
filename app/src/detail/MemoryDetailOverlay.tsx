@@ -27,6 +27,7 @@ interface Props {
   photoUris: readonly (string | null)[];
   photoStates: readonly DetailPhotoState[];
   onClose: () => void;
+  onDismissStart?: () => void;
   onMore: () => void;
   onPhotoDisplayed: (index: number) => void;
   onPhotoPress: (index: number) => void;
@@ -47,6 +48,7 @@ export default function MemoryDetailOverlay({
   photoUris,
   photoStates,
   onClose,
+  onDismissStart,
   onMore,
   onPhotoDisplayed,
   onPhotoPress,
@@ -118,6 +120,7 @@ export default function MemoryDetailOverlay({
   const dismissDetail = useCallback((velocity = 0) => {
     if (detailDismissing.current) return;
     detailDismissing.current = true;
+    onDismissStart?.();
 
     const targetDistance = height * 0.56 + Math.min(Math.max(velocity, 0) * 120, 260);
 
@@ -142,7 +145,7 @@ export default function MemoryDetailOverlay({
       detailDismissing.current = false;
       resetDetailPosition();
     });
-  }, [detailOffset, dismissProgress, height, onClose, resetDetailPosition]);
+  }, [detailOffset, dismissProgress, height, onClose, onDismissStart, resetDetailPosition]);
 
   const detailResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gesture) => shouldStartDetailDismiss(gesture.dx, gesture.dy),

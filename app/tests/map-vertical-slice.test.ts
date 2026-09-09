@@ -261,6 +261,30 @@ test('正式 Home 在地图与时间轴之间使用单层独立安静区并将�
   assert.doesNotMatch(quietZoneSource, /Blur|WebView|MemoraeMap/);
 });
 
+test('正式 Home 对时间轴和安静区提供平滑入场与出场过渡，收起记忆详情不突现', async () => {
+  const [homeSource, appSource, detailSource] = await Promise.all([
+    readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/detail/MemoryDetailOverlay.tsx', import.meta.url), 'utf8'),
+  ]);
+  assert.match(homeSource, /CHROME_ENTER_DURATION = 340/);
+  assert.match(homeSource, /CHROME_EXIT_DURATION = 180/);
+  assert.match(homeSource, /CHROME_BOTTOM_DRIFT_Y = 28/);
+  assert.match(homeSource, /const chromeProgress = useSharedValue\(chromeVisible \? 1 : 0\)/);
+  assert.match(homeSource, /withTiming\(1, \{[\s\S]*duration: CHROME_ENTER_DURATION/);
+  assert.match(homeSource, /withTiming\(0, \{[\s\S]*duration: CHROME_EXIT_DURATION/);
+  assert.match(homeSource, /pointerEvents=\{chromeVisible \? 'box-none' : 'none'\}/);
+  assert.match(homeSource, /bottomAnimatedStyle/);
+  assert.match(homeSource, /quietZoneAnimatedStyle/);
+
+  // 验证交叠式协同动效：手账开始收起的同时立即提前唤醒时间轴，消除串行空白等待
+  assert.match(detailSource, /onDismissStart\?:\s*\(\)\s*=>\s*void/);
+  assert.match(detailSource, /detailDismissing\.current = true;\s*\r?\n\s*onDismissStart\?\.()/);
+  assert.match(appSource, /const \[detailClosing, setDetailClosing\] = useState\(false\)/);
+  assert.match(appSource, /onDismissStart=\{\(\) => setDetailClosing\(true\)\}/);
+  assert.match(appSource, /chromeVisible=\{\(!selectedMemory \|\| detailClosing\)/);
+});
+
 test('远端照片同步完成后批量刷新缩略图，不逐张重建地图 Marker', async () => {
   const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(appSource, /onPhotoStored/);
