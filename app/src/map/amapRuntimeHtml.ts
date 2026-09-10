@@ -21,14 +21,14 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
     .marker.enter-pending { opacity: 0; }
     .marker.entering { animation: map-bubble-enter 360ms cubic-bezier(0.2, 0.9, 0.25, 1.08) both; }
     .photo-shell { position: absolute; left: 4.6px; top: 0; width: 49.3px; height: 49.3px; overflow: visible; }
-    .photo { display: block; width: 49.3px; height: 49.3px; box-sizing: border-box; border: 2.3px solid #f8f3e8; border-radius: 50%; outline: .8px solid rgba(139,111,57,.72); object-fit: cover; background: #dfe4df; box-shadow: 0 5.4px 13.1px rgba(61,54,44,.28); transition: transform 180ms ease, outline 180ms ease; }
-    .photo.fallback { background: #b5814b; }
-    .memory-count { position: absolute; right: .8px; top: -3.9px; z-index: 2; min-width: 15.4px; height: 15.4px; padding: 0 3.9px; box-sizing: border-box; border: 1.5px solid #f8f3e8; border-radius: 999px; background: #8f6034; color: #fff; text-align: center; font: 600 8.5px/12.3px sans-serif; }
-    .marker-label { position: absolute; top: 52.4px; left: 50%; transform: translateX(-50%); max-width: 86.2px; padding: 1.5px 5.4px; box-sizing: border-box; border: .8px solid rgba(139,111,57,.38); border-radius: 999px; background: rgba(248,243,232,.94); color: #51483d; box-shadow: 0 2.3px 6.2px rgba(61,54,44,.16); font: 500 8.5px/1.25 'Songti SC', STSong, serif; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .anchor { position: absolute; bottom: 2.3px; left: 27px; width: 4.6px; height: 4.6px; box-sizing: border-box; border: .8px solid rgba(255,255,255,.85); border-radius: 50%; background: #b5814b; }
-    .marker.selected .photo { transform: scale(1.2); outline: 3.1px solid rgba(181,129,75,.42); }
-    .marker.selected .marker-label { border-color: rgba(181,129,75,.72); }
-    .marker.selected .anchor { background: #8f6034; box-shadow: 0 0 0 3.9px rgba(181,129,75,.22); }
+    .photo { display: block; width: 49.3px; height: 49.3px; box-sizing: border-box; border: 2.3px solid rgba(255,255,255,.94); border-radius: 50%; outline: 1px solid rgba(153,194,231,.92); object-fit: cover; background: #dfe4df; box-shadow: 0 5.4px 13.1px rgba(38,56,70,.26); transition: transform 180ms ease, outline 180ms ease; }
+    .photo.fallback { background: #557d97; }
+    .memory-count { position: absolute; right: .8px; top: -3.9px; z-index: 2; min-width: 15.4px; height: 15.4px; padding: 0 3.9px; box-sizing: border-box; border: 1.5px solid #ffffff; border-radius: 999px; background: #36566b; color: #fff; text-align: center; font: 600 8.5px/12.3px sans-serif; }
+    .marker-label { position: absolute; top: 52.4px; left: 50%; transform: translateX(-50%); max-width: 86.2px; padding: 1.5px 5.4px; box-sizing: border-box; border: .8px solid rgba(153,194,231,.78); border-radius: 999px; background: rgba(246,251,254,.96); color: #263847; box-shadow: 0 2.3px 6.2px rgba(38,56,70,.18); font: 500 8.5px/1.25 'Songti SC', STSong, serif; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .anchor { position: absolute; bottom: 2.3px; left: 27px; width: 4.6px; height: 4.6px; box-sizing: border-box; border: .8px solid rgba(255,255,255,.9); border-radius: 50%; background: #476d87; }
+    .marker.selected .photo { transform: scale(1.2); outline: 3.1px solid rgba(153,194,231,.72); box-shadow: 0 7px 18px rgba(38,56,70,.36); }
+    .marker.selected .marker-label { border-color: rgba(110,165,210,.95); background: rgba(240,248,253,.98); color: #1a2936; }
+    .marker.selected .anchor { background: #2e4d65; box-shadow: 0 0 0 3.9px rgba(153,194,231,.36); }
     @keyframes map-bubble-enter {
       from { opacity: 0; transform: translateY(9px) scale(0.72); }
       72% { opacity: 1; transform: translateY(-2px) scale(1.07); }
