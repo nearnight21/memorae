@@ -88,6 +88,8 @@ export default function LocationPicker({
   const reverseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const effectiveCamera = controlledCamera ?? camera;
+  const hasInteracted = useRef(Boolean(initialLocation));
+  const mountedCameraRef = useRef<CameraState | null>(null);
 
   useEffect(() => {
     if (!active || !cameraIdle) return;
@@ -111,6 +113,18 @@ export default function LocationPicker({
       current && current.lat === next.latitude && current.lng === next.longitude ? current : null
     ));
     if (reverseTimer.current) clearTimeout(reverseTimer.current);
+    if (!hasInteracted.current) {
+      if (!mountedCameraRef.current) {
+        mountedCameraRef.current = next;
+        return;
+      }
+      const latDelta = Math.abs(next.latitude - mountedCameraRef.current.latitude);
+      const lngDelta = Math.abs(next.longitude - mountedCameraRef.current.longitude);
+      if (latDelta < 0.00001 && lngDelta < 0.00001) {
+        return;
+      }
+      hasInteracted.current = true;
+    }
     reverseTimer.current = setTimeout(() => {
       void (async () => {
       const id = ++requestId.current;
@@ -151,6 +165,7 @@ export default function LocationPicker({
   }
 
   function selectSuggestion(candidate: LocationSuggestion): void {
+    hasInteracted.current = true;
     setQuery('');
     setSuggestions([]);
     const target = { latitude: candidate.lat, longitude: candidate.lng, zoom: CENTER_ZOOM };
@@ -161,6 +176,7 @@ export default function LocationPicker({
   }
 
   function handleMapPress(coordinate: { latitude: number; longitude: number }): void {
+    hasInteracted.current = true;
     const target = { latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: CENTER_ZOOM };
     setCamera(target);
     resolveCenter(target);
@@ -194,7 +210,7 @@ export default function LocationPicker({
 
   const region = reverseResult ? locationRegionLabel(reverseResult) : selectedLocation
     ? [selectedLocation.province, selectedLocation.city, selectedLocation.district].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(' · ') || selectedLocation.name
-    : resolving ? '正在获取地点…' : error || (center ? '地图选点' : '移动地图选择地点');
+    : resolving ? '正在获取地点…' : error || (hasInteracted.current && center ? '地图选点' : '移动地图选择地点');
   const place = reverseResult ? locationPlaceLabel(reverseResult) : selectedLocation?.name ?? '';
 
   return (
@@ -242,16 +258,16 @@ export default function LocationPicker({
         <View style={styles.confirmRegion}>
           <View style={styles.confirmCopy}>
             <Text style={styles.regionText} numberOfLines={1}>{region}</Text>
-            <Text style={styles.placeText} numberOfLines={1}>{resolving ? '正在获取地点…' : place || (error || '拖动地图选择中心点')}</Text>
+            <Text style={styles.placeText} numberOfLines={1}>{resolving ? '正在获取地点…' : place || (error || (hasInteracted.current ? '拖动地图选择中心点' : '拖动地图或搜索地点'))}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="确定地点"
-            disabled={!center}
+            disabled={!center || (!selectedLocation && !hasInteracted.current)}
             onPress={() => onConfirm(selectedLocation && center
               ? { ...selectedLocation, lat: center.latitude, lng: center.longitude }
               : center ? locationFallback(center) : { name: '地图选点', mx: 50, my: 50 })}
-            style={({ pressed }) => [styles.confirmButton, !center && styles.disabled, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.confirmButton, (!center || (!selectedLocation && !hasInteracted.current)) && styles.disabled, pressed && styles.pressed]}
           >
             <Text style={styles.confirmText}>确定</Text>
           </Pressable>

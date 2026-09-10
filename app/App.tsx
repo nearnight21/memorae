@@ -852,6 +852,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       orderedSelection: true,
       exif: true,
       quality: 1,
+      legacy: Platform.OS === 'android',
     });
     if (result.canceled) return null;
     const photos: PendingPhoto[] = [];
@@ -966,7 +967,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
     }
     setStatus(photoLocation
       ? `已从照片读取地点：${photoLocation.name}。`
-      : `已选择 ${selection.photos.length} 张照片，请继续编辑记忆。`);
+      : selection.coordinates
+        ? `已选择 ${selection.photos.length} 张照片，未能解析地点。`
+        : `已选择 ${selection.photos.length} 张照片（未包含地点信息），请继续编辑。`);
   }
 
   async function encryptPendingPhoto(activeSession: VaultSessionV1, pending: PendingPhoto): Promise<MemoryPhotoV1> {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -14,6 +15,7 @@ import {
 import type { MemoryLocationV2 } from '../memory/memoryV2';
 import { androidTopInset } from '../ui/layout';
 import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
+import CrystalDatePicker from './CrystalDatePicker';
 
 export interface MemoryEditValues {
   title: string;
@@ -79,6 +81,7 @@ export default function MemoryEditOverlay({
     topInset,
     PixelRatio.get(),
   );
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const dateLabel = date.replace(/-/g, '.');
 
   return (
@@ -123,19 +126,16 @@ export default function MemoryEditOverlay({
             />
           </View>
           <View style={styles.metaRow}>
-            <View style={styles.dateTarget}>
-              <TextInput
-                accessibilityLabel="日期"
-                value={dateLabel}
-                onChangeText={(value) => onChange('date', value.replace(/\./g, '-'))}
-                style={styles.dateInput}
-                placeholder="YYYY.MM.DD"
-                placeholderTextColor="#786a5d"
-                keyboardType="numbers-and-punctuation"
-              />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`选择日期，当前为${dateLabel}`}
+              onPress={() => setDatePickerVisible(true)}
+              style={styles.dateTarget}
+            >
+              <Text style={styles.dateText}>{dateLabel}</Text>
               <View style={styles.shortUnderline} />
               <Text style={styles.chevron}>⌄</Text>
-            </View>
+            </Pressable>
             <Text style={styles.separator}>·</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="编辑地点" onPress={onLocation} style={styles.locationAction}>
               <Text style={styles.locationText} numberOfLines={1}>{locationLabel(location)}</Text>
@@ -174,6 +174,15 @@ export default function MemoryEditOverlay({
           </View>
         </View>
       </ScrollView>
+      <CrystalDatePicker
+        visible={datePickerVisible}
+        initialDate={date}
+        onConfirm={(nextDate) => {
+          setDatePickerVisible(false);
+          onChange('date', nextDate);
+        }}
+        onCancel={() => setDatePickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -208,7 +217,7 @@ const styles = StyleSheet.create({
   titleInput: { color: '#27231e', fontSize: 25, lineHeight: 34, fontWeight: '500', padding: 0 },
   metaRow: { flexDirection: 'row', alignItems: 'center', minHeight: 28, marginTop: 1 },
   dateTarget: { position: 'relative', width: 82, height: 26, justifyContent: 'flex-start' },
-  dateInput: { color: 'rgba(103,91,77,0.9)', fontSize: 12, lineHeight: 20, fontWeight: '600', padding: 0, paddingRight: 12 },
+  dateText: { color: 'rgba(103,91,77,0.9)', fontSize: 12, lineHeight: 20, fontWeight: '600', padding: 0, paddingRight: 12 },
   shortUnderline: { position: 'absolute', left: 0, bottom: 1, width: 78, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(138,117,97,0.38)' },
   chevron: { position: 'absolute', right: 0, top: 0, color: 'rgba(128,101,78,0.86)', fontSize: 11, lineHeight: 20 },
   separator: { color: 'rgba(103,91,77,0.72)', fontSize: 12, marginHorizontal: 4 },

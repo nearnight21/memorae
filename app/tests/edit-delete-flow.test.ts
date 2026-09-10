@@ -10,6 +10,12 @@ import {
   mergePhotoManageSelection,
   removedPhotoIds,
 } from '../src/edit/editLifecycle';
+import {
+  daysInMonth,
+  formatDateString,
+  localizedDateSummary,
+  parseDateParts,
+} from '../src/edit/datePickerModel';
 import { firstPhotoCoordinates, photoCoordinatesFromExif } from '../src/photos/photoMetadata';
 
 const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
@@ -61,6 +67,28 @@ test('读取 Android 数字 EXIF GPS 并校验坐标范围', () => {
     lng: 121.544,
   });
   assert.equal(photoCoordinatesFromExif({ GPSLatitude: 95, GPSLongitude: 121.544 }), null);
+  assert.equal(photoCoordinatesFromExif({ GPSLatitude: 0, GPSLongitude: 0 }), null);
+});
+
+test('支持多种 EXIF 格式（空格分隔、两段度分、对象型分数、别名字段）', () => {
+  const spaceSeparated = photoCoordinatesFromExif({
+    GPSLatitude: '31/1 14/1 25/1',
+    GPSLongitude: '121/1 28/1 50/1',
+  });
+  assert.ok(spaceSeparated);
+  assert.ok(Math.abs(spaceSeparated.lat - 31.24027777777778) < 1e-6);
+
+  const twoParts = photoCoordinatesFromExif({
+    GPSLatitude: [31, 15],
+    GPSLongitude: [121, 30],
+  });
+  assert.deepEqual(twoParts, { lat: 31.25, lng: 121.5 });
+
+  const rationalObjects = photoCoordinatesFromExif({
+    latitude: [{ numerator: 30, denominator: 1 }, { numerator: 30, denominator: 1 }, { numerator: 0, denominator: 1 }],
+    longitude: [{ numerator: 120, denominator: 1 }, { numerator: 0, denominator: 1 }, { numerator: 0, denominator: 1 }],
+  });
+  assert.deepEqual(rationalObjects, { lat: 30.5, lng: 120 });
 });
 
 test('读取带方向的 EXIF 度分秒，并选择第一张有定位的照片', () => {
@@ -197,4 +225,33 @@ test('详情浏览优先读取 preview，缺失时回退 thumbnail', () => {
   assert.match(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'thumbnail'\)/);
   assert.doesNotMatch(loadDetailPhoto, /readDetailPhotoVariant\(photoId, 'original'\)/);
   assert.match(loadDetailPhoto, /if \(!encrypted\) \{[\s\S]*?readDetailPhotoVariant\(photoId, 'thumbnail'\)/);
+});
+
+test('CrystalDatePicker 水晶日期选择器支持本地化格式、闰年判断与边界处理', () => {
+  assert.equal(daysInMonth(2024, 2), 29);
+  assert.equal(daysInMonth(2023, 2), 28);
+  assert.equal(daysInMonth(2024, 4), 30);
+  assert.equal(daysInMonth(2024, 5), 31);
+
+  assert.deepEqual(parseDateParts('2026-09-10'), { year: 2026, month: 9, day: 10 });
+  assert.deepEqual(parseDateParts('2024.02.29'), { year: 2024, month: 2, day: 29 });
+  assert.deepEqual(parseDateParts('2023.02.31'), { year: 2023, month: 2, day: 28 });
+
+  assert.equal(formatDateString(2026, 9, 5), '2026-09-05');
+  assert.equal(formatDateString(2024, 12, 25), '2024-12-25');
+
+  assert.equal(localizedDateSummary(2026, 9, 10), '2026年9月10日 · 周四');
+});
+
+test('编辑页接通 CrystalDatePicker 水晶日期选择器并淘汰文本输入', () => {
+  const overlaySource = readFileSync(
+    resolve(process.cwd(), 'src/edit/MemoryEditOverlay.tsx'),
+    'utf8',
+  );
+  assert.match(overlaySource, /<CrystalDatePicker/);
+  assert.match(overlaySource, /datePickerVisible/);
+  assert.match(overlaySource, /styles\.dateTarget/);
+  assert.match(overlaySource, /styles\.dateText/);
+  assert.doesNotMatch(overlaySource, /placeholder="YYYY\.MM\.DD"/);
+  assert.doesNotMatch(overlaySource, /keyboardType="numbers-and-punctuation"/);
 });
