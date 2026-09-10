@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   confirmText: {
-    color: '#754f31',
+    color: '#3c667c',
     fontSize: 15,
     fontWeight: '700',
   },
