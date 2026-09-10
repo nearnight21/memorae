@@ -5,6 +5,7 @@
 **/coverage/
 **/test-results/
 **/*.tsbuildinfo
+*.apk
 
 # Expo / React Native 生成目录
 app/.expo/
