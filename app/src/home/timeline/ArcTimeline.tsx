@@ -62,6 +62,8 @@ interface Props {
   createPullProgress: SharedValue<number>;
   onResetMapView?: () => void;
   resetPullProgress: SharedValue<number>;
+  onQuickReturnNow?: () => void;
+  onBrowseTimeline?: () => void;
 }
 
 interface YearNodeProps {
@@ -150,6 +152,8 @@ export default function ArcTimeline({
   createPullProgress,
   onResetMapView,
   resetPullProgress,
+  onQuickReturnNow,
+  onBrowseTimeline,
 }: Props) {
   const { width } = useWindowDimensions();
   const items = useMemo(() => buildTimelineItems(years), [years]);
@@ -196,8 +200,11 @@ export default function ArcTimeline({
     const nextValue = items[nextIndex]?.value ?? null;
     pendingSelectionIndex.current = nextIndex;
     const committed = commitTimelineSelection(currentValueRef.current, nextValue, onSelect);
-    if (committed) currentValueRef.current = nextValue;
-  }, [firstYearIndex, items, onSelect]);
+    if (committed) {
+      currentValueRef.current = nextValue;
+      onBrowseTimeline?.();
+    }
+  }, [firstYearIndex, items, onBrowseTimeline, onSelect]);
 
   const triggerCreateOnce = useCallback(() => {
     onCreateMemory?.();
@@ -215,7 +222,8 @@ export default function ArcTimeline({
     pendingSelectionIndex.current = currentYearIndex;
     currentValueRef.current = currentYear;
     onSelect(currentYear);
-  }, [currentYear, currentYearIndex, onSelect]);
+    onQuickReturnNow?.();
+  }, [currentYear, currentYearIndex, onQuickReturnNow, onSelect]);
 
   useAnimatedReaction(
     () => highlightedIndex.value,

@@ -9,6 +9,8 @@ interface Props {
   createPullProgress: SharedValue<number>;
   onResetMapView?: () => void;
   resetPullProgress: SharedValue<number>;
+  onQuickReturnNow?: () => void;
+  onBrowseTimeline?: () => void;
 }
 
 export default function MobileTimeline({
@@ -19,6 +21,8 @@ export default function MobileTimeline({
   createPullProgress,
   onResetMapView,
   resetPullProgress,
+  onQuickReturnNow,
+  onBrowseTimeline,
 }: Props) {
   return (
     <ArcTimeline
@@ -29,6 +33,8 @@ export default function MobileTimeline({
       createPullProgress={createPullProgress}
       onResetMapView={onResetMapView}
       resetPullProgress={resetPullProgress}
+      onQuickReturnNow={onQuickReturnNow}
+      onBrowseTimeline={onBrowseTimeline}
     />
   );
 }

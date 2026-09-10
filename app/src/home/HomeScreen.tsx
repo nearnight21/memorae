@@ -53,6 +53,8 @@ interface Props {
   locationOverlay?: ReactNode;
   onCreateMemory?: () => void;
   onResetMapView?: () => void;
+  onQuickReturnNow?: () => void;
+  onBrowseTimeline?: () => void;
   onOpenMore?: () => void;
   chromeVisible?: boolean;
 }
@@ -78,6 +80,8 @@ export default function HomeScreen({
   locationOverlay,
   onCreateMemory,
   onResetMapView,
+  onQuickReturnNow,
+  onBrowseTimeline,
   onOpenMore,
   chromeVisible = true,
 }: Props) {
@@ -285,6 +289,8 @@ export default function HomeScreen({
                 createPullProgress={createPullProgress}
                 onResetMapView={onResetMapView}
                 resetPullProgress={resetPullProgress}
+                onQuickReturnNow={onQuickReturnNow}
+                onBrowseTimeline={onBrowseTimeline}
               />
             </View>
           </Animated.View>

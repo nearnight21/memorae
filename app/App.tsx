@@ -102,7 +102,24 @@ import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
 import type { EphemeralTestBootstrap } from './src/testing/ephemeralTestRuntime';
 import { firstPhotoCoordinates, type PhotoCoordinates } from './src/photos/photoMetadata';
-import OnboardingOverlay from './src/onboarding/OnboardingOverlay';
+import InteractiveOnboardingTour from './src/onboarding/InteractiveOnboardingTour';
+import {
+  handleDetailClosed,
+  handleDraftCancelled,
+  handleDraftCreated,
+  handleEnterLocationPicker,
+  handleLocationCancelled,
+  handleLocationConfirmed,
+  handleMemorySaved,
+  handlePhotoPickerCancelled,
+  handlePullCreateTriggered,
+  handleQuickReturnNow,
+  handleResetMapView,
+  handleSkipCurrentStep,
+  handleTimelineScrolled,
+  initialTourState,
+  type OnboardingTourState,
+} from './src/onboarding/onboardingTourModel';
 import {
   AboutScreen,
   DefaultMapEditorOverlay,
@@ -247,6 +264,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'initial' | 'replay' | null>(null);
+  const [tourState, setTourState] = useState<OnboardingTourState>(initialTourState);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
   const [detailPhotoUris, setDetailPhotoUris] = useState<(string | null)[]>([]);
@@ -356,8 +374,20 @@ export default function App({ testBootstrap }: AppProps = {}) {
         setPhotoViewer(null);
         return true;
       }
-      if (onboardingMode) {
-        void completeOnboarding();
+      if (locationPickerVisible) {
+        cancelLocationPicker();
+        return true;
+      }
+      if (photoManageVisible) {
+        setPhotoManageVisible(false);
+        return true;
+      }
+      if (editDraft && draftVisible) {
+        cancelEdit();
+        return true;
+      }
+      if (selectedMemory) {
+        closeMemory();
         return true;
       }
       if (defaultMapEditorVisible) {
@@ -380,20 +410,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
         setMoreActionsVisible(false);
         return true;
       }
-      if (photoManageVisible) {
-        setPhotoManageVisible(false);
-        return true;
-      }
-      if (locationPickerVisible) {
-        cancelLocationPicker();
-        return true;
-      }
-      if (editDraft && draftVisible) {
-        cancelEdit();
-        return true;
-      }
-      if (selectedMemory) {
-        closeMemory();
+      if (onboardingMode) {
+        void completeOnboarding();
         return true;
       }
       return false;
@@ -908,7 +926,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
     }
     if (editDraft) return;
     const selection = await pickPendingPhotos();
-    if (!selection || selection.photos.length === 0) return;
+    if (!selection || selection.photos.length === 0) {
+      if (onboardingMode) {
+        setTourState((current) => handlePhotoPickerCancelled(current));
+      }
+      return;
+    }
     setStatus(selection.coordinates ? '正在读取照片拍摄地点……' : '正在创建记忆草稿……');
     const photoLocation = selection.coordinates
       ? await resolvePhotoLocation(selection.coordinates)
@@ -929,6 +952,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
       selection.photos.map((photo) => [`pending:${photo.uri}`, photo]),
     );
     setDraftVisible(true);
+    if (onboardingMode) {
+      setTourState((current) => handleDraftCreated(current));
+    }
     if (photoLocation && Number.isFinite(photoLocation.lat) && Number.isFinite(photoLocation.lng)) {
       setHomeViewport((current) => ({
         camera: {
@@ -1055,6 +1081,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function cancelEdit(): void {
     setPhotoManageVisible(false);
+    if (onboardingMode) {
+      setTourState((current) => handleDraftCancelled(current));
+    }
     if (editDraft?.kind === 'create') {
       setDraftVisible(false);
       setStatus('新建草稿已保留在本机当前会话中。');
@@ -1149,6 +1178,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
   function openEditLocation(): void {
     locationPickerOriginCamera.current = homeViewport.camera;
     setHomeCameraTarget(null);
+    if (onboardingMode) {
+      setTourState((current) => handleEnterLocationPicker(current));
+    }
     const initialLocation = editDraft?.location;
     if (initialLocation && typeof initialLocation.lat === 'number' && typeof initialLocation.lng === 'number') {
       const target = {
@@ -1209,6 +1241,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
         setDraftVisible(false);
         setPhotoManageVisible(false);
         editPendingPhotoPool.current.clear();
+        openMemory(nextMemory);
+        if (onboardingMode) {
+          setTourState((current) => handleMemorySaved(current, true));
+        }
         if (!currentAccountSyncClient()) {
           setStatus('新记忆已加密保存到本机。');
           return;
@@ -1418,6 +1454,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setDetailPhotoUris([]);
     setDetailPhotoStates([]);
     setPhotoViewer(null);
+    if (onboardingMode) {
+      setTourState((current) => handleDetailClosed(current));
+    }
   }
 
   function confirmLocation(next: MemoryLocationV2): void {
@@ -1435,6 +1474,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
     setLocationPickerVisible(false);
+    if (onboardingMode) {
+      setTourState((current) => handleLocationConfirmed(current));
+    }
   }
 
   function cancelLocationPicker(): void {
@@ -1444,6 +1486,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
     setLocationPickerVisible(false);
+    if (onboardingMode) {
+      setTourState((current) => handleLocationCancelled(current));
+    }
   }
 
   async function submitAuthEntry(): Promise<void> {
@@ -1495,6 +1540,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function resetHomeMapView(): void {
     setHomeCameraTarget({ ...activeDefaultMapCamera });
+    if (onboardingMode) {
+      setTourState((current) => handleResetMapView(current));
+    }
   }
 
   function openUtilityRoute(route: UtilityRoute): void {
@@ -1540,6 +1588,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function replayOnboarding(): void {
     setUtilityRoute(null);
+    setTourState(initialTourState());
     setOnboardingMode('replay');
   }
 
@@ -1549,6 +1598,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       setOnboardingCompleted(true);
       await saveOnboardingCompleted();
     }
+    setTourState(initialTourState());
     setOnboardingMode(null);
     if (completedMode === 'replay') setUtilityRoute('help');
   }
@@ -1866,8 +1916,23 @@ export default function App({ testBootstrap }: AppProps = {}) {
         )}
         onCameraIdle={handleHomeCameraIdle}
         onMapPress={locationPickerVisible ? handleMapPointPress : undefined}
-        onCreateMemory={() => void runTask(beginCreateMemory)}
+        onCreateMemory={() => {
+          if (onboardingMode) {
+            setTourState((current) => handlePullCreateTriggered(current));
+          }
+          void runTask(beginCreateMemory);
+        }}
         onResetMapView={resetHomeMapView}
+        onQuickReturnNow={() => {
+          if (onboardingMode) {
+            setTourState((current) => handleQuickReturnNow(current));
+          }
+        }}
+        onBrowseTimeline={() => {
+          if (onboardingMode) {
+            setTourState((current) => handleTimelineScrolled(current));
+          }
+        }}
         onOpenMore={() => setAppMenuVisible(true)}
         chromeVisible={(!selectedMemory || detailClosing) && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible}
         initialCamera={activeDefaultMapCamera}
@@ -2013,9 +2078,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
         />
       )}
       {onboardingMode && (
-        <OnboardingOverlay
+        <InteractiveOnboardingTour
+          state={tourState}
           replay={onboardingMode === 'replay'}
-          onComplete={() => void completeOnboarding()}
+          onSkipStep={() => setTourState((current) => handleSkipCurrentStep(current))}
+          onCompleteTour={() => void completeOnboarding()}
+          onDismissTour={() => void completeOnboarding()}
         />
       )}
     </View>
