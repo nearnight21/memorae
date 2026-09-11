@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Path } from '@shopify/react-native-skia';
+import { Canvas, Circle, Path } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -76,7 +76,7 @@ interface YearNodeProps {
   firstYearIndex: number;
 }
 
-const ARC_FLAT_DROP = 48;
+const ARC_FLAT_DROP = 74;
 const ARC_EDGE_SCROLL_YEARS_PER_SECOND = ARC_TIMELINE_GESTURE_SPEED;
 const SPRING_CONFIG = {
   stiffness: 250,
@@ -201,10 +201,11 @@ export default function ArcTimeline({
 
   const trackGeometry = useMemo(() => {
     const halfWidth = width / 2;
-    const wExt = halfWidth + 32; // 两侧延伸至屏幕外各 32dp，彻底画满屏幕不留断头
+    // 两端延伸出屏幕边缘 10dp，使下导轨在左右屏幕边界 (X=0 和 X=width) 恰好下垂到约 187dp（屏幕左右底角）自然收起
+    const wExt = halfWidth + 10;
     const x0 = halfWidth;
-    const x1 = -32;
-    const x2 = width + 32;
+    const x1 = -10;
+    const x2 = width + 10;
     const curvature = ARC_FLAT_DROP / (halfWidth * halfWidth);
     const dropExt = curvature * (wExt * wExt);
 
@@ -618,19 +619,20 @@ export default function ArcTimeline({
             style={[styles.lens, lensStyle]}
           >
             <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
-              {/* 拨钮内部双层细边框 */}
-              <Path
-                color="rgba(153, 194, 231, 0.48)"
-                path="M 8 3.5 L 60 3.5 Q 64.5 3.5 64.5 8 L 64.5 44 Q 64.5 48.5 60 48.5 L 8 48.5 Q 3.5 48.5 3.5 44 L 3.5 8 Q 3.5 3.5 8 3.5 Z"
-                strokeWidth={1}
-                style="stroke"
-              />
-              {/* 上下轨道金属咬合卡槽 */}
-              <Path color="rgba(255, 255, 255, 0.95)" path="M 27 1.5 L 41 1.5" strokeWidth={2.5} style="stroke" />
-              <Path color="rgba(255, 255, 255, 0.95)" path="M 27 50.5 L 41 50.5" strokeWidth={2.5} style="stroke" />
+              {/* 实体金属圆环厚度环身（7dp 厚度壁） */}
+              <Circle cx={32} cy={32} r={27} color="rgba(240, 246, 250, 0.95)" strokeWidth={7} style="stroke" />
+              {/* 外缘金属倒角高光圈 */}
+              <Circle cx={32} cy={32} r={30.5} color="rgba(255, 255, 255, 0.98)" strokeWidth={1} style="stroke" />
+              {/* 外轮廓精细切缝阴影 */}
+              <Circle cx={32} cy={32} r={31.2} color="rgba(140, 175, 198, 0.45)" strokeWidth={0.8} style="stroke" />
+              {/* 内孔深度切面阴影壁（营造向内深挖孔洞的立体厚度感） */}
+              <Circle cx={32} cy={32} r={23.5} color="rgba(42, 68, 86, 0.38)" strokeWidth={1.2} style="stroke" />
+              {/* 上下导轨抱轨金属咬合卡块 */}
+              <Path color="rgba(255, 255, 255, 0.98)" path="M 27 1.5 L 37 1.5" strokeWidth={2.5} style="stroke" />
+              <Path color="rgba(255, 255, 255, 0.98)" path="M 27 62.5 L 37 62.5" strokeWidth={2.5} style="stroke" />
               {/* 左右机械防滑咬花刻槽 */}
-              <Path color="rgba(130, 168, 192, 0.65)" path="M 7 19 L 7 33 M 10 19 L 10 33" strokeWidth={1.2} style="stroke" />
-              <Path color="rgba(130, 168, 192, 0.65)" path="M 58 19 L 58 33 M 61 19 L 61 33" strokeWidth={1.2} style="stroke" />
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 4 28 L 4 36 M 6.5 29 L 6.5 35" strokeWidth={1.2} style="stroke" />
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 60 28 L 60 36 M 57.5 29 L 57.5 35" strokeWidth={1.2} style="stroke" />
             </Canvas>
             {items[safeDisplayIndex]?.value === null && (
               <Text style={styles.allText}>全部</Text>
@@ -686,22 +688,20 @@ const styles = StyleSheet.create({
   },
   lens: {
     position: 'absolute',
-    top: 61,
+    top: 55,
     left: '50%',
-    width: 68,
-    height: 52,
-    marginLeft: -34,
-    borderRadius: 12,
+    width: 64,
+    height: 64,
+    marginLeft: -32,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(240, 248, 253, 0.28)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.92)',
-    shadowColor: '#36566b',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    backgroundColor: 'transparent',
+    shadowColor: '#1d2f3d',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
     zIndex: 3,
   },
   allText: {
