@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Circle, Path } from '@shopify/react-native-skia';
+import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -527,13 +527,13 @@ export default function ArcTimeline({
           <Canvas style={StyleSheet.absoluteFill}>
             <Path
               color="rgba(255,255,255,0.72)"
-              path={`M -24 150 Q ${width / 2} 36 ${width + 24} 150`}
+              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
               strokeWidth={4}
               style="stroke"
             />
             <Path
               color="rgba(153,194,231,0.82)"
-              path={`M -24 150 Q ${width / 2} 36 ${width + 24} 150`}
+              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
               strokeWidth={1}
               style="stroke"
             />
@@ -569,15 +569,13 @@ export default function ArcTimeline({
             style={[styles.lens, lensStyle]}
           >
             <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <Circle cx={33} cy={33} r={32} color="rgba(255,255,255,0.85)" style="stroke" strokeWidth={1.5} />
-              <Circle cx={33} cy={33} r={28} color="rgba(240,247,252,0.38)" style="stroke" strokeWidth={8} />
-              <Circle cx={33} cy={33} r={31} color="rgba(153,194,231,0.35)" style="stroke" strokeWidth={1} />
-              <Circle cx={33} cy={33} r={24} color="rgba(255,255,255,0.92)" style="stroke" strokeWidth={1.2} />
-              <Path color="rgba(60,86,100,0.85)" path="M 33 2 L 33 8" strokeWidth={2} style="stroke" />
+              <Circle cx={33} cy={33} r={30}>
+                <RadialGradient c={vec(23, 17)} r={39} colors={['rgba(255,255,255,0.72)', 'rgba(247,252,255,0.28)', 'rgba(225,240,248,0.14)', 'rgba(198,222,235,0.08)']} positions={[0, 0.34, 0.7, 1]} />
+              </Circle>
+              <Circle cx={33} cy={33} r={29.5} color="rgba(244,252,255,0.9)" style="stroke" strokeWidth={1.2} />
             </Canvas>
-            {items[safeDisplayIndex]?.value === null && (
-              <Text style={styles.allLabel}>全部</Text>
-            )}
+            <Text style={styles.lensYear}>{items[safeDisplayIndex]?.label}</Text>
+            <View style={styles.lensInner} />
           </Animated.View>
         </GestureDetector>
       </View>
@@ -612,7 +610,7 @@ const styles = StyleSheet.create({
   },
   yearNode: {
     position: 'absolute',
-    top: 19,
+    top: 4,
     left: '50%',
     width: 72,
     height: 34,
@@ -629,7 +627,7 @@ const styles = StyleSheet.create({
   },
   lens: {
     position: 'absolute',
-    top: 3,
+    top: 54,
     left: '50%',
     width: 66,
     height: 66,
@@ -637,20 +635,29 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 250, 253, 0.04)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.65)',
+    backgroundColor: 'rgba(239, 248, 252, 0.86)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.92)',
     shadowColor: '#36566b',
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
     zIndex: 3,
   },
-  allLabel: {
-    color: '#2b1d14',
+  lensInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#78a6bd',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 249, 237, 0.82)',
+  },
+  lensYear: {
+    color: '#3c5664',
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '800',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 });
