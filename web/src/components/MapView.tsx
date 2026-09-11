@@ -53,6 +53,15 @@ interface MapViewProps {
   readerMode?: 'reflection' | 'journal';
   /** 登录页只读地图背景：复用真实瓦片，但不显示或启用足迹业务控件。 */
   signedOutBackdrop?: boolean;
+  /** 嵌入落地页等外层容器：改为撑满父容器（h-full）而非整屏，保留全部交互。 */
+  embedded?: boolean;
+  /** 是否渲染底部水晶时间轴。落地页 Hero 只展示地图时置 false。 */
+  showTimeline?: boolean;
+  /**
+   * 展示场景开关：海外国家只有一条记忆时，点击其国家气泡直接展开详情。
+   * 正式产品保持默认 false，不改动「海外仅国家级气泡、点击只缩放」的既有行为。
+   */
+  openSingleForeignMemory?: boolean;
 }
 
 type RegionFocus = ViewportRegion;
@@ -214,6 +223,9 @@ export default function MapView({
   onOpenRecall,
   readerMode,
   signedOutBackdrop = false,
+  embedded = false,
+  showTimeline = true,
+  openSingleForeignMemory = false,
 }: MapViewProps) {
   const crystalMapCenter: L.LatLngExpression = [35, 100];
   const crystalMapZoom = 4;
@@ -758,6 +770,12 @@ export default function MapView({
           || await resolvePlace(countryOf(memory), cityOf(memory))
           || coords;
         map.flyTo(memoryCoords, POINT_ZOOM, { duration: 0.8 });
+        // 展示场景下，海外唯一记忆没有后续的城市/点位层级可点，直接展开详情。
+        if (openSingleForeignMemory) {
+          selectedDisplayCoordsRef.current = L.latLng(memoryCoords);
+          setIsResultListOpen(false);
+          onSelectMemory(memory);
+        }
       };
 
       const addForeignCountryMarkers = async () => {
@@ -949,7 +967,7 @@ export default function MapView({
     return () => {
       cancelled = true;
     };
-  }, [zoomTick, filtered, filtersActive, focusedRegion]);
+  }, [zoomTick, filtered, filtersActive, focusedRegion, openSingleForeignMemory]);
 
   const backToWorld = () => {
     setFocusedRegion(null);
@@ -981,7 +999,9 @@ export default function MapView({
   }
 
   return (
-    <div className="map-experience-root h-screen w-screen relative overflow-hidden">
+    <div className={embedded
+      ? 'map-experience-root h-full w-full relative overflow-hidden'
+      : 'map-experience-root h-screen w-screen relative overflow-hidden'}>
       {/* 瓦片首屏占位：先给用户稳定的地图轮廓，真实瓦片就绪后淡出。 */}
       <div
         className={`map-loading-poster absolute inset-0 z-[1] ${baseMapReady ? 'is-ready' : ''}`}
@@ -1094,7 +1114,7 @@ export default function MapView({
         </button>}
       </div>}
 
-      {!selectedMemory && allYears.length > 0 && (
+      {showTimeline && !selectedMemory && allYears.length > 0 && (
         <CrystalTimeline
           memories={enriched}
           filters={activeFilters}

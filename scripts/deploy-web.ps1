@@ -1,10 +1,11 @@
-[CmdletBinding(SupportsShouldProcess)]
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'None')]
 param(
   [string]$SshKey = '',
   [string]$HostName = '47.100.220.140',
   [string]$UserName = 'admin',
   [string]$WebDist = '',
-  [string]$RemoteRoot = '/var/www/memorae'
+  [string]$RemoteRoot = '/var/www/memorae',
+  [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $SshKey) {
   $candidateKeys = @(
     (Join-Path $repoRoot '.local-data\id_ed25519'),
+    (Join-Path $HOME '.ssh\memorae_server'),
     (Join-Path $HOME '.ssh\memorae_ed25519'),
     (Join-Path $HOME '.ssh\id_ed25519')
   )
@@ -48,7 +50,7 @@ $target = "$UserName@$HostName"
 $remoteStage = "$RemoteRoot/.deploy-stage-$([guid]::NewGuid().ToString('N'))"
 $sshArgs = @('-i', $SshKey, '-o', 'BatchMode=yes', $target)
 
-if ($PSCmdlet.ShouldProcess($target, 'Deploy Web dist while preserving /thinkpad')) {
+if ($Force -or $PSCmdlet.ShouldProcess($target, 'Deploy Web dist while preserving /thinkpad')) {
   & ssh @sshArgs "set -e; test -d '$RemoteRoot'; test -d '$RemoteRoot/thinkpad'; mkdir '$remoteStage'"
   & scp -i $SshKey -r (Join-Path $resolvedDist '*') "$target`:$remoteStage/"
 
@@ -77,4 +79,5 @@ test -f "$root/thinkpad/index.html"
   if ($LASTEXITCODE -ne 0) { throw "Remote deployment failed with exit code $LASTEXITCODE" }
 
   & ssh @sshArgs 'set -e; curl -fsS -o /dev/null https://memorae.cn/; curl -fsS -o /dev/null https://memorae.cn/thinkpad/; curl -fsS -o /dev/null https://memorae.cn/health'
+  Write-Host "Deployment succeeded and verified: https://memorae.cn/, https://memorae.cn/thinkpad/, https://memorae.cn/health"
 }

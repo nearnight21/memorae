@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { ArrowRight, Download, Sparkles, MapPin } from 'lucide-react';
-import travelPhoto from '../../assets/login/travel-photo.png';
+import { ArrowRight, Download, Sparkles } from 'lucide-react';
+import LandingMapDemo from './LandingMapDemo';
 
 export interface HeroSectionProps {
   onEnterApp: () => void;
@@ -40,100 +40,8 @@ export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
         </a>
       </div>
 
-      {/* 大地图主体展台 */}
-      <div className="hero-map-stage">
-        {/* 背景栅格微光 */}
-        <div className="hero-map-grid-mesh" />
-
-        {/* 动态足迹连线 */}
-        <svg
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-          viewBox="0 0 1000 500"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M 180 340 C 350 200, 550 360, 820 180"
-            fill="none"
-            stroke="rgba(108, 153, 173, 0.45)"
-            strokeWidth="2"
-            strokeDasharray="6 6"
-          />
-        </svg>
-
-        {/* 坐标气泡 1 */}
-        <div
-          className="hero-floating-card"
-          style={{ top: '60px', left: '12%', transform: 'rotate(-3deg)' }}
-        >
-          <div className="card-polaroid-frame">
-            <img src={travelPhoto} alt="京都暮色" />
-          </div>
-          <div className="card-polaroid-meta">
-            <h6>清水舞台的晚蝉与暮色</h6>
-            <p>
-              <MapPin size={10} style={{ display: 'inline', marginRight: 2, color: 'var(--theme-journal-earth)' }} />
-              2018.07 · 京都
-            </p>
-          </div>
-        </div>
-
-        {/* 坐标气泡 2 */}
-        <div
-          className="hero-floating-card"
-          style={{ bottom: '40px', right: '14%', transform: 'rotate(2.5deg)' }}
-        >
-          <div className="card-polaroid-frame">
-            <img src={travelPhoto} alt="阿勒泰初雪" />
-          </div>
-          <div className="card-polaroid-meta">
-            <h6>月亮湾的第一场初雪</h6>
-            <p>
-              <MapPin size={10} style={{ display: 'inline', marginRight: 2, color: 'var(--theme-journal-earth)' }} />
-              2022.10 · 阿勒泰
-            </p>
-          </div>
-        </div>
-
-        {/* 中心坐标点 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '48%',
-            left: '52%',
-            transform: 'translate(-50%, -50%)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          <div
-            style={{
-              width: '14px',
-              height: '14px',
-              borderRadius: '50%',
-              background: 'var(--theme-crystal-deep)',
-              boxShadow: '0 0 16px var(--theme-crystal)',
-              border: '2.5px solid var(--theme-land-paper)',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              fontWeight: 600,
-              color: 'var(--theme-crystal-deep)',
-              background: 'rgba(255, 253, 249, 0.95)',
-              padding: '2px 8px',
-              borderRadius: '4px',
-              border: '1px solid var(--theme-crystal-border)',
-              boxShadow: '0 2px 8px rgba(70, 50, 30, 0.08)',
-            }}
-          >
-            31.2053° N, 121.4398° E
-          </span>
-        </div>
-      </div>
+      {/* 大地图主体展台：真实产品地图的只读切片，可直接点击记忆气泡查看详情 */}
+      <LandingMapDemo height={640} showTimeline={false} className="hero-map-demo" />
     </section>
   );
 };

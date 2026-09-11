@@ -33,7 +33,7 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
       <nav className="landing-navbar">
         {/* 左侧 Logo */}
         <a href="#top" className="navbar-brand-group">
-          <div className="brand-glyph">所</div>
+          <img src="/favicon.png" alt="所忆 Logo" className="brand-logo-img" />
           <span className="brand-logotype">所忆 · Memorae</span>
         </a>
 
@@ -44,6 +44,9 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
           </a>
           <a href="#timeline" className="nav-link-anchor">
             水晶时光轴
+          </a>
+          <a href="#local-mode" className="nav-link-anchor">
+            本地模式
           </a>
           <a href="#download" className="nav-link-anchor">
             多端体验

@@ -106,6 +106,15 @@
   box-shadow: 0 2px 8px rgba(108, 153, 173, 0.45);
 }
 
+.brand-logo-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(180, 140, 100, 0.3);
+  display: block;
+}
+
 .brand-logotype {
   font-weight: 700;
   font-size: 15px;
@@ -788,6 +797,188 @@
   margin: 0;
 }
 
+/* ==========================================================================
+   6.5 信任与退路：本地模式手账信笺展台 (LocalModeTrustSection)
+   ========================================================================== */
+.local-mode-section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 40px 24px 70px;
+}
+
+.local-trust-card {
+  background: var(--theme-land-paper);
+  background-image: radial-gradient(rgba(138, 94, 60, 0.05) 1px, transparent 0);
+  background-size: 5px 5px;
+  border: 1.5px solid var(--theme-land-border);
+  border-radius: 24px;
+  padding: 56px 44px;
+  box-shadow: var(--theme-land-shadow-deep);
+  position: relative;
+  overflow: hidden;
+}
+
+.local-trust-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--theme-crystal), transparent);
+  opacity: 0.8;
+}
+
+.local-trust-header {
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto 44px;
+}
+
+.local-trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--theme-crystal-surface);
+  border: 1px solid var(--theme-crystal-border);
+  padding: 5px 14px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--theme-crystal-deep);
+  margin-bottom: 20px;
+}
+
+.local-trust-title {
+  font-size: clamp(28px, 4.2vw, 42px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+  margin: 0 0 18px 0;
+}
+
+.local-trust-subtitle {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* 本地模式三大承诺卡片 */
+.local-commitments-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 36px;
+}
+
+.local-commitment-item {
+  background: var(--theme-land-stage);
+  border: 1px solid var(--theme-land-border-soft);
+  border-radius: 16px;
+  padding: 24px 20px;
+  box-shadow: 0 4px 12px rgba(70, 45, 20, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.local-commitment-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(70, 45, 20, 0.08);
+}
+
+.commitment-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--theme-land-paper);
+  border: 1px solid var(--theme-crystal-border);
+  color: var(--theme-crystal-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 6px rgba(108, 153, 173, 0.2);
+}
+
+.commitment-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.commitment-desc {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* 坦诚的技术边界便签 */
+.local-limitations-callout {
+  background: var(--theme-land-subtle);
+  border: 1.5px dashed var(--theme-land-border);
+  border-radius: 16px;
+  padding: 24px 28px;
+  position: relative;
+}
+
+.limitations-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.limitations-badge-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--theme-journal-earth);
+  text-transform: uppercase;
+}
+
+.limitations-intro {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 14px 0;
+}
+
+.limitations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.limitations-list li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  position: relative;
+  padding-left: 20px;
+}
+
+.limitations-list li::before {
+  content: '·';
+  position: absolute;
+  left: 6px;
+  top: -2px;
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--theme-journal-brass);
+}
+
+.limitations-list strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 /* 7. 第四屏：尾声与极简下载 (DownloadFooter) */
 .download-footer-section {
   max-width: 1120px;
@@ -883,4 +1074,58 @@
   .timeline-feature-pill {
     margin: 0 auto;
   }
+  .local-commitments-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .local-trust-card {
+    padding: 36px 20px;
+  }
+}
+
+/* 9. 真实产品地图 Demo 切片（LandingMapDemo）
+   直接运行 Web 端真实 MapView：真实 Marker / 气泡 / 折页详情展开收起 / 水晶时间轴。
+   此处只做容器约束与嵌入门面作用域修正，不改组件自身视觉语义。 */
+.landing-map-demo-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1.5px solid var(--theme-land-border);
+  background: var(--theme-land-stage);
+  box-shadow: var(--theme-land-shadow-deep);
+  isolation: isolate;
+}
+
+/* 嵌入后水晶时间轴相对地图容器收窄，避免以 100vw 计算导致横向溢出 */
+.landing-map-demo-stage .crystal-timeline-formal,
+.landing-map-demo-stage .crystal-timeline-formal.is-expanded {
+  left: 50%;
+  width: min(1040px, calc(100% - 48px));
+}
+
+/* 嵌入舞台内的详情折页：真实产品按整屏设计，折页尺寸用的是 100vw/100vh 视口单位。
+   嵌入落地页容器后，用容器尺寸覆盖，避免折页按整屏尺寸渲染而被舞台裁剪。 */
+@media (min-width: 861px) {
+  .landing-map-demo-stage .map-journal-folio {
+    grid-template-columns: minmax(0, 48%) minmax(0, 52%);
+    width: min(1180px, calc(100% - 40px));
+    height: min(760px, calc(100% - 28px));
+    max-height: none;
+  }
+}
+
+.landing-map-demo-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--theme-crystal-deep);
+  background: radial-gradient(circle at 50% 34%, var(--theme-land-paper) 0%, var(--theme-land-stage) 100%);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }

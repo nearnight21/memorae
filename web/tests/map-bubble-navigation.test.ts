@@ -7,7 +7,7 @@ const mapViewSource = readFileSync(
   'utf8',
 );
 
-test('single-memory country bubbles reach the concrete point without opening the memory', () => {
+test('single-memory country bubbles reach the concrete point without opening the memory by default', () => {
   const handlerStart = mapViewSource.indexOf('const handleCountryClick');
   const foreignMarkerStart = mapViewSource.indexOf('const addForeignCountryMarkers', handlerStart);
 
@@ -19,7 +19,9 @@ test('single-memory country bubbles reach the concrete point without opening the
   assert.match(handler, /if \(list\.length !== 1\)[\s\S]*map\.flyTo\(coords, CITY_ZOOM/);
   assert.match(handler, /averageMemoryCoordinates\(list\)[\s\S]*resolvePlace\(countryOf\(memory\), cityOf\(memory\)\)/);
   assert.match(handler, /map\.flyTo\(memoryCoords, POINT_ZOOM/);
-  assert.doesNotMatch(handler, /onSelectMemory/);
+  // 默认仍不打开记忆：打开动作必须包在展示开关内，且该开关默认关闭。
+  assert.match(handler, /if \(openSingleForeignMemory\) \{[\s\S]*onSelectMemory\(memory\)/);
+  assert.match(mapViewSource, /openSingleForeignMemory = false/);
   assert.doesNotMatch(handler, /map\.once\('moveend'/);
 
   const countryMarkers = mapViewSource.match(/void handleCountryClick\(coords, list\)/g) ?? [];

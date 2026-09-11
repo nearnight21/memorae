@@ -3,6 +3,7 @@ import LandingNavbar from './components/LandingNavbar';
 import HeroSection from './components/HeroSection';
 import StickyStorySection from './components/StickyStorySection';
 import TimelinePlayground from './components/TimelinePlayground';
+import LocalModeTrustSection from './components/LocalModeTrustSection';
 import DownloadFooter from './components/DownloadFooter';
 import { navigateToApp } from './landingRouting';
 import './landing.css';
@@ -28,6 +29,9 @@ export const LandingPage: FC<LandingPageProps> = ({ onEnterApp = navigateToApp }
 
       {/* 第 3 屏：原生水晶时光轴交互展台（拖拽岁月与功能联动） */}
       <TimelinePlayground />
+
+      {/* 第 3.5 屏：信任与退路：本地模式手账信笺展台 */}
+      <LocalModeTrustSection />
 
       {/* 第 4 屏：尾声与极简下载收口 */}
       <DownloadFooter onEnterApp={onEnterApp} />
