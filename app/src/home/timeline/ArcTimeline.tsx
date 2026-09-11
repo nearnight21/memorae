@@ -199,6 +199,35 @@ export default function ArcTimeline({
   const currentValueRef = useRef<string | null>(selectedYear);
   const pendingSelectionIndex = useRef<number | null>(null);
 
+  const trackGeometry = useMemo(() => {
+    const radius = Math.min(220, width * ARC_RADIUS_RATIO);
+    const cx = width / 2;
+    const cy = 87 + radius;
+    const hHalf = 26;
+    const rTop = radius + hHalf;
+    const rBottom = radius - hHalf;
+    const thetaMax = 0.85;
+
+    const x1Top = (cx - rTop * Math.sin(thetaMax)).toFixed(2);
+    const y1Top = (cy - rTop * Math.cos(thetaMax)).toFixed(2);
+    const x2Top = (cx + rTop * Math.sin(thetaMax)).toFixed(2);
+    const y2Top = (cy - rTop * Math.cos(thetaMax)).toFixed(2);
+
+    const x1Bottom = (cx - rBottom * Math.sin(thetaMax)).toFixed(2);
+    const y1Bottom = (cy - rBottom * Math.cos(thetaMax)).toFixed(2);
+    const x2Bottom = (cx + rBottom * Math.sin(thetaMax)).toFixed(2);
+    const y2Bottom = (cy - rBottom * Math.cos(thetaMax)).toFixed(2);
+
+    const rTopStr = rTop.toFixed(2);
+    const rBottomStr = rBottom.toFixed(2);
+
+    const topPath = `M ${x1Top} ${y1Top} A ${rTopStr} ${rTopStr} 0 0 1 ${x2Top} ${y2Top}`;
+    const bottomPath = `M ${x1Bottom} ${y1Bottom} A ${rBottomStr} ${rBottomStr} 0 0 1 ${x2Bottom} ${y2Bottom}`;
+    const slotBodyPath = `${topPath} L ${x2Bottom} ${y2Bottom} A ${rBottomStr} ${rBottomStr} 0 0 0 ${x1Bottom} ${y1Bottom} Z`;
+
+    return { topPath, bottomPath, slotBodyPath };
+  }, [width]);
+
   const updateDisplayIndex = useCallback((index: number) => {
     setDisplayIndex((current) => current === index ? current : index);
   }, []);
@@ -532,35 +561,35 @@ export default function ArcTimeline({
       <View style={styles.arcViewport}>
         <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
           <Canvas style={StyleSheet.absoluteFill}>
-            {/* 双轨夹出的条形滑道底槽 */}
+            {/* 严格同心双轨夹出的条形滑道底槽 */}
             <Path
               color="rgba(226, 238, 246, 0.42)"
-              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126 L ${width + 24} 176 Q ${width / 2} 48 -24 176 Z`}
+              path={trackGeometry.slotBodyPath}
               style="fill"
             />
-            {/* 上导轨 */}
+            {/* 上导轨（与年份数字轨迹严格同心） */}
             <Path
               color="rgba(255,255,255,0.88)"
-              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126`}
+              path={trackGeometry.topPath}
               strokeWidth={2}
               style="stroke"
             />
             <Path
               color="rgba(145,182,208,0.72)"
-              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126`}
+              path={trackGeometry.topPath}
               strokeWidth={1}
               style="stroke"
             />
-            {/* 下导轨 */}
+            {/* 下导轨（与年份数字轨迹严格同心） */}
             <Path
               color="rgba(255,255,255,0.88)"
-              path={`M -24 176 Q ${width / 2} 48 ${width + 24} 176`}
+              path={trackGeometry.bottomPath}
               strokeWidth={2}
               style="stroke"
             />
             <Path
               color="rgba(145,182,208,0.72)"
-              path={`M -24 176 Q ${width / 2} 48 ${width + 24} 176`}
+              path={trackGeometry.bottomPath}
               strokeWidth={1}
               style="stroke"
             />
@@ -632,7 +661,7 @@ const styles = StyleSheet.create({
     top: 26,
     left: 0,
     right: 0,
-    height: 156,
+    height: 180,
     alignItems: 'center',
     overflow: 'visible',
   },
@@ -643,7 +672,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     alignItems: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   yearNode: {
     position: 'absolute',
