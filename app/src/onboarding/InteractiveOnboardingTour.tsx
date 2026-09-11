@@ -119,7 +119,7 @@ export default function InteractiveOnboardingTour({
     cardPositionStyle = [styles.posBottom, { bottom: Math.max(32, insets.bottom + 16) }];
   } else {
     // 主界面时间轴上方
-    cardPositionStyle = [styles.posAboveTimeline, { bottom: Math.max(210, insets.bottom + 180) }];
+    cardPositionStyle = [styles.posAboveTimeline, { bottom: Math.max(260, insets.bottom + 230) }];
   }
 
   return (
@@ -127,7 +127,7 @@ export default function InteractiveOnboardingTour({
       {/* 视觉手势微动指引层（绝不拦截触摸） */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         {state.step === 'pull_create' && (
-          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(105, insets.bottom + 75) }]}>
+          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(155, insets.bottom + 125) }]}>
             <Animated.View style={[styles.pulseHalo, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
             <Animated.View style={[styles.arrowContainer, { transform: [{ translateY: translateYBounce }] }]}>
               <Text style={styles.arrowIcon}>▲</Text>
@@ -137,7 +137,7 @@ export default function InteractiveOnboardingTour({
         )}
 
         {state.step === 'timeline_browse' && (
-          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(105, insets.bottom + 75) }]}>
+          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(155, insets.bottom + 125) }]}>
             <Animated.View style={[styles.arrowContainer, { transform: [{ translateX: translateXHorizontal }] }]}>
               <Text style={styles.arrowHorizontalIcon}>◀ 左右滑动 ▶</Text>
             </Animated.View>
@@ -145,7 +145,7 @@ export default function InteractiveOnboardingTour({
         )}
 
         {state.step === 'timeline_now' && (
-          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(105, insets.bottom + 75) }]}>
+          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(155, insets.bottom + 125) }]}>
             <Animated.View style={[styles.pulseHalo, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
             <Animated.View style={[styles.doubleTapWrap, { transform: [{ translateY: translateYBounce }] }]}>
               <Text style={styles.doubleTapText}>双击中心</Text>
@@ -154,7 +154,7 @@ export default function InteractiveOnboardingTour({
         )}
 
         {state.step === 'timeline_reset_map' && (
-          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(105, insets.bottom + 75) }]}>
+          <View style={[styles.timelineCenterAnchor, { bottom: Math.max(155, insets.bottom + 125) }]}>
             <Animated.View style={[styles.pulseHalo, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
             <Animated.View style={[styles.arrowContainer, { transform: [{ translateY: translateYDownBounce }] }]}>
               <Text style={styles.arrowLabel}>向下拉动</Text>

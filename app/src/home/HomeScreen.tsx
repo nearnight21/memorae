@@ -25,7 +25,7 @@ import { androidTopInset } from '../ui/layout';
 import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
 import { CREATE_OVERLAY_MAX_OPACITY, RESET_OVERLAY_MAX_OPACITY } from './timeline/timelineModel';
 
-const TIMELINE_VERTICAL_OFFSET = 50;
+const TIMELINE_VERTICAL_OFFSET = 0;
 const CHROME_ENTER_DURATION = 340;
 const CHROME_EXIT_DURATION = 180;
 const CHROME_BOTTOM_DRIFT_Y = 28;

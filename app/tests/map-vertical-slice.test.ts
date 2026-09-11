@@ -242,13 +242,13 @@ test('地点选择模式复用 Home 的唯一地图实例', async () => {
   assert.match(homeSource, /showStatus=\{false\}/);
 });
 
-test('正式 Home 在地图与时间轴之间使用单层独立安静区并将时间轴下移 50px', async () => {
+test('正式 Home 在地图与时间轴之间使用单层独立安静区', async () => {
   const [homeSource, quietZoneSource] = await Promise.all([
     readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/home/TimelineQuietZone.tsx', import.meta.url), 'utf8'),
   ]);
   assert.match(homeSource, /<TimelineQuietZone \/>/);
-  assert.match(homeSource, /const TIMELINE_VERTICAL_OFFSET = 50/);
+  assert.match(homeSource, /const TIMELINE_VERTICAL_OFFSET = 0/);
   assert.match(homeSource, /transform: \[\{ translateY: TIMELINE_VERTICAL_OFFSET \}\]/);
   assert.match(homeSource, /map: \{[\s\S]*zIndex: 2/);
   assert.match(homeSource, /overlay: \{[\s\S]*zIndex: 4/);
