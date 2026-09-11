@@ -597,9 +597,6 @@ export default function ArcTimeline({
     // 创建手势仍整体退场；收起底盘时不再连同年份一起变灰。
     opacity: interpolate(createPullProgress.value, [0, 0.35, 1], [1, 0.72, 0], Extrapolation.CLAMP),
   }), [createPullProgress]);
-  const dialOpacity = useDerivedValue(() => (
-    interpolate(dialRevealProgress.value, [0, 1], [0.9, 1], Extrapolation.CLAMP)
-  ));
 
   if (items.length === 0) return null;
   const safeDisplayIndex = clampArcTimelineIndex(displayIndex, items.length);
@@ -617,7 +614,7 @@ export default function ArcTimeline({
               height: trackGeometry.canvasHeight,
             }}
           >
-            <Group opacity={dialOpacity} transform={[{ translateX: trackGeometry.overDraw }]}>
+            <Group transform={[{ translateX: trackGeometry.overDraw }]}>
               <Mask mask={(
                 <Rect x={0} y={0} width={width} height={trackGeometry.canvasHeight}>
                   <LinearGradient
@@ -628,26 +625,37 @@ export default function ArcTimeline({
                   />
                 </Rect>
               )}>
+                {/* 静止底盘：冷蓝凹槽，向下渐隐；顶端留白形成明亮上缘 */}
                 <Path path={trackGeometry.bodyPath}>
                   <LinearGradient
                     start={vec(0, trackGeometry.crestY)}
                     end={vec(0, trackGeometry.canvasHeight)}
                     colors={[
-                      'rgba(240,248,253,0.38)',
-                      'rgba(233,244,252,0.78)',
-                      'rgba(228,240,250,0.52)',
-                      'rgba(228,240,250,0)',
+                      'rgba(255,255,255,0.90)',
+                      'rgba(130,172,202,0.66)',
+                      'rgba(130,172,202,0.40)',
+                      'rgba(130,172,202,0)',
                     ]}
-                    positions={[0, 0.28, 0.62, 1]}
+                    positions={[0, 0.16, 0.52, 1]}
                   />
                 </Path>
-                <Path path={trackGeometry.bodyPath} color="rgba(235,246,253,0.20)" style="fill">
-                  <BlurMask blur={7} style="normal" />
+                {/* 凹槽上缘内侧冷蓝阴影，刻画下陷深度 */}
+                <Path path={trackGeometry.crestPath} color="rgba(88,132,166,0.38)" strokeWidth={7} style="stroke">
+                  <BlurMask blur={6} style="normal" />
                 </Path>
-                <Path path={trackGeometry.crestPath} color="rgba(250,253,255,0.48)" strokeWidth={4} style="stroke">
-                  <BlurMask blur={3} style="normal" />
-                </Path>
-                <Path path={trackGeometry.crestPath} color="rgba(250,253,255,0.42)" strokeWidth={1} style="stroke" />
+                {/* 明亮上缘轨道线 */}
+                <Path path={trackGeometry.crestPath} color="rgba(255,255,255,0.96)" strokeWidth={2} style="stroke" />
+
+                {/* 拖动强调：整条轨道亮起并泛出柔光；松手后淡出，恢复为静止底盘 */}
+                <Group opacity={dialRevealProgress}>
+                  <Path path={trackGeometry.bodyPath} color="rgba(255,255,255,0.34)" style="fill">
+                    <BlurMask blur={10} style="normal" />
+                  </Path>
+                  <Path path={trackGeometry.crestPath} color="rgba(255,255,255,1)" strokeWidth={4} style="stroke">
+                    <BlurMask blur={5} style="normal" />
+                  </Path>
+                  <Path path={trackGeometry.crestPath} color="rgba(255,255,255,1)" strokeWidth={2} style="stroke" />
+                </Group>
               </Mask>
             </Group>
           </Canvas>
