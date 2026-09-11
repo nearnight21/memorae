@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
+import { Canvas, Path } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -83,6 +83,13 @@ const SPRING_CONFIG = {
   stiffness: 250,
   damping: 28,
   mass: 0.78,
+  energyThreshold: 0.001,
+  reduceMotion: ReduceMotion.System,
+} as const;
+const SNAP_BACK_CONFIG = {
+  stiffness: 270,
+  damping: 24,
+  mass: 0.75,
   energyThreshold: 0.001,
   reduceMotion: ReduceMotion.System,
 } as const;
@@ -442,8 +449,8 @@ export default function ArcTimeline({
       releaseTargetIndex.value = nextIndex;
       releaseCommitted.value = 0;
       releaseProgress.value = withTiming(1, RETURN_CONFIG);
-      scrollIndex.value = withTiming(targetIndex, RETURN_CONFIG);
-      dragOffsetYears.value = withTiming(0, RETURN_CONFIG);
+      scrollIndex.value = withSpring(targetIndex, SNAP_BACK_CONFIG);
+      dragOffsetYears.value = withSpring(0, SNAP_BACK_CONFIG);
     })
     .onFinalize((_event, success) => {
       if (success) return;
@@ -525,15 +532,35 @@ export default function ArcTimeline({
       <View style={styles.arcViewport}>
         <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
           <Canvas style={StyleSheet.absoluteFill}>
+            {/* 双轨夹出的条形滑道底槽 */}
             <Path
-              color="rgba(255,255,255,0.72)"
-              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
-              strokeWidth={4}
+              color="rgba(226, 238, 246, 0.42)"
+              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126 L ${width + 24} 176 Q ${width / 2} 48 -24 176 Z`}
+              style="fill"
+            />
+            {/* 上导轨 */}
+            <Path
+              color="rgba(255,255,255,0.88)"
+              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126`}
+              strokeWidth={2}
               style="stroke"
             />
             <Path
-              color="rgba(153,194,231,0.82)"
-              path={`M -24 146 Q ${width / 2} 22 ${width + 24} 146`}
+              color="rgba(145,182,208,0.72)"
+              path={`M -24 126 Q ${width / 2} -2 ${width + 24} 126`}
+              strokeWidth={1}
+              style="stroke"
+            />
+            {/* 下导轨 */}
+            <Path
+              color="rgba(255,255,255,0.88)"
+              path={`M -24 176 Q ${width / 2} 48 ${width + 24} 176`}
+              strokeWidth={2}
+              style="stroke"
+            />
+            <Path
+              color="rgba(145,182,208,0.72)"
+              path={`M -24 176 Q ${width / 2} 48 ${width + 24} 176`}
               strokeWidth={1}
               style="stroke"
             />
@@ -569,13 +596,23 @@ export default function ArcTimeline({
             style={[styles.lens, lensStyle]}
           >
             <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <Circle cx={33} cy={33} r={30}>
-                <RadialGradient c={vec(23, 17)} r={39} colors={['rgba(255,255,255,0.72)', 'rgba(247,252,255,0.28)', 'rgba(225,240,248,0.14)', 'rgba(198,222,235,0.08)']} positions={[0, 0.34, 0.7, 1]} />
-              </Circle>
-              <Circle cx={33} cy={33} r={29.5} color="rgba(244,252,255,0.9)" style="stroke" strokeWidth={1.2} />
+              {/* 拨钮内部双层细边框 */}
+              <Path
+                color="rgba(153, 194, 231, 0.48)"
+                path="M 8 3.5 L 60 3.5 Q 64.5 3.5 64.5 8 L 64.5 44 Q 64.5 48.5 60 48.5 L 8 48.5 Q 3.5 48.5 3.5 44 L 3.5 8 Q 3.5 3.5 8 3.5 Z"
+                strokeWidth={1}
+                style="stroke"
+              />
+              {/* 上下轨道金属咬合卡槽 */}
+              <Path color="rgba(255, 255, 255, 0.95)" path="M 27 1.5 L 41 1.5" strokeWidth={2.5} style="stroke" />
+              <Path color="rgba(255, 255, 255, 0.95)" path="M 27 50.5 L 41 50.5" strokeWidth={2.5} style="stroke" />
+              {/* 左右机械防滑咬花刻槽 */}
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 7 19 L 7 33 M 10 19 L 10 33" strokeWidth={1.2} style="stroke" />
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 58 19 L 58 33 M 61 19 L 61 33" strokeWidth={1.2} style="stroke" />
             </Canvas>
-            <Text style={styles.lensYear}>{items[safeDisplayIndex]?.label}</Text>
-            <View style={styles.lensInner} />
+            {items[safeDisplayIndex]?.value === null && (
+              <Text style={styles.allText}>全部</Text>
+            )}
           </Animated.View>
         </GestureDetector>
       </View>
@@ -610,10 +647,10 @@ const styles = StyleSheet.create({
   },
   yearNode: {
     position: 'absolute',
-    top: 4,
+    top: 71,
     left: '50%',
     width: 72,
-    height: 34,
+    height: 32,
     marginLeft: -36,
     alignItems: 'center',
     justifyContent: 'center',
@@ -627,37 +664,28 @@ const styles = StyleSheet.create({
   },
   lens: {
     position: 'absolute',
-    top: 54,
+    top: 61,
     left: '50%',
-    width: 66,
-    height: 66,
-    marginLeft: -33,
-    borderRadius: 33,
+    width: 68,
+    height: 52,
+    marginLeft: -34,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(239, 248, 252, 0.86)',
-    borderWidth: 2,
+    backgroundColor: 'rgba(240, 248, 253, 0.28)',
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.92)',
     shadowColor: '#36566b',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
     zIndex: 3,
   },
-  lensInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#78a6bd',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 249, 237, 0.82)',
-  },
-  lensYear: {
-    color: '#3c5664',
+  allText: {
+    color: '#1d2a32',
     fontSize: 14,
     lineHeight: 18,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+    fontWeight: '800',
   },
 });
