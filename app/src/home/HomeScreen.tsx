@@ -196,7 +196,7 @@ export default function HomeScreen({
         />
       </View>
       {!locationMode && (
-        <Animated.View pointerEvents="none" style={quietZoneAnimatedStyle}>
+        <Animated.View pointerEvents="none" style={[styles.quietZone, quietZoneAnimatedStyle]}>
           <TimelineQuietZone />
         </Animated.View>
       )}
@@ -304,6 +304,7 @@ export default function HomeScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#e3e8e5' },
   map: { ...StyleSheet.absoluteFill, zIndex: 2 },
+  quietZone: { ...StyleSheet.absoluteFill, zIndex: 3 },
   overlay: { flex: 1, paddingTop: androidTopInset(), zIndex: 4, justifyContent: 'space-between' },
   topRow: { paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   regionArea: { width: 224, zIndex: 4 },

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Circle, Group, Path } from '@shopify/react-native-skia';
+import { BlurMask, Canvas, Circle, Group, LinearGradient, Mask, Path, Rect, vec } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -72,6 +72,7 @@ interface YearNodeProps {
   width: number;
   scrollIndex: SharedValue<number>;
   highlightedIndex: SharedValue<number>;
+  dialRevealProgress: SharedValue<number>;
   itemCount: number;
   firstYearIndex: number;
 }
@@ -107,8 +108,27 @@ const CREATE_OVERLAY_RETURN_CONFIG = {
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
+const DIAL_REVEAL_CONFIG = {
+  duration: 130,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+} as const;
+const DIAL_COLLAPSE_CONFIG = {
+  duration: 380,
+  easing: Easing.out(Easing.cubic),
+  reduceMotion: ReduceMotion.System,
+} as const;
 
-function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount, firstYearIndex }: YearNodeProps) {
+function YearNode({
+  item,
+  index,
+  width,
+  scrollIndex,
+  highlightedIndex,
+  dialRevealProgress,
+  itemCount,
+  firstYearIndex,
+}: YearNodeProps) {
   // “全部”由中心按钮承载，不参与年份拱形节点，避免回弹期间出现幽灵节点。
   if (item.value === null) return null;
 
@@ -124,9 +144,27 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
     const dropY = (ARC_FLAT_DROP / (halfWidth * halfWidth)) * (deltaX * deltaX);
     const normalizedDistance = Math.abs(distance);
     const isHighlighted = index === highlightedIndex.value;
+    const reveal = interpolate(
+      dialRevealProgress.value,
+      [0, 0.2, 0.7, 1],
+      [0, 0.26, 0.72, 1],
+      Extrapolation.CLAMP,
+    );
+    const quietOpacity = interpolate(
+      normalizedDistance,
+      [0, 0.72, 1.05, 1.5],
+      [1, 0.96, 0.86, 0],
+      Extrapolation.CLAMP,
+    );
+    const expandedOpacity = interpolate(
+      normalizedDistance,
+      [0, 1, 2.15, 3.5],
+      [1, 0.84, 0.3, 0],
+      Extrapolation.CLAMP,
+    );
     const baseScale = interpolate(normalizedDistance, [0, 1, 2.4], [1.12, 0.94, 0.76], Extrapolation.CLAMP);
     return {
-      opacity: isHighlighted ? 1 : interpolate(normalizedDistance, [0, 1.8, 3.4], [1, 0.72, 0], Extrapolation.CLAMP),
+      opacity: isHighlighted ? 1 : interpolate(reveal, [0, 1], [quietOpacity, expandedOpacity], Extrapolation.CLAMP),
       zIndex: isHighlighted ? 2 : 0,
       transform: [
         { translateX: deltaX },
@@ -134,12 +172,12 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
         { scale: baseScale * (isHighlighted ? 1.08 : 1) },
       ],
     };
-  }, [firstYearIndex, highlightedIndex, index, itemCount, scrollIndex, width]);
+  }, [dialRevealProgress, firstYearIndex, highlightedIndex, index, itemCount, scrollIndex, width]);
 
   const highlightedTextStyle = useAnimatedStyle(() => {
     const isHighlighted = index === highlightedIndex.value;
     return {
-      color: isHighlighted ? '#1d2a32' : '#60727c',
+      color: isHighlighted ? '#1d2a32' : '#405e73',
       fontWeight: isHighlighted ? '800' : '600',
     };
   }, [highlightedIndex, index]);
@@ -180,6 +218,7 @@ export default function ArcTimeline({
   const edgeScrollOffset = useSharedValue(0);
   const edgeDirection = useSharedValue(0);
   const isDragging = useSharedValue(0);
+  const dialRevealProgress = useSharedValue(0);
   const releaseProgress = useSharedValue(0);
   const releaseTargetIndex = useSharedValue(0);
   const releaseCommitted = useSharedValue(0);
@@ -202,7 +241,8 @@ export default function ArcTimeline({
 
   const trackGeometry = useMemo(() => {
     const halfWidth = width / 2;
-    // 两端向屏幕外各延伸 40dp，完全贯穿屏幕两端，彻底消除边缘断线
+    // 上缘沿年份弧线展开，底面延伸至画布下方，再用渐变消隐。
+    // 不再绘制下缘，避免大轮廓重新变成两条平行轨道。
     const overDraw = 40;
     const wExt = halfWidth + overDraw;
     const x0 = halfWidth;
@@ -211,22 +251,14 @@ export default function ArcTimeline({
     const curvature = ARC_FLAT_DROP / (halfWidth * halfWidth);
     const dropExt = curvature * (wExt * wExt);
 
-    // 法向等宽几何补偿：计算两端切线倾角的割线因数 1/cos(alpha)，将端点垂直间距适度展开，使全线法向视宽恒等于 52dp
-    const slopeExt = 2 * curvature * wExt;
-    const secExt = Math.sqrt(1 + slopeExt * slopeExt);
-    const hHalfCenter = 26;
-    const hHalfEdge = hHalfCenter * secExt;
+    const crestY = 55;
+    const canvasHeight = 220;
+    const yEnd = (crestY + dropExt).toFixed(2);
+    const yControl = (crestY - dropExt).toFixed(2);
+    const crestPath = `M ${x1} ${yEnd} Q ${x0} ${yControl} ${x2} ${yEnd}`;
+    const bodyPath = `${crestPath} L ${x2} ${canvasHeight + 40} L ${x1} ${canvasHeight + 40} Z`;
 
-    const yEndTop = (87 + dropExt - hHalfEdge).toFixed(2);
-    const yCtrlTop = (87 - hHalfCenter - (dropExt + (hHalfEdge - hHalfCenter))).toFixed(2);
-    const yEndBottom = (87 + dropExt + hHalfEdge).toFixed(2);
-    const yCtrlBottom = (87 + hHalfCenter - (dropExt + (hHalfEdge - hHalfCenter))).toFixed(2);
-
-    const topPath = `M ${x1} ${yEndTop} Q ${x0} ${yCtrlTop} ${x2} ${yEndTop}`;
-    const bottomPath = `M ${x1} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x2} ${yEndBottom}`;
-    const slotBodyPath = `${topPath} L ${x2} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x1} ${yEndBottom} Z`;
-
-    return { topPath, bottomPath, slotBodyPath, overDraw };
+    return { crestPath, bodyPath, crestY, canvasHeight, overDraw };
   }, [width]);
 
   const updateDisplayIndex = useCallback((index: number) => {
@@ -336,6 +368,8 @@ export default function ArcTimeline({
   const panGesture = useMemo(() => Gesture.Pan()
     .minDistance(CREATE_PULL_INTENT_THRESHOLD)
     .onStart(() => {
+      cancelAnimation(dialRevealProgress);
+      dialRevealProgress.value = withTiming(1, DIAL_REVEAL_CONFIG);
       cancelAnimation(scrollIndex);
       cancelAnimation(dragOffsetYears);
       cancelAnimation(releaseProgress);
@@ -437,11 +471,14 @@ export default function ArcTimeline({
               createPullArmed.value = 0;
             },
           );
+          // 新建记忆覆盖层接管后，时间轴也回到静止轮廓，避免轨道停在展开态。
+          dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
           return;
         }
         createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
         createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
         createPullArmed.value = 0;
+        dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
         return;
       }
       if (resolvedMode === ARC_TIMELINE_GESTURE_RESET_MAP) {
@@ -457,6 +494,7 @@ export default function ArcTimeline({
         resetPullOffsetY.value = withSpring(0, SPRING_CONFIG);
         resetPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
         resetPullArmed.value = 0;
+        dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
         return;
       }
       if (resolvedMode !== ARC_TIMELINE_GESTURE_HORIZONTAL) {
@@ -466,6 +504,7 @@ export default function ArcTimeline({
         resetPullOffsetY.value = withSpring(0, SPRING_CONFIG);
         resetPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
         resetPullArmed.value = 0;
+        dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
         return;
       }
       const buttonIndex = scrollIndex.value + visualArcTimelineDragOffset(
@@ -481,6 +520,7 @@ export default function ArcTimeline({
       releaseProgress.value = withTiming(1, RETURN_CONFIG);
       scrollIndex.value = withSpring(targetIndex, SNAP_BACK_CONFIG);
       dragOffsetYears.value = withSpring(0, SNAP_BACK_CONFIG);
+      dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
     })
     .onFinalize((_event, success) => {
       if (success) return;
@@ -488,6 +528,7 @@ export default function ArcTimeline({
       isDragging.value = 0;
       edgeDirection.value = 0;
       edgeScrollOffset.value = 0;
+      dialRevealProgress.value = withTiming(0, DIAL_COLLAPSE_CONFIG);
       dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
       createPullOffsetY.value = withSpring(0, SPRING_CONFIG);
       createPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
@@ -495,7 +536,7 @@ export default function ArcTimeline({
       resetPullOffsetY.value = withSpring(0, SPRING_CONFIG);
       resetPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
       resetPullArmed.value = 0;
-    }), [createCommitted, createHapticTriggered, createPullArmed, createPullOffsetY, createPullProgress, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, gestureStartIndex, isDragging, items.length, maximumDragYears, onResetMapView, resetCommitted, resetHapticTriggered, resetPullArmed, resetPullOffsetY, resetPullProgress, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, triggerCreateHaptic, triggerCreateOnce, triggerResetOnce]);
+    }), [createCommitted, createHapticTriggered, createPullArmed, createPullOffsetY, createPullProgress, dialRevealProgress, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, gestureStartIndex, isDragging, items.length, maximumDragYears, onResetMapView, resetCommitted, resetHapticTriggered, resetPullArmed, resetPullOffsetY, resetPullProgress, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, triggerCreateHaptic, triggerCreateOnce, triggerResetOnce]);
 
   const doubleTapGesture = useMemo(() => Gesture.Tap()
     .numberOfTaps(2)
@@ -542,18 +583,23 @@ export default function ArcTimeline({
     const distance = Math.abs(fractionalIndex);
     const createScale = interpolate(createPullProgress.value, [0, 1], [1, 1.035], Extrapolation.CLAMP)
       * (createPullArmed.value === 1 ? 1.025 : 1);
+    const dialScale = interpolate(dialRevealProgress.value, [0, 1], [1, 1.035], Extrapolation.CLAMP);
     return {
       transform: [
         { translateX: deltaX },
         { translateY: dropY + createPullOffsetY.value + resetPullOffsetY.value },
-        { scale: interpolate(distance, [0, 0.5], [1, 0.94], Extrapolation.CLAMP) * createScale * doubleTapScale.value },
+        { scale: interpolate(distance, [0, 0.5], [1, 0.94], Extrapolation.CLAMP) * createScale * dialScale * doubleTapScale.value },
       ],
     };
-  }, [createPullArmed, createPullOffsetY, createPullProgress, doubleTapScale, dragOffsetYears, maximumDragYears, resetPullOffsetY, width]);
+  }, [createPullArmed, createPullOffsetY, createPullProgress, dialRevealProgress, doubleTapScale, dragOffsetYears, maximumDragYears, resetPullOffsetY, width]);
 
   const trackStyle = useAnimatedStyle(() => ({
+    // 创建手势仍整体退场；收起底盘时不再连同年份一起变灰。
     opacity: interpolate(createPullProgress.value, [0, 0.35, 1], [1, 0.72, 0], Extrapolation.CLAMP),
   }), [createPullProgress]);
+  const dialOpacity = useDerivedValue(() => (
+    interpolate(dialRevealProgress.value, [0, 1], [0.9, 1], Extrapolation.CLAMP)
+  ));
 
   if (items.length === 0) return null;
   const safeDisplayIndex = clampArcTimelineIndex(displayIndex, items.length);
@@ -568,82 +614,41 @@ export default function ArcTimeline({
               top: 0,
               left: -trackGeometry.overDraw,
               width: width + trackGeometry.overDraw * 2,
-              height: 220,
+              height: trackGeometry.canvasHeight,
             }}
           >
-            <Group transform={[{ translateX: trackGeometry.overDraw }]}>
-              {/* 1. 凹槽深层基底色（沉稳的内嵌下陷底色） */}
-              <Path
-                color="rgba(216, 230, 240, 0.52)"
-                path={trackGeometry.slotBodyPath}
-                style="fill"
-              />
-              {/* 2. 槽体顶部内壁遮蔽阴影（光线自上方射入，形成向下凹陷 3mm 的内阴影） */}
-              <Path
-                color="rgba(36, 56, 72, 0.12)"
-                path={trackGeometry.topPath}
-                strokeWidth={6}
-                style="stroke"
-              />
-              {/* 3. 槽体底部内沿反光高光（下轨内壁接收上方反射的环境微光） */}
-              <Path
-                color="rgba(255, 255, 255, 0.45)"
-                path={trackGeometry.bottomPath}
-                strokeWidth={2}
-                style="stroke"
-              />
-
-              {/* --- 上金属导轨（3.5dp 实体厚度金属凸轨） --- */}
-              <Path
-                color="rgba(35, 52, 66, 0.10)"
-                path={trackGeometry.topPath}
-                strokeWidth={5}
-                style="stroke"
-              />
-              <Path
-                color="rgba(235, 244, 250, 0.96)"
-                path={trackGeometry.topPath}
-                strokeWidth={3.5}
-                style="stroke"
-              />
-              <Path
-                color="rgba(255, 255, 255, 0.98)"
-                path={trackGeometry.topPath}
-                strokeWidth={1.2}
-                style="stroke"
-              />
-              <Path
-                color="rgba(128, 162, 185, 0.65)"
-                path={trackGeometry.topPath}
-                strokeWidth={0.8}
-                style="stroke"
-              />
-
-              {/* --- 下金属导轨（3.5dp 实体厚度金属凸轨） --- */}
-              <Path
-                color="rgba(20, 36, 48, 0.16)"
-                path={trackGeometry.bottomPath}
-                strokeWidth={5}
-                style="stroke"
-              />
-              <Path
-                color="rgba(235, 244, 250, 0.96)"
-                path={trackGeometry.bottomPath}
-                strokeWidth={3.5}
-                style="stroke"
-              />
-              <Path
-                color="rgba(255, 255, 255, 0.98)"
-                path={trackGeometry.bottomPath}
-                strokeWidth={1.2}
-                style="stroke"
-              />
-              <Path
-                color="rgba(128, 162, 185, 0.65)"
-                path={trackGeometry.bottomPath}
-                strokeWidth={0.8}
-                style="stroke"
-              />
+            <Group opacity={dialOpacity} transform={[{ translateX: trackGeometry.overDraw }]}>
+              <Mask mask={(
+                <Rect x={0} y={0} width={width} height={trackGeometry.canvasHeight}>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(width, 0)}
+                    colors={['transparent', 'white', 'white', 'transparent']}
+                    positions={[0, 0.24, 0.76, 1]}
+                  />
+                </Rect>
+              )}>
+                <Path path={trackGeometry.bodyPath}>
+                  <LinearGradient
+                    start={vec(0, trackGeometry.crestY)}
+                    end={vec(0, trackGeometry.canvasHeight)}
+                    colors={[
+                      'rgba(240,248,253,0.38)',
+                      'rgba(233,244,252,0.78)',
+                      'rgba(228,240,250,0.52)',
+                      'rgba(228,240,250,0)',
+                    ]}
+                    positions={[0, 0.28, 0.62, 1]}
+                  />
+                </Path>
+                <Path path={trackGeometry.bodyPath} color="rgba(235,246,253,0.20)" style="fill">
+                  <BlurMask blur={7} style="normal" />
+                </Path>
+                <Path path={trackGeometry.crestPath} color="rgba(250,253,255,0.48)" strokeWidth={4} style="stroke">
+                  <BlurMask blur={3} style="normal" />
+                </Path>
+                <Path path={trackGeometry.crestPath} color="rgba(250,253,255,0.42)" strokeWidth={1} style="stroke" />
+              </Mask>
             </Group>
           </Canvas>
           {items.map((item, index) => (
@@ -655,6 +660,7 @@ export default function ArcTimeline({
               itemCount={items.length}
               firstYearIndex={firstYearIndex}
               scrollIndex={scrollIndex}
+              dialRevealProgress={dialRevealProgress}
               width={width}
             />
           ))}

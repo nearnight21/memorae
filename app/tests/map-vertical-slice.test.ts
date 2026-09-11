@@ -254,7 +254,7 @@ test('正式 Home 在地图与时间轴之间使用单层独立安静区', async
   assert.match(homeSource, /overlay: \{[\s\S]*zIndex: 4/);
   assert.match(homeSource, /status\?\.includes\('诊断：'\) \? undefined : status/);
   assert.match(quietZoneSource, /TIMELINE_QUIET_ZONE_SCREEN_RATIO = 0\.3/);
-  assert.match(quietZoneSource, /rgba\(247,245,239,0\.55\)/);
+  assert.match(quietZoneSource, /rgba\(231,242,252,0\.76\)/);
   assert.doesNotMatch(quietZoneSource, /RadialGradient/);
   assert.match(quietZoneSource, /pointerEvents="none"/);
   assert.match(quietZoneSource, /zIndex: 3/);
