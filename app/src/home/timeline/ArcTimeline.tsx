@@ -76,8 +76,7 @@ interface YearNodeProps {
   firstYearIndex: number;
 }
 
-const ARC_RADIUS_RATIO = 0.54;
-const ARC_STEP_RADIANS = 0.32;
+const ARC_FLAT_DROP = 48;
 const ARC_EDGE_SCROLL_YEARS_PER_SECOND = ARC_TIMELINE_GESTURE_SPEED;
 const SPRING_CONFIG = {
   stiffness: 250,
@@ -120,18 +119,19 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
       const wrapped = (distance + yearCount / 2) % yearCount;
       distance = ((wrapped < 0 ? wrapped + yearCount : wrapped) - yearCount / 2);
     }
-    const radius = Math.min(220, width * ARC_RADIUS_RATIO);
-    const angle = distance * ARC_STEP_RADIANS;
+    const deltaX = distance * 76;
+    const halfWidth = width / 2;
+    const dropY = (ARC_FLAT_DROP / (halfWidth * halfWidth)) * (deltaX * deltaX);
     const normalizedDistance = Math.abs(distance);
     const isHighlighted = index === highlightedIndex.value;
-    const baseScale = interpolate(normalizedDistance, [0, 1, 2.4], [1.12, 0.92, 0.72], Extrapolation.CLAMP);
+    const baseScale = interpolate(normalizedDistance, [0, 1, 2.4], [1.12, 0.94, 0.76], Extrapolation.CLAMP);
     return {
       opacity: isHighlighted ? 1 : interpolate(normalizedDistance, [0, 1.8, 3.4], [1, 0.72, 0], Extrapolation.CLAMP),
       zIndex: isHighlighted ? 2 : 0,
       transform: [
-        { translateX: Math.sin(angle) * radius },
-        { translateY: radius * (1 - Math.cos(angle)) },
-        { scale: baseScale * (isHighlighted ? 1.1 : 1) },
+        { translateX: deltaX },
+        { translateY: dropY },
+        { scale: baseScale * (isHighlighted ? 1.08 : 1) },
       ],
     };
   }, [firstYearIndex, highlightedIndex, index, itemCount, scrollIndex, width]);
@@ -139,7 +139,7 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
   const highlightedTextStyle = useAnimatedStyle(() => {
     const isHighlighted = index === highlightedIndex.value;
     return {
-      color: isHighlighted ? '#2b1d14' : '#60727c',
+      color: isHighlighted ? '#1d2a32' : '#60727c',
       fontWeight: isHighlighted ? '800' : '600',
     };
   }, [highlightedIndex, index]);
@@ -200,30 +200,22 @@ export default function ArcTimeline({
   const pendingSelectionIndex = useRef<number | null>(null);
 
   const trackGeometry = useMemo(() => {
-    const radius = Math.min(220, width * ARC_RADIUS_RATIO);
-    const cx = width / 2;
-    const cy = 87 + radius;
-    const hHalf = 26;
-    const rTop = radius + hHalf;
-    const rBottom = radius - hHalf;
-    const thetaMax = 0.85;
+    const halfWidth = width / 2;
+    const wExt = halfWidth + 32; // 两侧延伸至屏幕外各 32dp，彻底画满屏幕不留断头
+    const x0 = halfWidth;
+    const x1 = -32;
+    const x2 = width + 32;
+    const curvature = ARC_FLAT_DROP / (halfWidth * halfWidth);
+    const dropExt = curvature * (wExt * wExt);
 
-    const x1Top = (cx - rTop * Math.sin(thetaMax)).toFixed(2);
-    const y1Top = (cy - rTop * Math.cos(thetaMax)).toFixed(2);
-    const x2Top = (cx + rTop * Math.sin(thetaMax)).toFixed(2);
-    const y2Top = (cy - rTop * Math.cos(thetaMax)).toFixed(2);
+    const yEndTop = (61 + dropExt).toFixed(2);
+    const yCtrlTop = (61 - dropExt).toFixed(2);
+    const yEndBottom = (113 + dropExt).toFixed(2);
+    const yCtrlBottom = (113 - dropExt).toFixed(2);
 
-    const x1Bottom = (cx - rBottom * Math.sin(thetaMax)).toFixed(2);
-    const y1Bottom = (cy - rBottom * Math.cos(thetaMax)).toFixed(2);
-    const x2Bottom = (cx + rBottom * Math.sin(thetaMax)).toFixed(2);
-    const y2Bottom = (cy - rBottom * Math.cos(thetaMax)).toFixed(2);
-
-    const rTopStr = rTop.toFixed(2);
-    const rBottomStr = rBottom.toFixed(2);
-
-    const topPath = `M ${x1Top} ${y1Top} A ${rTopStr} ${rTopStr} 0 0 1 ${x2Top} ${y2Top}`;
-    const bottomPath = `M ${x1Bottom} ${y1Bottom} A ${rBottomStr} ${rBottomStr} 0 0 1 ${x2Bottom} ${y2Bottom}`;
-    const slotBodyPath = `${topPath} L ${x2Bottom} ${y2Bottom} A ${rBottomStr} ${rBottomStr} 0 0 0 ${x1Bottom} ${y1Bottom} Z`;
+    const topPath = `M ${x1} ${yEndTop} Q ${x0} ${yCtrlTop} ${x2} ${yEndTop}`;
+    const bottomPath = `M ${x1} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x2} ${yEndBottom}`;
+    const slotBodyPath = `${topPath} L ${x2} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x1} ${yEndBottom} Z`;
 
     return { topPath, bottomPath, slotBodyPath };
   }, [width]);
@@ -535,15 +527,16 @@ export default function ArcTimeline({
 
   const lensStyle = useAnimatedStyle(() => {
     const fractionalIndex = visualArcTimelineDragOffset(dragOffsetYears.value, maximumDragYears);
-    const radius = Math.min(220, width * ARC_RADIUS_RATIO);
-    const angle = fractionalIndex * ARC_STEP_RADIANS;
+    const deltaX = fractionalIndex * 76;
+    const halfWidth = width / 2;
+    const dropY = (ARC_FLAT_DROP / (halfWidth * halfWidth)) * (deltaX * deltaX);
     const distance = Math.abs(fractionalIndex);
     const createScale = interpolate(createPullProgress.value, [0, 1], [1, 1.035], Extrapolation.CLAMP)
       * (createPullArmed.value === 1 ? 1.025 : 1);
     return {
       transform: [
-        { translateX: Math.sin(angle) * radius },
-        { translateY: radius * (1 - Math.cos(angle)) + createPullOffsetY.value + resetPullOffsetY.value },
+        { translateX: deltaX },
+        { translateY: dropY + createPullOffsetY.value + resetPullOffsetY.value },
         { scale: interpolate(distance, [0, 0.5], [1, 0.94], Extrapolation.CLAMP) * createScale * doubleTapScale.value },
       ],
     };
