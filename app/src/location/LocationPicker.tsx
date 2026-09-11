@@ -35,6 +35,7 @@ interface Props {
   onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
   locationClient?: LocationClient;
   onNetworkRequired?: () => Promise<boolean>;
+  onSearchActiveChange?: (active: boolean) => void;
   onCancel: () => void;
   onConfirm: (location: MemoryLocationV2) => void;
 }
@@ -68,6 +69,7 @@ export default function LocationPicker({
   onMapPress,
   locationClient,
   onNetworkRequired,
+  onSearchActiveChange,
   onCancel,
   onConfirm,
 }: Props) {
@@ -100,10 +102,15 @@ export default function LocationPicker({
     if (camera) onCameraChange?.(camera);
   }, [camera?.latitude, camera?.longitude, camera?.zoom]);
 
+  useEffect(() => {
+    onSearchActiveChange?.(searching || suggestions.length > 0);
+  }, [onSearchActiveChange, searching, suggestions.length]);
+
   useEffect(() => () => {
     if (reverseTimer.current) clearTimeout(reverseTimer.current);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-  }, []);
+    onSearchActiveChange?.(false);
+  }, [onSearchActiveChange]);
 
   function resolveCenter(next: CameraState): void {
     setCenter(next);
@@ -166,6 +173,9 @@ export default function LocationPicker({
 
   function selectSuggestion(candidate: LocationSuggestion): void {
     hasInteracted.current = true;
+    searchRequestId.current += 1;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setSearching(false);
     setQuery('');
     setSuggestions([]);
     const target = { latitude: candidate.lat, longitude: candidate.lng, zoom: CENTER_ZOOM };

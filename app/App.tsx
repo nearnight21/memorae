@@ -250,6 +250,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [thumbnailSources, setThumbnailSources] = useState<MemoryThumbnailSources>({});
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [onboardingSearchActive, setOnboardingSearchActive] = useState(false);
   const [selectedMemory, setSelectedMemory] = useState<MemoryV2 | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [editDraft, setEditDraft] = useState<EditDraftState | null>(null);
@@ -1180,6 +1181,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function openEditLocation(): void {
     locationPickerOriginCamera.current = homeViewport.camera;
+    setOnboardingSearchActive(false);
     setHomeCameraTarget(null);
     if (onboardingMode) {
       setTourState((current) => handleEnterLocationPicker(current));
@@ -1464,6 +1466,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   function confirmLocation(next: MemoryLocationV2): void {
     locationPickerOriginCamera.current = null;
+    setOnboardingSearchActive(false);
     setEditDraft((current) => current ? { ...current, location: next } : current);
     if (Number.isFinite(next.lat) && Number.isFinite(next.lng)) {
       setHomeViewport((current) => ({
@@ -1486,6 +1489,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     const origin = locationPickerOriginCamera.current;
     if (origin) setHomeViewport({ camera: origin });
     locationPickerOriginCamera.current = null;
+    setOnboardingSearchActive(false);
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
     setLocationPickerVisible(false);
@@ -1952,6 +1956,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
             camera={locationCameraTarget}
             locationClient={mobileLocationClient}
             onNetworkRequired={requestLocationNetwork}
+            onSearchActiveChange={setOnboardingSearchActive}
             onCameraChange={setLocationCameraTarget}
             onCancel={cancelLocationPicker}
             onConfirm={confirmLocation}
@@ -2080,7 +2085,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onSave={() => void runTask(confirmDefaultMapEditor)}
         />
       )}
-      {onboardingMode && (
+      {onboardingMode && !onboardingSearchActive && (
         <InteractiveOnboardingTour
           state={tourState}
           replay={onboardingMode === 'replay'}
