@@ -48,7 +48,7 @@ export default function OnboardingOverlay({ replay, onComplete }: { replay: bool
         ) : page.visual === 'timeline' ? (
           <View style={styles.timelineVisual}>
             <Image source={timePath} resizeMode="stretch" style={styles.timePath} />
-            <View style={styles.timelineButton}><Text style={styles.timelineYear}>全部</Text><View style={styles.timelineDot} /></View>
+            <View style={styles.timelineButton}><Text style={styles.timelineYear}>现在</Text><View style={styles.timelineDot} /></View>
           </View>
         ) : (
           <View style={styles.lockVisual}>

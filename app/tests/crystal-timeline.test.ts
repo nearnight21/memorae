@@ -58,6 +58,9 @@ test('水晶时间轴使用真实年份补齐自然年并保留全部时间，�
     '2026',
   ]);
   assert.equal(items.some((item) => item.value === '2027' || item.value === '2028'), false);
+  assert.equal(items[items.length - 1]?.label, '现在');
+  assert.equal(items[0]?.label, '现在');
+  assert.equal(items[1]?.label, '2020');
   assert.deepEqual(buildTimelineItems([], 2026, 3).map((item) => item.value), [
     null,
     '2024',

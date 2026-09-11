@@ -46,8 +46,12 @@ export function buildTimelineItems(
   );
 
   return [
-    { key: 'all', label: '全部', value: null },
-    ...naturalYears.map((year) => ({ key: `year:${year}`, label: year, value: year })),
+    { key: 'all', label: '现在', value: null },
+    ...naturalYears.map((year) => ({
+      key: `year:${year}`,
+      label: year === String(currentYear) ? '现在' : year,
+      value: year,
+    })),
   ];
 }
 
@@ -178,9 +182,9 @@ export const CREATE_PULL_ACTIVATION_DISTANCE = 112;
 export const CREATE_PULL_MAX_DISTANCE = 164;
 export const CREATE_PULL_RESISTANCE = 0.32;
 export const CREATE_OVERLAY_MAX_OPACITY = 0.5;
-export const RESET_PULL_INTENT_THRESHOLD = 10;
-export const RESET_PULL_ACTIVATION_DISTANCE = 60;
-export const RESET_PULL_MAX_DISTANCE = 112;
+export const RESET_PULL_INTENT_THRESHOLD = 12;
+export const RESET_PULL_ACTIVATION_DISTANCE = 82;
+export const RESET_PULL_MAX_DISTANCE = 130;
 export const RESET_PULL_RESISTANCE = 0.28;
 export const RESET_OVERLAY_MAX_OPACITY = 0.24;
 
@@ -210,7 +214,8 @@ export function resolveArcTimelineGestureMode(
   if (translationY < 0 && verticalDistance > horizontalDistance * dominanceRatio) {
     return ARC_TIMELINE_GESTURE_CREATE;
   }
-  if (translationY > 0 && verticalDistance > horizontalDistance * dominanceRatio) {
+  const resetRatio = Math.max(dominanceRatio, 1.45);
+  if (translationY > 0 && verticalDistance > horizontalDistance * resetRatio) {
     return ARC_TIMELINE_GESTURE_RESET_MAP;
   }
   return ARC_TIMELINE_GESTURE_PENDING;
@@ -218,8 +223,8 @@ export function resolveArcTimelineGestureMode(
 
 export function resetPullDisplayDistance(
   translationY: number,
-  activationDistance = 60,
-  maximumDistance = 112,
+  activationDistance = 82,
+  maximumDistance = 130,
   resistance = 0.28,
 ): number {
   'worklet';
@@ -231,7 +236,7 @@ export function resetPullDisplayDistance(
 export function resetPullProgress(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = 60,
+  activationDistance = 82,
 ): number {
   'worklet';
   if (mode !== ARC_TIMELINE_GESTURE_RESET_MAP || activationDistance <= 0) return 0;
@@ -241,7 +246,7 @@ export function resetPullProgress(
 export function isResetPullArmed(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = 60,
+  activationDistance = 82,
 ): boolean {
   'worklet';
   return mode === ARC_TIMELINE_GESTURE_RESET_MAP && translationY >= activationDistance;

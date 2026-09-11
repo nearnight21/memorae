@@ -198,6 +198,8 @@ test('正式中心年份按钮以互斥手势承载回到现在、上拉创建�
   assert.match(timeline, /scheduleOnRN\(triggerResetOnce\)/);
   assert.match(timeline, /scheduleOnRN\(triggerCreateOnce\)/);
   assert.match(timeline, /Haptics\.impactAsync\(Haptics\.ImpactFeedbackStyle\.Light\)/);
+  assert.doesNotMatch(timeline, /<Text style=\{styles\.allText\}>全部<\/Text>/);
+  assert.match(timeline, /item\.label === '现在' \? '现在' :/);
   assert.doesNotMatch(timeline, /setInterval|setTimeout|from 'react-native'.*Animated/);
   const createReleaseBranch = timeline.match(
     /if \(resolvedMode === ARC_TIMELINE_GESTURE_CREATE\) \{([\s\S]*?)if \(resolvedMode !== ARC_TIMELINE_GESTURE_HORIZONTAL\)/,

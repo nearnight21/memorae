@@ -94,9 +94,10 @@ test('弧形时间轴方向锁定区分横向、上拉创建和下拉回到全�
 });
 
 test('下拉回到全景使用阻尼位移和一次性激活阈值', () => {
-  assert.equal(RESET_PULL_ACTIVATION_DISTANCE, 60);
+  assert.equal(RESET_PULL_ACTIVATION_DISTANCE, 82);
   assert.equal(resetPullDisplayDistance(30), 30);
-  assert.equal(resetPullDisplayDistance(100), 71.2);
+  assert.equal(resetPullDisplayDistance(82), 82);
+  assert.equal(resetPullDisplayDistance(120), 92.64);
   assert.equal(resetPullDisplayDistance(-100), 0);
 });
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Circle, Path } from '@shopify/react-native-skia';
+import { Canvas, Circle, Group, Path } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -76,7 +76,7 @@ interface YearNodeProps {
   firstYearIndex: number;
 }
 
-const ARC_FLAT_DROP = 74;
+const ARC_FLAT_DROP = 60;
 const ARC_EDGE_SCROLL_YEARS_PER_SECOND = ARC_TIMELINE_GESTURE_SPEED;
 const SPRING_CONFIG = {
   stiffness: 250,
@@ -145,7 +145,10 @@ function YearNode({ item, index, width, scrollIndex, highlightedIndex, itemCount
   }, [highlightedIndex, index]);
 
   return (
-    <Animated.View accessibilityLabel={`${item.label} 年`} style={[styles.yearNode, animatedStyle]}>
+    <Animated.View
+      accessibilityLabel={item.label === '现在' ? '现在' : `${item.label} 年`}
+      style={[styles.yearNode, animatedStyle]}
+    >
       <Animated.Text style={[styles.yearText, highlightedTextStyle]}>{item.label}</Animated.Text>
     </Animated.View>
   );
@@ -191,9 +194,7 @@ export default function ArcTimeline({
   const resetCommitted = useSharedValue(0);
   const doubleTapScale = useSharedValue(1);
   const highlightedIndex = useDerivedValue(
-    () => firstYearIndex > 0 && scrollIndex.value === 0 && Math.abs(dragOffsetYears.value) < 0.5
-      ? 0
-      : arcTimelineButtonIndex(scrollIndex.value, dragOffsetYears.value, items.length, maximumDragYears, firstYearIndex),
+    () => arcTimelineButtonIndex(scrollIndex.value, dragOffsetYears.value, items.length, maximumDragYears, firstYearIndex),
     [dragOffsetYears, firstYearIndex, items.length, maximumDragYears, scrollIndex],
   );
   const currentValueRef = useRef<string | null>(selectedYear);
@@ -201,11 +202,12 @@ export default function ArcTimeline({
 
   const trackGeometry = useMemo(() => {
     const halfWidth = width / 2;
-    // 两端延伸出屏幕边缘 10dp，使下导轨在左右屏幕边界 (X=0 和 X=width) 恰好下垂到约 187dp（屏幕左右底角）自然收起
-    const wExt = halfWidth + 10;
+    // 两端向屏幕外各延伸 40dp，完全贯穿屏幕两端，彻底消除边缘断线
+    const overDraw = 40;
+    const wExt = halfWidth + overDraw;
     const x0 = halfWidth;
-    const x1 = -10;
-    const x2 = width + 10;
+    const x1 = -overDraw;
+    const x2 = width + overDraw;
     const curvature = ARC_FLAT_DROP / (halfWidth * halfWidth);
     const dropExt = curvature * (wExt * wExt);
 
@@ -224,7 +226,7 @@ export default function ArcTimeline({
     const bottomPath = `M ${x1} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x2} ${yEndBottom}`;
     const slotBodyPath = `${topPath} L ${x2} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x1} ${yEndBottom} Z`;
 
-    return { topPath, bottomPath, slotBodyPath };
+    return { topPath, bottomPath, slotBodyPath, overDraw };
   }, [width]);
 
   const updateDisplayIndex = useCallback((index: number) => {
@@ -302,9 +304,9 @@ export default function ArcTimeline({
     }
     cancelAnimation(scrollIndex);
     cancelAnimation(dragOffsetYears);
-    const targetIndex = targetSelection === 0
-      ? 0
-      : wrapArcTimelineYearIndex(targetSelection, items.length, firstYearIndex);
+    const targetIndex = targetSelection === 0 && firstYearIndex > 0
+      ? currentYearIndex
+      : (targetSelection === 0 ? 0 : wrapArcTimelineYearIndex(targetSelection, items.length, firstYearIndex));
     scrollIndex.value = withSpring(targetIndex, SPRING_CONFIG);
     dragOffsetYears.value = withSpring(0, SPRING_CONFIG);
   }, [currentYearIndex, dragOffsetYears, firstYearIndex, items.length, scrollIndex, selectedYear]);
@@ -497,9 +499,9 @@ export default function ArcTimeline({
 
   const doubleTapGesture = useMemo(() => Gesture.Tap()
     .numberOfTaps(2)
-    .maxDelay(260)
-    .maxDuration(220)
-    .maxDistance(CREATE_PULL_INTENT_THRESHOLD)
+    .maxDelay(285)
+    .maxDuration(240)
+    .maxDistance(24)
     .onEnd((_event, success) => {
       if (!success || isDragging.value !== 0 || gestureMode.value !== ARC_TIMELINE_GESTURE_PENDING) return;
       cancelAnimation(scrollIndex);
@@ -560,79 +562,89 @@ export default function ArcTimeline({
     <View accessibilityLabel="记忆年份时间轴" style={styles.root}>
       <View style={styles.arcViewport}>
         <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
-          <Canvas style={StyleSheet.absoluteFill}>
-            {/* 1. 凹槽深层基底色（沉稳的内嵌下陷底色） */}
-            <Path
-              color="rgba(216, 230, 240, 0.52)"
-              path={trackGeometry.slotBodyPath}
-              style="fill"
-            />
-            {/* 2. 槽体顶部内壁遮蔽阴影（光线自上方射入，形成向下凹陷 3mm 的内阴影） */}
-            <Path
-              color="rgba(36, 56, 72, 0.12)"
-              path={trackGeometry.topPath}
-              strokeWidth={6}
-              style="stroke"
-            />
-            {/* 3. 槽体底部内沿反光高光（下轨内壁接收上方反射的环境微光） */}
-            <Path
-              color="rgba(255, 255, 255, 0.45)"
-              path={trackGeometry.bottomPath}
-              strokeWidth={2}
-              style="stroke"
-            />
+          <Canvas
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -trackGeometry.overDraw,
+              width: width + trackGeometry.overDraw * 2,
+              height: 220,
+            }}
+          >
+            <Group transform={[{ translateX: trackGeometry.overDraw }]}>
+              {/* 1. 凹槽深层基底色（沉稳的内嵌下陷底色） */}
+              <Path
+                color="rgba(216, 230, 240, 0.52)"
+                path={trackGeometry.slotBodyPath}
+                style="fill"
+              />
+              {/* 2. 槽体顶部内壁遮蔽阴影（光线自上方射入，形成向下凹陷 3mm 的内阴影） */}
+              <Path
+                color="rgba(36, 56, 72, 0.12)"
+                path={trackGeometry.topPath}
+                strokeWidth={6}
+                style="stroke"
+              />
+              {/* 3. 槽体底部内沿反光高光（下轨内壁接收上方反射的环境微光） */}
+              <Path
+                color="rgba(255, 255, 255, 0.45)"
+                path={trackGeometry.bottomPath}
+                strokeWidth={2}
+                style="stroke"
+              />
 
-            {/* --- 上金属导轨（3.5dp 实体厚度金属凸轨） --- */}
-            <Path
-              color="rgba(35, 52, 66, 0.10)"
-              path={trackGeometry.topPath}
-              strokeWidth={5}
-              style="stroke"
-            />
-            <Path
-              color="rgba(235, 244, 250, 0.96)"
-              path={trackGeometry.topPath}
-              strokeWidth={3.5}
-              style="stroke"
-            />
-            <Path
-              color="rgba(255, 255, 255, 0.98)"
-              path={trackGeometry.topPath}
-              strokeWidth={1.2}
-              style="stroke"
-            />
-            <Path
-              color="rgba(128, 162, 185, 0.65)"
-              path={trackGeometry.topPath}
-              strokeWidth={0.8}
-              style="stroke"
-            />
+              {/* --- 上金属导轨（3.5dp 实体厚度金属凸轨） --- */}
+              <Path
+                color="rgba(35, 52, 66, 0.10)"
+                path={trackGeometry.topPath}
+                strokeWidth={5}
+                style="stroke"
+              />
+              <Path
+                color="rgba(235, 244, 250, 0.96)"
+                path={trackGeometry.topPath}
+                strokeWidth={3.5}
+                style="stroke"
+              />
+              <Path
+                color="rgba(255, 255, 255, 0.98)"
+                path={trackGeometry.topPath}
+                strokeWidth={1.2}
+                style="stroke"
+              />
+              <Path
+                color="rgba(128, 162, 185, 0.65)"
+                path={trackGeometry.topPath}
+                strokeWidth={0.8}
+                style="stroke"
+              />
 
-            {/* --- 下金属导轨（3.5dp 实体厚度金属凸轨） --- */}
-            <Path
-              color="rgba(20, 36, 48, 0.16)"
-              path={trackGeometry.bottomPath}
-              strokeWidth={5}
-              style="stroke"
-            />
-            <Path
-              color="rgba(235, 244, 250, 0.96)"
-              path={trackGeometry.bottomPath}
-              strokeWidth={3.5}
-              style="stroke"
-            />
-            <Path
-              color="rgba(255, 255, 255, 0.98)"
-              path={trackGeometry.bottomPath}
-              strokeWidth={1.2}
-              style="stroke"
-            />
-            <Path
-              color="rgba(128, 162, 185, 0.65)"
-              path={trackGeometry.bottomPath}
-              strokeWidth={0.8}
-              style="stroke"
-            />
+              {/* --- 下金属导轨（3.5dp 实体厚度金属凸轨） --- */}
+              <Path
+                color="rgba(20, 36, 48, 0.16)"
+                path={trackGeometry.bottomPath}
+                strokeWidth={5}
+                style="stroke"
+              />
+              <Path
+                color="rgba(235, 244, 250, 0.96)"
+                path={trackGeometry.bottomPath}
+                strokeWidth={3.5}
+                style="stroke"
+              />
+              <Path
+                color="rgba(255, 255, 255, 0.98)"
+                path={trackGeometry.bottomPath}
+                strokeWidth={1.2}
+                style="stroke"
+              />
+              <Path
+                color="rgba(128, 162, 185, 0.65)"
+                path={trackGeometry.bottomPath}
+                strokeWidth={0.8}
+                style="stroke"
+              />
+            </Group>
           </Canvas>
           {items.map((item, index) => (
             <YearNode
@@ -656,8 +668,8 @@ export default function ArcTimeline({
             ]}
             accessibilityLabel="中心年份按钮"
             accessibilityRole="adjustable"
-            accessibilityValue={{ text: items[safeDisplayIndex]?.value ? `${items[safeDisplayIndex].label} 年` : '全部时间' }}
-            hitSlop={{ top: 16, bottom: 20, left: 24, right: 24 }}
+            accessibilityValue={{ text: items[safeDisplayIndex]?.label === '现在' ? '现在' : `${items[safeDisplayIndex]?.label ?? ''} 年` }}
+            hitSlop={{ top: 20, bottom: 24, left: 32, right: 32 }}
             onAccessibilityAction={({ nativeEvent }) => {
               if (nativeEvent.actionName === 'increment') animateFromAccessibility(safeDisplayIndex + 1);
               if (nativeEvent.actionName === 'decrement') animateFromAccessibility(safeDisplayIndex - 1);
@@ -665,23 +677,23 @@ export default function ArcTimeline({
             style={[styles.lens, lensStyle]}
           >
             <Canvas pointerEvents="none" style={StyleSheet.absoluteFill}>
-              {/* 实体金属圆环厚度环身（7dp 厚度壁） */}
-              <Circle cx={32} cy={32} r={27} color="rgba(240, 246, 250, 0.95)" strokeWidth={7} style="stroke" />
+              {/* 实体金属圆环厚度环身（4.5dp 壁厚，内径 52dp 宽敞透光） */}
+              <Circle cx={32} cy={32} r={28.25} color="rgba(240, 246, 250, 0.95)" strokeWidth={4.5} style="stroke" />
               {/* 外缘金属倒角高光圈 */}
               <Circle cx={32} cy={32} r={30.5} color="rgba(255, 255, 255, 0.98)" strokeWidth={1} style="stroke" />
               {/* 外轮廓精细切缝阴影 */}
               <Circle cx={32} cy={32} r={31.2} color="rgba(140, 175, 198, 0.45)" strokeWidth={0.8} style="stroke" />
-              {/* 内孔深度切面阴影壁（营造向内深挖孔洞的立体厚度感） */}
-              <Circle cx={32} cy={32} r={23.5} color="rgba(42, 68, 86, 0.38)" strokeWidth={1.2} style="stroke" />
+              {/* 内孔深度切面阴影壁（扩大至 r=26，内孔直径恒等于 52dp，为 4 位年份提供呼吸间隙） */}
+              <Circle cx={32} cy={32} r={26} color="rgba(42, 68, 86, 0.35)" strokeWidth={1.0} style="stroke" />
               {/* 上下导轨抱轨金属咬合卡块 */}
               <Path color="rgba(255, 255, 255, 0.98)" path="M 27 1.5 L 37 1.5" strokeWidth={2.5} style="stroke" />
               <Path color="rgba(255, 255, 255, 0.98)" path="M 27 62.5 L 37 62.5" strokeWidth={2.5} style="stroke" />
-              {/* 左右机械防滑咬花刻槽 */}
-              <Path color="rgba(130, 168, 192, 0.65)" path="M 4 28 L 4 36 M 6.5 29 L 6.5 35" strokeWidth={1.2} style="stroke" />
-              <Path color="rgba(130, 168, 192, 0.65)" path="M 60 28 L 60 36 M 57.5 29 L 57.5 35" strokeWidth={1.2} style="stroke" />
+              {/* 左右机械防滑咬花刻槽（贴紧外壁受力区，不向内孔凸出侵占文字） */}
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 3.5 28 L 3.5 36 M 5.5 29 L 5.5 35" strokeWidth={1.2} style="stroke" />
+              <Path color="rgba(130, 168, 192, 0.65)" path="M 60.5 28 L 60.5 36 M 58.5 29 L 58.5 35" strokeWidth={1.2} style="stroke" />
             </Canvas>
             {items[safeDisplayIndex]?.value === null && (
-              <Text style={styles.allText}>全部</Text>
+              <Text style={styles.allText}>现在</Text>
             )}
           </Animated.View>
         </GestureDetector>
@@ -702,7 +714,7 @@ const styles = StyleSheet.create({
     top: 26,
     left: 0,
     right: 0,
-    height: 180,
+    height: 220,
     alignItems: 'center',
     overflow: 'visible',
   },
