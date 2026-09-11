@@ -209,10 +209,16 @@ export default function ArcTimeline({
     const curvature = ARC_FLAT_DROP / (halfWidth * halfWidth);
     const dropExt = curvature * (wExt * wExt);
 
-    const yEndTop = (61 + dropExt).toFixed(2);
-    const yCtrlTop = (61 - dropExt).toFixed(2);
-    const yEndBottom = (113 + dropExt).toFixed(2);
-    const yCtrlBottom = (113 - dropExt).toFixed(2);
+    // 法向等宽几何补偿：计算两端切线倾角的割线因数 1/cos(alpha)，将端点垂直间距适度展开，使全线法向视宽恒等于 52dp
+    const slopeExt = 2 * curvature * wExt;
+    const secExt = Math.sqrt(1 + slopeExt * slopeExt);
+    const hHalfCenter = 26;
+    const hHalfEdge = hHalfCenter * secExt;
+
+    const yEndTop = (87 + dropExt - hHalfEdge).toFixed(2);
+    const yCtrlTop = (87 - hHalfCenter - (dropExt + (hHalfEdge - hHalfCenter))).toFixed(2);
+    const yEndBottom = (87 + dropExt + hHalfEdge).toFixed(2);
+    const yCtrlBottom = (87 + hHalfCenter - (dropExt + (hHalfEdge - hHalfCenter))).toFixed(2);
 
     const topPath = `M ${x1} ${yEndTop} Q ${x0} ${yCtrlTop} ${x2} ${yEndTop}`;
     const bottomPath = `M ${x1} ${yEndBottom} Q ${x0} ${yCtrlBottom} ${x2} ${yEndBottom}`;
@@ -555,36 +561,76 @@ export default function ArcTimeline({
       <View style={styles.arcViewport}>
         <Animated.View pointerEvents="none" style={[styles.trackLayer, trackStyle]}>
           <Canvas style={StyleSheet.absoluteFill}>
-            {/* 严格同心双轨夹出的条形滑道底槽 */}
+            {/* 1. 凹槽深层基底色（沉稳的内嵌下陷底色） */}
             <Path
-              color="rgba(226, 238, 246, 0.42)"
+              color="rgba(216, 230, 240, 0.52)"
               path={trackGeometry.slotBodyPath}
               style="fill"
             />
-            {/* 上导轨（与年份数字轨迹严格同心） */}
+            {/* 2. 槽体顶部内壁遮蔽阴影（光线自上方射入，形成向下凹陷 3mm 的内阴影） */}
             <Path
-              color="rgba(255,255,255,0.88)"
+              color="rgba(36, 56, 72, 0.12)"
               path={trackGeometry.topPath}
-              strokeWidth={2}
+              strokeWidth={6}
               style="stroke"
             />
+            {/* 3. 槽体底部内沿反光高光（下轨内壁接收上方反射的环境微光） */}
             <Path
-              color="rgba(145,182,208,0.72)"
-              path={trackGeometry.topPath}
-              strokeWidth={1}
-              style="stroke"
-            />
-            {/* 下导轨（与年份数字轨迹严格同心） */}
-            <Path
-              color="rgba(255,255,255,0.88)"
+              color="rgba(255, 255, 255, 0.45)"
               path={trackGeometry.bottomPath}
               strokeWidth={2}
               style="stroke"
             />
+
+            {/* --- 上金属导轨（3.5dp 实体厚度金属凸轨） --- */}
             <Path
-              color="rgba(145,182,208,0.72)"
+              color="rgba(35, 52, 66, 0.10)"
+              path={trackGeometry.topPath}
+              strokeWidth={5}
+              style="stroke"
+            />
+            <Path
+              color="rgba(235, 244, 250, 0.96)"
+              path={trackGeometry.topPath}
+              strokeWidth={3.5}
+              style="stroke"
+            />
+            <Path
+              color="rgba(255, 255, 255, 0.98)"
+              path={trackGeometry.topPath}
+              strokeWidth={1.2}
+              style="stroke"
+            />
+            <Path
+              color="rgba(128, 162, 185, 0.65)"
+              path={trackGeometry.topPath}
+              strokeWidth={0.8}
+              style="stroke"
+            />
+
+            {/* --- 下金属导轨（3.5dp 实体厚度金属凸轨） --- */}
+            <Path
+              color="rgba(20, 36, 48, 0.16)"
               path={trackGeometry.bottomPath}
-              strokeWidth={1}
+              strokeWidth={5}
+              style="stroke"
+            />
+            <Path
+              color="rgba(235, 244, 250, 0.96)"
+              path={trackGeometry.bottomPath}
+              strokeWidth={3.5}
+              style="stroke"
+            />
+            <Path
+              color="rgba(255, 255, 255, 0.98)"
+              path={trackGeometry.bottomPath}
+              strokeWidth={1.2}
+              style="stroke"
+            />
+            <Path
+              color="rgba(128, 162, 185, 0.65)"
+              path={trackGeometry.bottomPath}
+              strokeWidth={0.8}
               style="stroke"
             />
           </Canvas>

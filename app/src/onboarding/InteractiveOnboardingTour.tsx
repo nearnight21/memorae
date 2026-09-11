@@ -149,6 +149,7 @@ export default function InteractiveOnboardingTour({
             <Animated.View style={[styles.pulseHalo, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
             <Animated.View style={[styles.doubleTapWrap, { transform: [{ translateY: translateYBounce }] }]}>
               <Text style={styles.doubleTapText}>双击中心</Text>
+              <Text style={styles.arrowIcon}>▼</Text>
             </Animated.View>
           </View>
         )}
@@ -365,6 +366,8 @@ const styles = StyleSheet.create({
   doubleTapWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: -56,
+    gap: 2,
   },
   doubleTapText: {
     fontSize: 11,
