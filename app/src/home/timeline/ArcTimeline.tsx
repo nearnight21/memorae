@@ -269,14 +269,30 @@ export default function ArcTimeline({
     [flashClock],
   );
   const flashPeakStart = useDerivedValue(
-    () => flashProgress.value * (1 + FLASH_PEAK_RATIO) - FLASH_PEAK_RATIO,
-    [flashProgress],
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashProgress.value * (1 + FLASH_PEAK_RATIO) - FLASH_PEAK_RATIO),
+    [dialRevealProgress, flashProgress],
   );
   const flashPeakEnd = useDerivedValue(
-    () => flashPeakStart.value + FLASH_PEAK_RATIO,
-    [flashPeakStart],
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashPeakStart.value + FLASH_PEAK_RATIO),
+    [dialRevealProgress, flashPeakStart],
   );
   const flashOpacity = useDerivedValue(() => 1 - dialRevealProgress.value, [dialRevealProgress]);
+  const peakAlphaMultiplier = useDerivedValue(
+    () => (dialRevealProgress.value > 0.005 ? 0 : Math.max(0, 1 - dialRevealProgress.value)),
+    [dialRevealProgress],
+  );
+  const peakOuterColor = useDerivedValue(
+    () => `rgba(120,195,255,${(0.62 * peakAlphaMultiplier.value).toFixed(3)})`,
+    [peakAlphaMultiplier],
+  );
+  const peakMidColor = useDerivedValue(
+    () => `rgba(185,228,255,${(0.95 * peakAlphaMultiplier.value).toFixed(3)})`,
+    [peakAlphaMultiplier],
+  );
+  const peakCoreColor = useDerivedValue(
+    () => `rgba(255,255,255,${(1 * peakAlphaMultiplier.value).toFixed(3)})`,
+    [peakAlphaMultiplier],
+  );
 
   const updateDisplayIndex = useCallback((index: number) => {
     setDisplayIndex((current) => current === index ? current : index);
@@ -721,7 +737,7 @@ export default function ArcTimeline({
                     path={trackGeometry.crestPath}
                     start={flashPeakStart}
                     end={flashPeakEnd}
-                    color="rgba(120,195,255,0.62)"
+                    color={peakOuterColor}
                     strokeWidth={9}
                     style="stroke"
                   >
@@ -731,7 +747,7 @@ export default function ArcTimeline({
                     path={trackGeometry.crestPath}
                     start={flashPeakStart}
                     end={flashPeakEnd}
-                    color="rgba(185,228,255,0.95)"
+                    color={peakMidColor}
                     strokeWidth={4.5}
                     style="stroke"
                   >
@@ -741,7 +757,7 @@ export default function ArcTimeline({
                     path={trackGeometry.crestPath}
                     start={flashPeakStart}
                     end={flashPeakEnd}
-                    color="rgba(255,255,255,1)"
+                    color={peakCoreColor}
                     strokeWidth={2.2}
                     style="stroke"
                   />
