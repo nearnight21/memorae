@@ -711,47 +711,40 @@ export default function ArcTimeline({
                   />
                 </Group>
                 <Group opacity={flashOpacity}>
+                  {/* 常驻灯带：紧贴核心白线（2.2dp），赋予通透微光，绝不向上向下扩出 4.5dp 的平行双线与宽槽 */}
                   <Path
                     path={trackGeometry.crestPath}
-                    color="rgba(14,38,66,0.45)"
-                    strokeWidth={7.5}
-                    style="stroke"
-                  >
-                    <BlurMask blur={4} style="normal" />
-                  </Path>
-                  <Path
-                    path={trackGeometry.crestPath}
-                    color="rgba(120,195,255,0.50)"
-                    strokeWidth={4.5}
-                    style="stroke"
-                  >
-                    <BlurMask blur={4} style="normal" />
-                  </Path>
-                  <Path
-                    path={trackGeometry.crestPath}
-                    color="rgba(210,235,255,0.90)"
-                    strokeWidth={1.8}
+                    color="rgba(140, 210, 255, 0.75)"
+                    strokeWidth={2.2}
                     style="stroke"
                   />
+                  <Path
+                    path={trackGeometry.crestPath}
+                    color="rgba(255, 255, 255, 0.95)"
+                    strokeWidth={1.6}
+                    style="stroke"
+                  />
+
+                  {/* 跑动波峰（流光）：保留充沛的能量感与通透辉光，掠过时流光清晰夺目，绝不暗淡 */}
                   <Path
                     path={trackGeometry.crestPath}
                     start={flashPeakStart}
                     end={flashPeakEnd}
                     color={peakOuterColor}
-                    strokeWidth={9}
+                    strokeWidth={7.5}
                     style="stroke"
                   >
-                    <BlurMask blur={6} style="normal" />
+                    <BlurMask blur={5} style="normal" />
                   </Path>
                   <Path
                     path={trackGeometry.crestPath}
                     start={flashPeakStart}
                     end={flashPeakEnd}
                     color={peakMidColor}
-                    strokeWidth={4.5}
+                    strokeWidth={4.2}
                     style="stroke"
                   >
-                    <BlurMask blur={3} style="normal" />
+                    <BlurMask blur={2.5} style="normal" />
                   </Path>
                   <Path
                     path={trackGeometry.crestPath}
