@@ -666,15 +666,33 @@ export default function ArcTimeline({
                 {/* 明亮上缘轨道线 */}
                 <Path path={trackGeometry.crestPath} color="rgba(255,255,255,0.96)" strokeWidth={2} style="stroke" />
 
-                {/* 拖动强调：整条轨道亮起并泛出柔光；松手后淡出，恢复为静止底盘 */}
+                {/* 拖动常亮高对比边缘线：在淡蓝和白色背景下通过深色锐利底边保底，在深蓝背景下通过纯白光核穿透，全弧常亮且不产生双线区域 */}
                 <Group opacity={dialRevealProgress}>
-                  <Path path={trackGeometry.bodyPath} color="rgba(255,255,255,0.34)" style="fill">
-                    <BlurMask blur={10} style="normal" />
+                  {/* 1. 微量冰蓝发光微晕（不使用大面积弥散白雾，防止冲淡上边缘线） */}
+                  <Path
+                    path={trackGeometry.crestPath}
+                    color="rgba(100, 190, 255, 0.70)"
+                    strokeWidth={3.6}
+                    style="stroke"
+                  >
+                    <BlurMask blur={1.6} style="normal" />
                   </Path>
-                  <Path path={trackGeometry.crestPath} color="rgba(255,255,255,1)" strokeWidth={4} style="stroke">
-                    <BlurMask blur={5} style="normal" />
-                  </Path>
-                  <Path path={trackGeometry.crestPath} color="rgba(255,255,255,1)" strokeWidth={2} style="stroke" />
+
+                  {/* 2. 高对比深色紧致底边（2.8dp 纯净硬朗描边，专治淡蓝色与白色背景，绝不下渗形成第二条线） */}
+                  <Path
+                    path={trackGeometry.crestPath}
+                    color="rgba(8, 20, 36, 0.95)"
+                    strokeWidth={2.8}
+                    style="stroke"
+                  />
+
+                  {/* 3. 极高穿透实心纯白光核（1.6dp 锐利光芯，专治深蓝色与暗色背景） */}
+                  <Path
+                    path={trackGeometry.crestPath}
+                    color="#FFFFFF"
+                    strokeWidth={1.6}
+                    style="stroke"
+                  />
                 </Group>
                 <Group opacity={flashOpacity}>
                   <Path
