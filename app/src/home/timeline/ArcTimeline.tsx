@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { BlurMask, Canvas, Circle, Group, LinearGradient, Mask, Path, Rect, vec } from '@shopify/react-native-skia';
+import { BlurMask, Canvas, Circle, Group, LinearGradient, Mask, Path, Rect, Skia, useClock, vec } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   cancelAnimation,
@@ -12,8 +12,10 @@ import Animated, {
   useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
+  useReducedMotion,
   useSharedValue,
   useFrameCallback,
+  withRepeat,
   withSpring,
   withTiming,
   type SharedValue,
@@ -118,6 +120,119 @@ const DIAL_COLLAPSE_CONFIG = {
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
+const FLASH_DURATION_MS = 2600;
+const FLASH_HEAD_PX = 7;
+const FLASH_TAIL_PX = 40;
+const FLASH_SEGMENTS = 6;
+const FLASH_SAMPLE_STEP_PX = 3;
+const FLASH_PARTICLE_COUNT = 10;
+const FLASH_PARTICLE_LIFESPAN_MS = 1100;
+const FLASH_TAIL_INDICES = Array.from({ length: FLASH_SEGMENTS }, (_, index) => index);
+const FLASH_PARTICLE_PARAMS = Array.from({ length: FLASH_PARTICLE_COUNT }, (_, index) => {
+  const seed = (index * 9301 + 49297) % 233280;
+  const random = seed / 233280;
+  const driftSeed = ((index * 4703 + 7919) % 1000) / 1000;
+  const sideSeed = ((index * 3253 + 1237) % 1000) / 1000;
+  return {
+    phase: random,
+    drift: 28 + driftSeed * 42,
+    lateral: (sideSeed - 0.5) * 2,
+    size: 0.9 + driftSeed * 1.3,
+  };
+});
+
+interface FlashTrack {
+  length: number;
+  step: number;
+  points: number[];
+}
+
+function sampleFlashTrack(track: FlashTrack | null, distance: number) {
+  'worklet';
+  if (!track) return { x: 0, y: 0, tx: 1, ty: 0 };
+  const { length, step, points } = track;
+  if (distance < 0 || distance > length) return { x: 0, y: 0, tx: 1, ty: 0 };
+  const rawIndex = distance / step;
+  const lastIndex = points.length / 4 - 2;
+  const index = Math.max(0, Math.min(lastIndex, Math.floor(rawIndex)));
+  const fraction = Math.max(0, Math.min(1, rawIndex - index));
+  const a = index * 4;
+  const b = a + 4;
+  return {
+    x: points[a] + (points[b] - points[a]) * fraction,
+    y: points[a + 1] + (points[b + 1] - points[a + 1]) * fraction,
+    tx: points[a + 2] + (points[b + 2] - points[a + 2]) * fraction,
+    ty: points[a + 3] + (points[b + 3] - points[a + 3]) * fraction,
+  };
+}
+
+interface CometSegmentProps {
+  index: number;
+  crestPath: string;
+  track: SharedValue<FlashTrack | null>;
+  headDistance: SharedValue<number>;
+}
+
+function CometSegment({ index, crestPath, track, headDistance }: CometSegmentProps) {
+  const falloff = Math.pow(1 - index / FLASH_SEGMENTS, 1.5);
+  const segmentLength = FLASH_TAIL_PX / FLASH_SEGMENTS;
+  const start = useDerivedValue(() => {
+    const currentTrack = track.value;
+    if (!currentTrack) return 0;
+    const distance = headDistance.value - segmentLength * (index + 1);
+    return Math.max(0, Math.min(1, distance / currentTrack.length));
+  }, [headDistance, index, segmentLength, track]);
+  const end = useDerivedValue(() => {
+    const currentTrack = track.value;
+    if (!currentTrack) return 0;
+    const distance = headDistance.value - segmentLength * index;
+    return Math.max(0, Math.min(1, distance / currentTrack.length));
+  }, [headDistance, index, segmentLength, track]);
+  return (
+    <Path
+      path={crestPath}
+      start={start}
+      end={end}
+      color={`rgba(214,238,255,${(0.9 * falloff).toFixed(3)})`}
+      strokeWidth={0.6 + 3.2 * falloff}
+      style="stroke"
+    >
+      <BlurMask blur={2.5} style="normal" />
+    </Path>
+  );
+}
+
+interface CometParticleProps {
+  index: number;
+  track: SharedValue<FlashTrack | null>;
+  headDistance: SharedValue<number>;
+  clock: SharedValue<number>;
+}
+
+function CometParticle({ index, track, headDistance, clock }: CometParticleProps) {
+  const params = FLASH_PARTICLE_PARAMS[index];
+  const center = useDerivedValue(() => {
+    const currentTrack = track.value;
+    const life = (clock.value / FLASH_PARTICLE_LIFESPAN_MS + params.phase) % 1;
+    const distance = headDistance.value - params.drift * life;
+    const point = sampleFlashTrack(currentTrack, distance);
+    const spread = params.lateral * (3 + life * 14);
+    return { x: point.x - point.ty * spread, y: point.y + point.tx * spread };
+  }, [clock, headDistance, params, track]);
+  const radius = useDerivedValue(() => {
+    const life = (clock.value / FLASH_PARTICLE_LIFESPAN_MS + params.phase) % 1;
+    return params.size * (0.5 + 0.5 * (1 - life));
+  }, [clock, params]);
+  const color = useDerivedValue(() => {
+    const currentTrack = track.value;
+    const life = (clock.value / FLASH_PARTICLE_LIFESPAN_MS + params.phase) % 1;
+    const distance = headDistance.value - params.drift * life;
+    const onTrack = currentTrack && distance >= 0 && distance <= currentTrack.length ? 1 : 0;
+    const alpha = Math.sin(life * Math.PI) * 0.9 * onTrack;
+    return `rgba(214,238,255,${alpha.toFixed(3)})`;
+  }, [clock, headDistance, params, track]);
+  return <Circle c={center} r={radius} color={color} />;
+}
 
 function YearNode({
   item,
@@ -260,6 +375,69 @@ export default function ArcTimeline({
 
     return { crestPath, bodyPath, crestY, canvasHeight, overDraw };
   }, [width]);
+
+  const reducedMotion = useReducedMotion();
+  const flashTrack = useMemo<FlashTrack | null>(() => {
+    const crestSkPath = Skia.Path.MakeFromSVGString(trackGeometry.crestPath);
+    if (!crestSkPath) return null;
+    const contour = Skia.ContourMeasureIter(crestSkPath, false, 1).next();
+    const length = contour?.length() ?? 0;
+    if (!contour || length <= 0) {
+      contour?.dispose();
+      crestSkPath.dispose();
+      return null;
+    }
+    const sampleCount = Math.ceil(length / FLASH_SAMPLE_STEP_PX) + 1;
+    const points: number[] = [];
+    for (let index = 0; index < sampleCount; index += 1) {
+      const distance = Math.min(length, index * FLASH_SAMPLE_STEP_PX);
+      const [position, tangent] = contour.getPosTan(distance);
+      points.push(position.x, position.y, tangent.x, tangent.y);
+    }
+    contour.dispose();
+    crestSkPath.dispose();
+    return { length, step: FLASH_SAMPLE_STEP_PX, points };
+  }, [trackGeometry.crestPath]);
+  const flashTrackValue = useSharedValue<FlashTrack | null>(flashTrack);
+  const flashClock = useClock();
+  const flashProgress = useSharedValue(0);
+  const flashHeadDistance = useDerivedValue(() => {
+    const currentTrack = flashTrackValue.value;
+    if (!currentTrack) return 0;
+    return -FLASH_TAIL_PX + flashProgress.value * (currentTrack.length + FLASH_TAIL_PX);
+  }, [flashProgress, flashTrackValue]);
+  const flashHeadStart = useDerivedValue(() => {
+    const currentTrack = flashTrackValue.value;
+    if (!currentTrack) return 0;
+    return Math.max(0, Math.min(1, (flashHeadDistance.value - FLASH_HEAD_PX * 0.5) / currentTrack.length));
+  }, [flashHeadDistance, flashTrackValue]);
+  const flashHeadEnd = useDerivedValue(() => {
+    const currentTrack = flashTrackValue.value;
+    if (!currentTrack) return 0;
+    return Math.max(0, Math.min(1, (flashHeadDistance.value + FLASH_HEAD_PX * 0.5) / currentTrack.length));
+  }, [flashHeadDistance, flashTrackValue]);
+  const flashOpacity = useDerivedValue(() => 1 - dialRevealProgress.value, [dialRevealProgress]);
+
+  useEffect(() => {
+    flashTrackValue.value = flashTrack;
+  }, [flashTrack, flashTrackValue]);
+
+  useEffect(() => {
+    if (reducedMotion || !flashTrack) {
+      cancelAnimation(flashProgress);
+      flashProgress.value = 0;
+      return;
+    }
+    flashProgress.value = 0;
+    flashProgress.value = withRepeat(
+      withTiming(1, { duration: FLASH_DURATION_MS, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    return () => {
+      cancelAnimation(flashProgress);
+    };
+  }, [flashProgress, flashTrack, reducedMotion]);
 
   const updateDisplayIndex = useCallback((index: number) => {
     setDisplayIndex((current) => current === index ? current : index);
@@ -655,6 +833,54 @@ export default function ArcTimeline({
                     <BlurMask blur={5} style="normal" />
                   </Path>
                   <Path path={trackGeometry.crestPath} color="rgba(255,255,255,1)" strokeWidth={2} style="stroke" />
+                </Group>
+                <Group opacity={flashOpacity}>
+                  <Path
+                    path={trackGeometry.crestPath}
+                    start={flashHeadStart}
+                    end={flashHeadEnd}
+                    color="rgba(190,225,255,0.38)"
+                    strokeWidth={10}
+                    style="stroke"
+                  >
+                    <BlurMask blur={8} style="normal" />
+                  </Path>
+                  <Path
+                    path={trackGeometry.crestPath}
+                    start={flashHeadStart}
+                    end={flashHeadEnd}
+                    color="rgba(225,242,255,0.85)"
+                    strokeWidth={5}
+                    style="stroke"
+                  >
+                    <BlurMask blur={3} style="normal" />
+                  </Path>
+                  <Path
+                    path={trackGeometry.crestPath}
+                    start={flashHeadStart}
+                    end={flashHeadEnd}
+                    color="rgba(255,255,255,1)"
+                    strokeWidth={2.5}
+                    style="stroke"
+                  />
+                  {FLASH_TAIL_INDICES.map((index) => (
+                    <CometSegment
+                      key={`flash-tail-${index}`}
+                      index={index}
+                      crestPath={trackGeometry.crestPath}
+                      track={flashTrackValue}
+                      headDistance={flashHeadDistance}
+                    />
+                  ))}
+                  {FLASH_PARTICLE_PARAMS.map((_params, index) => (
+                    <CometParticle
+                      key={`flash-particle-${index}`}
+                      index={index}
+                      track={flashTrackValue}
+                      headDistance={flashHeadDistance}
+                      clock={flashClock}
+                    />
+                  ))}
                 </Group>
               </Mask>
             </Group>
