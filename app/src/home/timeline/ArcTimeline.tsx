@@ -119,7 +119,7 @@ const DIAL_COLLAPSE_CONFIG = {
   reduceMotion: ReduceMotion.System,
 } as const;
 const FLASH_DURATION_MS = 3230;
-const FLASH_PEAK_RATIO = 0.25;
+const FLASH_PEAK_RATIO = 0.175;
 
 function YearNode({
   item,
@@ -281,16 +281,45 @@ export default function ArcTimeline({
     () => (dialRevealProgress.value > 0.005 ? 0 : Math.max(0, 1 - dialRevealProgress.value)),
     [dialRevealProgress],
   );
-  const peakOuterColor = useDerivedValue(
-    () => `rgba(120,195,255,${(0.62 * peakAlphaMultiplier.value).toFixed(3)})`,
+
+  // 彗星流光重叠层级起点（全部向彗头 flashPeakEnd 汇聚，向后形成平滑连续的指数衰减拖尾）
+  const cometCoreStart = useDerivedValue(
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashPeakEnd.value - FLASH_PEAK_RATIO * 0.08),
+    [dialRevealProgress, flashPeakEnd],
+  );
+  const cometInnerStart = useDerivedValue(
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashPeakEnd.value - FLASH_PEAK_RATIO * 0.20),
+    [dialRevealProgress, flashPeakEnd],
+  );
+  const cometMidStart = useDerivedValue(
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashPeakEnd.value - FLASH_PEAK_RATIO * 0.40),
+    [dialRevealProgress, flashPeakEnd],
+  );
+  const cometBodyStart = useDerivedValue(
+    () => (dialRevealProgress.value > 0.005 ? 0 : flashPeakEnd.value - FLASH_PEAK_RATIO * 0.70),
+    [dialRevealProgress, flashPeakEnd],
+  );
+  const cometTailStart = flashPeakStart;
+
+  // 各层叠加颜色（乘以 peakAlphaMultiplier 确保滑动时彻底熄灭）
+  const cometCoreColor = useDerivedValue(
+    () => `rgba(255,255,255,${(1.0 * peakAlphaMultiplier.value).toFixed(3)})`,
     [peakAlphaMultiplier],
   );
-  const peakMidColor = useDerivedValue(
-    () => `rgba(185,228,255,${(0.95 * peakAlphaMultiplier.value).toFixed(3)})`,
+  const cometInnerColor = useDerivedValue(
+    () => `rgba(235,248,255,${(0.95 * peakAlphaMultiplier.value).toFixed(3)})`,
     [peakAlphaMultiplier],
   );
-  const peakCoreColor = useDerivedValue(
-    () => `rgba(255,255,255,${(1 * peakAlphaMultiplier.value).toFixed(3)})`,
+  const cometMidColor = useDerivedValue(
+    () => `rgba(165,222,255,${(0.75 * peakAlphaMultiplier.value).toFixed(3)})`,
+    [peakAlphaMultiplier],
+  );
+  const cometBodyColor = useDerivedValue(
+    () => `rgba(125,200,255,${(0.45 * peakAlphaMultiplier.value).toFixed(3)})`,
+    [peakAlphaMultiplier],
+  );
+  const cometTailColor = useDerivedValue(
+    () => `rgba(100,185,255,${(0.24 * peakAlphaMultiplier.value).toFixed(3)})`,
     [peakAlphaMultiplier],
   );
 
@@ -725,33 +754,60 @@ export default function ArcTimeline({
                     style="stroke"
                   />
 
-                  {/* 跑动波峰（流光）：保留充沛的能量感与通透辉光，掠过时流光清晰夺目，绝不暗淡 */}
+                  {/* 跑动波峰（连续平滑彗星拖尾：同终点重叠包裹法，彻底消除分段阶梯跳跃） */}
+                  {/* Layer 1: 100% 全长柔光雾气（形成飘逸长彗尾与远端渐隐） */}
                   <Path
                     path={trackGeometry.crestPath}
-                    start={flashPeakStart}
+                    start={cometTailStart}
                     end={flashPeakEnd}
-                    color={peakOuterColor}
-                    strokeWidth={7.5}
+                    color={cometTailColor}
+                    strokeWidth={6.0}
                     style="stroke"
                   >
-                    <BlurMask blur={5} style="normal" />
+                    <BlurMask blur={4.5} style="normal" />
                   </Path>
+
+                  {/* Layer 2: 70% 彗体蓝晕过渡 */}
                   <Path
                     path={trackGeometry.crestPath}
-                    start={flashPeakStart}
+                    start={cometBodyStart}
                     end={flashPeakEnd}
-                    color={peakMidColor}
-                    strokeWidth={4.2}
+                    color={cometBodyColor}
+                    strokeWidth={4.8}
                     style="stroke"
                   >
-                    <BlurMask blur={2.5} style="normal" />
+                    <BlurMask blur={3.0} style="normal" />
                   </Path>
+
+                  {/* Layer 3: 40% 亮蓝彗身能量层 */}
                   <Path
                     path={trackGeometry.crestPath}
-                    start={flashPeakStart}
+                    start={cometMidStart}
                     end={flashPeakEnd}
-                    color={peakCoreColor}
-                    strokeWidth={2.2}
+                    color={cometMidColor}
+                    strokeWidth={3.6}
+                    style="stroke"
+                  >
+                    <BlurMask blur={2.0} style="normal" />
+                  </Path>
+
+                  {/* Layer 4: 20% 彗核亮体 */}
+                  <Path
+                    path={trackGeometry.crestPath}
+                    start={cometInnerStart}
+                    end={flashPeakEnd}
+                    color={cometInnerColor}
+                    strokeWidth={2.0}
+                    style="stroke"
+                  />
+
+                  {/* Layer 5: 8% 纯白针尖光核（领跑最前端） */}
+                  <Path
+                    path={trackGeometry.crestPath}
+                    start={cometCoreStart}
+                    end={flashPeakEnd}
+                    color={cometCoreColor}
+                    strokeWidth={2.4}
                     style="stroke"
                   />
                 </Group>
