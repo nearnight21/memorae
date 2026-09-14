@@ -295,6 +295,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   });
   const [homeCameraTarget, setHomeCameraTarget] = useState<CameraState | null>(null);
   const [locationCameraTarget, setLocationCameraTarget] = useState<CameraState | null>(null);
+  const [isMapMoving, setIsMapMoving] = useState(false);
   const locationPickerOriginCamera = useRef<CameraState | null>(null);
   const defaultMapEditorOriginCamera = useRef<CameraState | null>(null);
   const detailLoadId = useRef(0);
@@ -1521,10 +1522,18 @@ export default function App({ testBootstrap }: AppProps = {}) {
       setStatus('这条记忆没有可用的地图坐标。');
       return;
     }
+    if (Number.isFinite(memoryLocation.lat) && Number.isFinite(memoryLocation.lng)) {
+      setHomeCameraTarget({
+        latitude: memoryLocation.lat!,
+        longitude: memoryLocation.lng!,
+        zoom: Math.max(homeViewport.camera.zoom, 14),
+      });
+    }
     void runTask(async () => { openMemory(memory); });
   }
 
   function handleHomeCameraIdle(event: MapCameraIdleEvent): void {
+    setIsMapMoving(false);
     setHomeViewport(event);
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
@@ -1921,6 +1930,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
             ? `${label}有 ${count} 段记忆，已展开该区域。`
             : `已展开 ${count} 段记忆：${coordinate.latitude.toFixed(3)}, ${coordinate.longitude.toFixed(3)}。`,
         )}
+        onCameraMoveStart={() => setIsMapMoving(true)}
         onCameraIdle={handleHomeCameraIdle}
         onMapPress={locationPickerVisible ? handleMapPointPress : undefined}
         onCreateMemory={() => {
@@ -1949,6 +1959,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
         locationOverlay={locationPickerVisible ? (
           <LocationPicker
             mapAlreadyMounted
+            isMoving={isMapMoving}
             active={locationPickerVisible}
             initialLocation={editDraft?.location ?? null}
             initialCamera={homeViewport.camera}

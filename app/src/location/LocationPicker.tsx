@@ -28,6 +28,7 @@ interface Props {
   initialLocation?: MemoryLocationV2 | null;
   initialCamera?: CameraState;
   mapAlreadyMounted?: boolean;
+  isMoving?: boolean;
   active?: boolean;
   cameraIdle?: CameraState | null;
   camera?: CameraState | null;
@@ -62,6 +63,7 @@ export default function LocationPicker({
   initialLocation = null,
   initialCamera: initialCameraProp,
   mapAlreadyMounted = false,
+  isMoving: externalMoving = false,
   active = true,
   cameraIdle,
   camera: controlledCamera,
@@ -77,6 +79,7 @@ export default function LocationPicker({
   const initialCamera = useMemo(() => finiteCoordinates(initialLocation) ?? initialCameraProp ?? null, [initialLocation, initialCameraProp]);
   const [camera, setCamera] = useState<CameraState | null>(initialCamera);
   const [mapMoving, setMapMoving] = useState(false);
+  const [selectedTrigger, setSelectedTrigger] = useState(0);
   const [center, setCenter] = useState<CameraState | null>(initialCamera);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(initialLocation ? {
     ...initialLocation,
@@ -185,6 +188,7 @@ export default function LocationPicker({
     // 保留搜索结果中的 POI 名称；随后坐标反查可能只返回直辖市级别的行政名称。
     setSelectedLocation(normalizeLocationResult(candidate, selectedLocation));
     setCamera(target);
+    setSelectedTrigger((c) => c + 1);
     setMapMoving(true);
     resolveCenter(target);
   }
@@ -193,6 +197,7 @@ export default function LocationPicker({
     hasInteracted.current = true;
     const target = { latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: CENTER_ZOOM };
     setCamera(target);
+    setSelectedTrigger((c) => c + 1);
     setMapMoving(true);
     resolveCenter(target);
   }
@@ -229,7 +234,7 @@ export default function LocationPicker({
   const place = reverseResult ? locationPlaceLabel(reverseResult) : selectedLocation?.name ?? '';
 
   return (
-    <KeyboardAvoidingView pointerEvents="box-none" style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView pointerEvents="box-none" style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined} onTouchStart={() => setMapMoving(true)}>
       {!mapAlreadyMounted && <MemoraeMap
         markers={[]}
         initialCamera={initialCamera ?? undefined}
@@ -240,7 +245,7 @@ export default function LocationPicker({
         showStatus={false}
       />}
       <View pointerEvents="none" style={styles.mapDim} />
-      <RetroMetalPin isMoving={mapMoving} />
+      <RetroMetalPin isMoving={externalMoving || mapMoving} selectedTrigger={selectedTrigger} />
       <View style={[styles.overlay, { paddingTop: topInset }]} pointerEvents="box-none">
         <View style={styles.topRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="取消地点选择" onPress={onCancel} style={styles.cancelButton}>

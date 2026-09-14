@@ -3,52 +3,76 @@ import { Animated, StyleSheet, View } from 'react-native';
 
 interface Props {
   isMoving?: boolean;
+  selectedTrigger?: number;
 }
 
 /**
  * 手账复古金属选点指示器（Pin）
- * 采用经典水滴泪珠造型与象牙白内芯，针尖严格锚定在正下方中心 (0, 0)。
- * 伴随地图拖动提供物理悬浮与落地弹跳（Spring Bounce）反馈。
+ * 结构：上部金属圆环徽章 + 中部正向下尖锥 + 下部垂直细针。
+ * 针尖 100% 垂直指向正下方地面中心 (0, 0)，绝无偏斜。
+ * 支持地图拖拽时悬浮抬起，停稳或选中时提供清脆的弹簧扎地（Bounce）反馈。
  */
-export default function RetroMetalPin({ isMoving = false }: Props) {
-  const liftProgress = useRef(new Animated.Value(0)).current;
+export default function RetroMetalPin({ isMoving = false, selectedTrigger = 0 }: Props) {
+  const liftAnim = useRef(new Animated.Value(0)).current;
+  const stampAnim = useRef(new Animated.Value(0)).current;
+  const isFirstMount = useRef(true);
 
+  // 响应地图拖拽与停稳
   useEffect(() => {
     if (isMoving) {
-      Animated.spring(liftProgress, {
+      Animated.spring(liftAnim, {
         toValue: 1,
-        tension: 85,
+        tension: 90,
         friction: 8,
         useNativeDriver: true,
       }).start();
     } else {
-      Animated.spring(liftProgress, {
+      Animated.spring(liftAnim, {
         toValue: 0,
-        tension: 135,
-        friction: 5.2, // 清脆弹跳：下落 -> 触地轻弹 -> 扎定
+        tension: 140,
+        friction: 5.5, // 清脆弹跳：下落 -> 触地轻弹 -> 扎定
         useNativeDriver: true,
       }).start();
     }
-  }, [isMoving, liftProgress]);
+  }, [isMoving, liftAnim]);
 
-  const pinTranslateY = liftProgress.interpolate({
+  // 响应主动选中地点（例如点击搜索候选词或地图点）
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (selectedTrigger > 0) {
+      stampAnim.setValue(0);
+      Animated.sequence([
+        Animated.timing(stampAnim, {
+          toValue: -14,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+        Animated.spring(stampAnim, {
+          toValue: 0,
+          tension: 160,
+          friction: 4.8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [selectedTrigger, stampAnim]);
+
+  const pinTranslateY = liftAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -16],
+    outputRange: [0, -18],
   });
 
-  const pinRotate = liftProgress.interpolate({
+  const shadowScale = liftAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '-5deg'],
+    outputRange: [1, 0.58],
   });
 
-  const shadowScale = liftProgress.interpolate({
+  const shadowOpacity = liftAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 0.62],
-  });
-
-  const shadowOpacity = liftProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.38, 0.16],
+    outputRange: [0.38, 0.15],
   });
 
   return (
@@ -64,26 +88,32 @@ export default function RetroMetalPin({ isMoving = false }: Props) {
         ]}
       />
 
-      {/* 悬浮弹跳图钉主体 */}
+      {/* 悬浮与弹跳图钉主体 */}
       <Animated.View
         style={[
           styles.pinWrapper,
           {
             transform: [
               { translateY: pinTranslateY },
-              { rotate: pinRotate },
+              { translateY: stampAnim },
             ],
           },
         ]}
       >
-        {/* 水滴金属头部：旋转 -45 度的圆角方块形成经典朝下水滴 */}
-        <View style={styles.teardropOuter}>
-          <View style={styles.teardropInner}>
-            <View style={styles.centerPearl} />
+        {/* 1. 顶部手账复古金属圆环 */}
+        <View style={styles.medalRing}>
+          <View style={styles.innerPearl}>
+            <View style={styles.coreDot} />
           </View>
         </View>
 
-        {/* 底部高精金属触地针尖 */}
+        {/* 2. 中部正向等腰尖锥：尖端 100% 朝正下方 */}
+        <View style={styles.coneHolder}>
+          <View style={styles.coneOuter} />
+          <View style={styles.coneInner} />
+        </View>
+
+        {/* 3. 底部垂直金属细针：直插 (0, 0) 地面 */}
         <View style={styles.needleShaft}>
           <View style={styles.needleTip} />
         </View>
@@ -105,8 +135,8 @@ const styles = StyleSheet.create({
   },
   shadow: {
     position: 'absolute',
-    top: -2,
-    width: 20,
+    top: -3,
+    width: 22,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#2A241E',
@@ -115,60 +145,88 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     alignItems: 'center',
-    // 针尖底部恰好对准 (0, 0)
     width: 32,
-    height: 46,
+    height: 48,
     justifyContent: 'flex-end',
   },
-  teardropOuter: {
-    width: 28,
-    height: 28,
+  medalRing: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#C89B6D',
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 0,
-    transform: [{ rotate: '-45deg' }],
     borderWidth: 2,
-    borderColor: '#7A5230',
+    borderColor: '#754F31',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#1F1710',
-    shadowOpacity: 0.32,
+    shadowOpacity: 0.35,
     shadowRadius: 5,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+    zIndex: 2,
   },
-  teardropInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  innerPearl: {
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
     backgroundColor: '#FAF6EE',
-    borderWidth: 1.5,
-    borderColor: 'rgba(122, 82, 48, 0.45)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(117, 79, 49, 0.42)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerPearl: {
+  coreDot: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#8B5A2B',
+    backgroundColor: '#754F31',
+  },
+  coneHolder: {
+    width: 14,
+    height: 11,
+    alignItems: 'center',
+    marginTop: -3,
+    zIndex: 1,
+  },
+  coneOuter: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 11,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#754F31',
+  },
+  coneInner: {
+    position: 'absolute',
+    top: 0,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#C89B6D',
   },
   needleShaft: {
     width: 2.5,
-    height: 9,
-    backgroundColor: '#6A4423',
+    height: 8,
+    backgroundColor: '#5C3D24',
     alignItems: 'center',
-    marginTop: -2,
-    borderRadius: 1,
+    marginTop: -1,
+    borderBottomLeftRadius: 1.25,
+    borderBottomRightRadius: 1.25,
+    zIndex: 0,
   },
   needleTip: {
     position: 'absolute',
     bottom: 0,
     width: 1.5,
     height: 3,
-    backgroundColor: '#4A2E16',
+    backgroundColor: '#3E2715',
     borderBottomLeftRadius: 0.75,
     borderBottomRightRadius: 0.75,
   },

@@ -2,11 +2,14 @@ import { useRef, useState } from 'react';
 import {
   Image,
   type LayoutChangeEvent,
+  Pressable,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 import ResumableZoom from 'react-native-zoom-toolkit/lib/module/components/resumable/ResumableZoom';
-import type { ResumableZoomRefType, TapGestureEvent } from 'react-native-zoom-toolkit';
+import type { ResumableZoomRefType } from 'react-native-zoom-toolkit';
+import { useAppTopInset } from '../ui/layout';
 
 interface Props {
   previewUri: string;
@@ -15,6 +18,7 @@ interface Props {
 }
 
 export default function PhotoViewerOverlay({ previewUri, originalUri, onClose }: Props) {
+  const topInset = useAppTopInset();
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [loadedOriginalUri, setLoadedOriginalUri] = useState<string | null>(null);
   const previewSize = useRef({ width: 0, height: 0 });
@@ -29,17 +33,8 @@ export default function PhotoViewerOverlay({ previewUri, originalUri, onClose }:
   const onPreviewLoad = (event: { nativeEvent: { source: { width: number; height: number } } }) => {
     previewSize.current = event.nativeEvent.source;
   };
-  const onTap = (event: TapGestureEvent) => {
-    if ((zoomRef.current?.getState().scale ?? 1) > 1.01) return;
-    const { width: canvasWidth, height: canvasHeight } = canvasSize;
-    const { width: imageWidth, height: imageHeight } = previewSize.current;
-    if (canvasWidth <= 0 || canvasHeight <= 0 || imageWidth <= 0 || imageHeight <= 0) return;
-    const fit = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
-    const fittedWidth = imageWidth * fit;
-    const fittedHeight = imageHeight * fit;
-    const left = (canvasWidth - fittedWidth) / 2;
-    const top = (canvasHeight - fittedHeight) / 2;
-    if (event.x < left || event.x > left + fittedWidth || event.y < top || event.y > top + fittedHeight) {
+  const onTap = () => {
+    if ((zoomRef.current?.getState().scale ?? 1) <= 1.01) {
       onClose();
     }
   };
@@ -78,6 +73,14 @@ export default function PhotoViewerOverlay({ previewUri, originalUri, onClose }:
           </ResumableZoom>
         )}
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="返回详情"
+        onPress={onClose}
+        style={[styles.backButton, { top: topInset + 12 }]}
+      >
+        <Text style={styles.backText}>‹</Text>
+      </Pressable>
     </View>
   );
 }
@@ -103,4 +106,24 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   originalVisible: { opacity: 1 },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(30, 26, 22, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  backText: {
+    color: '#FAF6EE',
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '300',
+    marginTop: -2,
+  },
 });

@@ -44,6 +44,7 @@ interface Props {
   onRegionSelect: (region: HomeRegionOption) => void;
   onMarkerPress?: (event: MapMarkerPressEvent) => void;
   onClusterPress?: (event: MapClusterPressEvent) => void;
+  onCameraMoveStart?: () => void;
   onCameraIdle?: (event: MapCameraIdleEvent) => void;
   onMapPress?: (coordinate: { latitude: number; longitude: number }) => void;
   initialCamera?: CameraState;
@@ -71,6 +72,7 @@ export default function HomeScreen({
   onRegionSelect,
   onMarkerPress,
   onClusterPress,
+  onCameraMoveStart,
   onCameraIdle,
   onMapPress,
   initialCamera,
@@ -187,6 +189,7 @@ export default function HomeScreen({
           markers={locationMode ? EMPTY_MARKERS : markers}
           onMarkerPress={onMarkerPress}
           onClusterPress={onClusterPress}
+          onCameraMoveStart={onCameraMoveStart}
           onCameraIdle={onCameraIdle}
           onMapPress={onMapPress}
           initialCamera={initialCamera}

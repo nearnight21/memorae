@@ -294,7 +294,10 @@ export default function AmapJsWebViewMap({
         webviewDebuggingEnabled={WEBVIEW_DEBUGGING_ENABLED}
         androidLayerType="hardware"
         domStorageEnabled={false}
-        cacheEnabled={false}
+        cacheEnabled
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
         setSupportMultipleWindows={false}
         onMessage={handleMessage}
         onLoadEnd={() => setStatus('本地地图 Runtime 已加载。')}
