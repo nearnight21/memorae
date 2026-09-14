@@ -1,0 +1,118 @@
+name: iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '要构建的 Git 分支或 Commit'
+        required: true
+        default: 'feature/app-ui'
+
+permissions:
+  contents: read
+
+jobs:
+  ios-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 缓存 CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ~/.cocoapods
+          key: pods-${{ runner.os }}-${{ hashFiles('app/ios/Podfile.lock', 'app/package-lock.json') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: 环境信息
+        run: |
+          xcodebuild -version
+          node -v
+          npm -v
+          pod --version || true
+
+      - name: 入口守卫（必须是正式 App）
+        run: |
+          node -e "const m=require('./package.json').main; if(m!=='index.ts'){console.error('入口错误，必须是 index.ts，实际为 '+m);process.exit(1)}"
+          echo "入口守卫通过：main=index.ts"
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 生成 iOS 工程并安装 Pods
+        env:
+          EXPO_PUBLIC_AMAP_WEB_KEY: ${{ secrets.EXPO_PUBLIC_AMAP_WEB_KEY }}
+          EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE: ${{ secrets.EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE }}
+        run: npx expo prebuild -p ios --clean
+
+      - name: 解析 Workspace 与 Scheme
+        id: resolve
+        run: |
+          WS=$(ls -d ios/*.xcworkspace 2>/dev/null | head -1 || true)
+          SCHEME=$(basename "$WS" .xcworkspace 2>/dev/null || true)
+          if [ -z "$WS" ] || [ -z "$SCHEME" ]; then
+            echo "错误: 无法解析 workspace 或 scheme"
+            ls -la ios || true
+            exit 1
+          fi
+          echo "workspace=$WS scheme=$SCHEME"
+          xcodebuild -workspace "$WS" -list
+          echo "ws=$WS" >> "$GITHUB_OUTPUT"
+          echo "scheme=$SCHEME" >> "$GITHUB_OUTPUT"
+
+      - name: 编译未签名 Release
+        env:
+          EXPO_PUBLIC_AMAP_WEB_KEY: ${{ secrets.EXPO_PUBLIC_AMAP_WEB_KEY }}
+          EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE: ${{ secrets.EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE }}
+        run: |
+          xcodebuild -workspace "${{ steps.resolve.outputs.ws }}" \
+            -scheme "${{ steps.resolve.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: 校验并打包未签名 IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "错误: 未找到生成的 .app 产物"
+            find build/Build/Products -maxdepth 2 -type d || true
+            exit 1
+          fi
+          if ! ls "$APP"/*.jsbundle >/dev/null 2>&1; then
+            echo "错误: JS bundle 未内嵌到 .app 中"
+            ls -la "$APP" || true
+            exit 1
+          fi
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry memorae-ios-unsigned.ipa Payload
+          ls -lh memorae-ios-unsigned.ipa
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: memorae-ios-unsigned-ipa
+          path: app/memorae-ios-unsigned.ipa
+          retention-days: 7
