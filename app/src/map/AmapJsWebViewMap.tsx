@@ -40,6 +40,7 @@ type RuntimeEvent =
   | { type: 'markerPressed'; id: string }
   | ({ type: 'clusterPressed' } & AmapMapClusterPress)
   | { type: 'mapPressed'; lat: number; lng: number }
+  | { type: 'cameraMoveStart' }
   | { type: 'cameraIdle'; lat: number; lng: number; zoom?: number; bounds?: AmapMapBounds }
   | { type: 'error'; message: string };
 
@@ -60,7 +61,7 @@ function parseBounds(value: unknown): AmapMapBounds | undefined {
 function parseRuntimeEvent(value: unknown): RuntimeEvent | null {
   if (!value || typeof value !== 'object' || !('type' in value)) return null;
   const message = value as Record<string, unknown>;
-  if (message.type === 'runtimeStarted' || message.type === 'ready') {
+  if (message.type === 'runtimeStarted' || message.type === 'ready' || message.type === 'cameraMoveStart') {
     return { type: message.type };
   }
   if (
@@ -119,6 +120,7 @@ interface Props {
   markers: AmapWebViewMarker[];
   onMarkerPressed?: (id: string) => void;
   onClusterPressed?: (cluster: AmapMapClusterPress) => void;
+  onCameraMoveStart?: () => void;
   onCameraIdle?: (coordinates: AmapMapCamera) => void;
   onMapPressed?: (coordinate: { lat: number; lng: number }) => void;
   initialCamera?: AmapMapCamera;
@@ -173,6 +175,7 @@ export default function AmapJsWebViewMap({
   markers,
   onMarkerPressed,
   onClusterPressed,
+  onCameraMoveStart,
   onCameraIdle,
   onMapPressed,
   initialCamera,
@@ -259,6 +262,8 @@ export default function AmapJsWebViewMap({
       setSelectedId(message.id);
       post(webViewRef.current, { type: 'setSelected', id: message.id });
       onMarkerPressed?.(message.id);
+    } else if (message.type === 'cameraMoveStart') {
+      onCameraMoveStart?.();
     } else if (message.type === 'clusterPressed') {
       onClusterPressed?.(message);
     } else if (message.type === 'mapPressed') {

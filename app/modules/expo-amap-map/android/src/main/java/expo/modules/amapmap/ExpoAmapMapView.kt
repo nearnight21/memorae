@@ -260,16 +260,15 @@ class ExpoAmapMapView(
       "perf event=requested_camera_move instance=$nativeMapViewInstanceId count=$requestedCameraMoveCount",
     )
     val position = amap.cameraPosition
-    amap.moveCamera(
-      CameraUpdateFactory.newCameraPosition(
-        CameraPosition(
-          LatLng(requested.latitude, requested.longitude),
-          requested.zoom.toFloat(),
-          position.tilt,
-          position.bearing,
-        ),
+    val update = CameraUpdateFactory.newCameraPosition(
+      CameraPosition(
+        LatLng(requested.latitude, requested.longitude),
+        requested.zoom.toFloat(),
+        position.tilt,
+        position.bearing,
       ),
     )
+    amap.animateCamera(update, 500L, null)
   }
 
   fun setMarkerUpdatesPaused(paused: Boolean) {

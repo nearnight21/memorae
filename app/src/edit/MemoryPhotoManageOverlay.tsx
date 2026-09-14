@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { androidTopInset } from '../ui/layout';
+import { useAppTopInset } from '../ui/layout';
 
 export interface PhotoManageItem {
   id: string;
@@ -24,6 +24,7 @@ interface Props {
 }
 
 export default function MemoryPhotoManageOverlay({ items, onAddPhotos, onCancel, onComplete }: Props) {
+  const topInset = useAppTopInset();
   const [workingItems, setWorkingItems] = useState<PhotoManageItem[]>(() => [...items]);
   const [busy, setBusy] = useState(false);
 
@@ -51,7 +52,7 @@ export default function MemoryPhotoManageOverlay({ items, onAddPhotos, onCancel,
     <View style={styles.root}>
       <View pointerEvents="none" style={styles.mapDim} />
       <View pointerEvents="none" style={styles.warmGradient} />
-      <View style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: topInset }]}>
         <View style={styles.topBar}>
           <Pressable accessibilityRole="button" accessibilityLabel="返回编辑" onPress={onCancel} style={styles.topAction}>
             <Text style={styles.cancelText}>返回</Text>
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, zIndex: 14, backgroundColor: 'transparent' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(42,36,30,0.12)' },
   warmGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '100%', backgroundColor: 'rgba(233,221,202,0.72)' },
-  safeArea: { flex: 1, paddingTop: androidTopInset() },
+  safeArea: { flex: 1 },
   topBar: { height: 62, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   topAction: { minWidth: 54, minHeight: 40, justifyContent: 'center' },
   cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, fontWeight: '500' },

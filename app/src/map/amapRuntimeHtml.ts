@@ -55,6 +55,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       let map = null;
       let selectedId = null;
       let tileTimeout = null;
+      let initialCameraPositioned = false;
       const notice = document.getElementById('notice');
       const post = (message) => window.ReactNativeWebView?.postMessage(JSON.stringify(message));
       post({ type: 'runtimeStarted' });
@@ -106,7 +107,9 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const cameraCenter = () => map?.getCenter?.() || null;
       const setCamera = (zoom, lng, lat) => {
         if (!map) return;
-        map.setZoomAndCenter(zoom, [lng, lat], true);
+        const immediately = !initialCameraPositioned;
+        initialCameraPositioned = true;
+        map.setZoomAndCenter(zoom, [lng, lat], immediately, 500);
       };
       const postCameraIdle = () => {
         if (!map) return;
@@ -426,7 +429,9 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         try {
           map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'] });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
+          map.on('movestart', () => post({ type: 'cameraMoveStart' }));
           map.on('moveend', postCameraIdle);
+          map.on('zoomstart', () => post({ type: 'cameraMoveStart' }));
           map.on('zoomend', () => { render(); postCameraIdle(); });
           map.on('complete', () => {
             if (tileTimeout) window.clearTimeout(tileTimeout);

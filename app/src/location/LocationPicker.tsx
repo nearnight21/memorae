@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,7 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { androidTopInset } from '../ui/layout';
+import RetroMetalPin from './RetroMetalPin';
+import { useAppTopInset } from '../ui/layout';
 import MemoraeMap, { type CameraState } from '../map/MemoraeMap';
 import type { MemoryLocationV2 } from '../memory/memoryV2';
 import {
@@ -73,8 +73,10 @@ export default function LocationPicker({
   onCancel,
   onConfirm,
 }: Props) {
+  const topInset = useAppTopInset();
   const initialCamera = useMemo(() => finiteCoordinates(initialLocation) ?? initialCameraProp ?? null, [initialLocation, initialCameraProp]);
   const [camera, setCamera] = useState<CameraState | null>(initialCamera);
+  const [mapMoving, setMapMoving] = useState(false);
   const [center, setCenter] = useState<CameraState | null>(initialCamera);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(initialLocation ? {
     ...initialLocation,
@@ -113,6 +115,7 @@ export default function LocationPicker({
   }, [onSearchActiveChange]);
 
   function resolveCenter(next: CameraState): void {
+    setMapMoving(false);
     setCenter(next);
     setError('');
     setReverseResult(null);
@@ -182,6 +185,7 @@ export default function LocationPicker({
     // 保留搜索结果中的 POI 名称；随后坐标反查可能只返回直辖市级别的行政名称。
     setSelectedLocation(normalizeLocationResult(candidate, selectedLocation));
     setCamera(target);
+    setMapMoving(true);
     resolveCenter(target);
   }
 
@@ -189,6 +193,7 @@ export default function LocationPicker({
     hasInteracted.current = true;
     const target = { latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: CENTER_ZOOM };
     setCamera(target);
+    setMapMoving(true);
     resolveCenter(target);
   }
 
@@ -229,15 +234,14 @@ export default function LocationPicker({
         markers={[]}
         initialCamera={initialCamera ?? undefined}
         camera={effectiveCamera}
+        onCameraMoveStart={() => setMapMoving(true)}
         onCameraIdle={(event) => resolveCenter(event.camera)}
         onMapPress={handleMapPress}
         showStatus={false}
       />}
       <View pointerEvents="none" style={styles.mapDim} />
-      <View pointerEvents="none" style={styles.centerMarkerWrap}>
-        <Image source={require('../../assets/location/fixed-center-marker.png')} style={styles.centerMarker} resizeMode="contain" />
-      </View>
-      <View style={styles.overlay} pointerEvents="box-none">
+      <RetroMetalPin isMoving={mapMoving} />
+      <View style={[styles.overlay, { paddingTop: topInset }]} pointerEvents="box-none">
         <View style={styles.topRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="取消地点选择" onPress={onCancel} style={styles.cancelButton}>
             <Text style={styles.cancelText}>取消</Text>
@@ -290,9 +294,7 @@ export default function LocationPicker({
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, zIndex: 10, backgroundColor: 'transparent' },
   mapDim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(255,255,255,0.24)' },
-  centerMarkerWrap: { position: 'absolute', width: 28, height: 44, left: '50%', top: '50%', marginLeft: -14, marginTop: -22, zIndex: 5 },
-  centerMarker: { width: 28, height: 44 },
-  overlay: { flex: 1, paddingTop: androidTopInset(), justifyContent: 'space-between', zIndex: 6 },
+  overlay: { flex: 1, justifyContent: 'space-between', zIndex: 6 },
   topRow: { paddingTop: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
   cancelButton: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, fontWeight: '500' },

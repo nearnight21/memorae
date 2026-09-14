@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { MemoryV2 } from '../memory/memoryV2';
-import { androidTopInset } from '../ui/layout';
+import { useAppTopInset } from '../ui/layout';
 import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
 import {
   circularPhotoIndex,
@@ -64,7 +64,7 @@ export default function MemoryDetailOverlay({
   const detailDismissing = useRef(false);
 
   const photoCount = memory.photos.length;
-  const topInset = androidTopInset();
+  const topInset = useAppTopInset();
   const { width: heroWidth, height: heroHeight, top: heroTop } = memoryHeroLayout(
     width,
     height,

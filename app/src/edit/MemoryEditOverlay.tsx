@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import type { MemoryLocationV2 } from '../memory/memoryV2';
-import { androidTopInset } from '../ui/layout';
+import { useAppTopInset } from '../ui/layout';
 import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
 import CrystalDatePicker from './CrystalDatePicker';
 
@@ -74,7 +74,7 @@ export default function MemoryEditOverlay({
   const { width, height } = useWindowDimensions();
   const count = Math.max(photoCount, photoUris.length);
   const photos = Array.from({ length: count }, (_, index) => photoUris[index] ?? null);
-  const topInset = androidTopInset();
+  const topInset = useAppTopInset();
   const { width: heroWidth, height: heroHeight, top: heroTop } = memoryHeroLayout(
     width,
     height,

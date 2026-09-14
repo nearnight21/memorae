@@ -19,6 +19,7 @@ export default function WebViewMemoraeMapAdapter({
   showStatus = true,
   onMarkerPress,
   onClusterPress,
+  onCameraMoveStart,
   onCameraIdle,
   onMapPress,
 }: MemoraeMapProps) {
@@ -65,6 +66,7 @@ export default function WebViewMemoraeMapAdapter({
       showStatus={showStatus}
       onMarkerPressed={(markerId) => onMarkerPress?.(toMarkerPressEvent(markerId))}
       onClusterPressed={(cluster) => onClusterPress?.(toClusterPressEvent(cluster))}
+      onCameraMoveStart={onCameraMoveStart}
       onCameraIdle={(nextCamera) => {
         const event = fromWebViewCamera(nextCamera, lastCamera.current ?? initialCamera);
         lastCamera.current = event.camera;

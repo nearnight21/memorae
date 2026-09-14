@@ -103,7 +103,7 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.doesNotMatch(runtimeSource, /#map \{ width: calc\(100% \+ 400px\); \}/);
   assert.match(runtimeSource, /const cameraCenter = \(\) => map\?\.getCenter\?\.\(\) \|\| null/);
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat/);
-  assert.match(runtimeSource, /map\.setZoomAndCenter\(zoom, \[lng, lat\], true\)/);
+  assert.match(runtimeSource, /map\.setZoomAndCenter\(zoom, \[lng, lat\], immediately/);
   assert.doesNotMatch(runtimeSource, /CAMERA_FOCUS_OFFSET_X|containerToLngLat|map\.panBy/);
   assert.match(runtimeSource, /postCameraIdle/);
   assert.match(runtimeSource, /message\.type === 'setCamera'/);

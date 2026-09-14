@@ -44,6 +44,7 @@ export default function AndroidNativeMemoraeMapAdapter({
   showStatus = true,
   onMarkerPress,
   onClusterPress,
+  onCameraMoveStart: _onCameraMoveStart,
   onCameraIdle,
   onMapPress,
 }: MemoraeMapProps) {
