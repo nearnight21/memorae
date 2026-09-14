@@ -298,7 +298,6 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [isMapMoving, setIsMapMoving] = useState(false);
   const locationPickerOriginCamera = useRef<CameraState | null>(null);
   const defaultMapEditorOriginCamera = useRef<CameraState | null>(null);
-  const pendingOpenMemoryRef = useRef<MemoryV2 | null>(null);
   const detailLoadId = useRef(0);
   const detailPhotoPerformance = useRef(new Map<number, {
     startedAt: number;
@@ -1524,29 +1523,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
       return;
     }
     if (Number.isFinite(memoryLocation.lat) && Number.isFinite(memoryLocation.lng)) {
-      const targetZoom = homeViewport.camera.zoom < 9 ? 9 : homeViewport.camera.zoom;
-      const latDelta = Math.abs(memoryLocation.lat! - homeViewport.camera.latitude);
-      const lngDelta = Math.abs(memoryLocation.lng! - homeViewport.camera.longitude);
-      const zoomDelta = Math.abs(targetZoom - homeViewport.camera.zoom);
-      const needsCameraFlight = latDelta > 0.0001 || lngDelta > 0.0001 || zoomDelta > 0.05;
-
-      if (needsCameraFlight) {
-        // 等待地图缩放飞行动画完全结束停稳后再翻开手账详情卡片
-        pendingOpenMemoryRef.current = memory;
-        setHomeCameraTarget({
-          latitude: memoryLocation.lat!,
-          longitude: memoryLocation.lng!,
-          zoom: targetZoom,
-          animate: true,
-        });
-        setTimeout(() => {
-          if (pendingOpenMemoryRef.current === memory) {
-            pendingOpenMemoryRef.current = null;
-            void runTask(async () => { openMemory(memory); });
-          }
-        }, 750);
-        return;
-      }
+      setHomeCameraTarget({
+        latitude: memoryLocation.lat!,
+        longitude: memoryLocation.lng!,
+        zoom: homeViewport.camera.zoom < 9 ? 9 : homeViewport.camera.zoom,
+      });
     }
     void runTask(async () => { openMemory(memory); });
   }
@@ -1556,11 +1537,6 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setHomeViewport(event);
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
-    if (pendingOpenMemoryRef.current) {
-      const memoryToOpen = pendingOpenMemoryRef.current;
-      pendingOpenMemoryRef.current = null;
-      void runTask(async () => { openMemory(memoryToOpen); });
-    }
   }
 
   function handleMapPointPress(coordinate: { latitude: number; longitude: number }): void {
