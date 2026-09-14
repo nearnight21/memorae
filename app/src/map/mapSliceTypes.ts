@@ -117,7 +117,7 @@ export interface ExpoAmapMapViewRef {
   getDiagnostics(): Promise<MapDiagnostics>;
 }
 
-type NativeEvent<T> = { nativeEvent: T };
+export type NativeEvent<T> = { nativeEvent: T };
 
 export interface ExpoAmapMapViewProps {
   privacyConsentGranted: boolean;

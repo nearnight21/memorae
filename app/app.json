@@ -40,12 +40,6 @@
       "expo-document-picker",
       "expo-sharing",
       "./plugins/with-ephemeral-test-build",
-      [
-        "./plugins/with-amap-map",
-        {
-          "apiKeyEnv": "MEMORY_RECALL_AMAP_ANDROID_KEY"
-        }
-      ],
       "./plugins/with-android-release-signing",
       "./plugins/with-local-network-security"
     ],

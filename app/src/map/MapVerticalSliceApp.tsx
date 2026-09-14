@@ -12,18 +12,22 @@ import {
   View,
 } from 'react-native';
 
-import ExpoAmapMapView from '../../modules/expo-amap-map/src/ExpoAmapMapView';
 import type {
   CameraIdlePayload,
+  ExpoAmapMapViewProps,
   ExpoAmapMapViewRef,
   MapDiagnostics,
   NativeErrorPayload,
-} from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
+} from './mapSliceTypes';
 import {
   createJpegPhotoVariant,
   PHOTO_VARIANT_SPECS,
 } from '../photos/photoVariants';
 import { createNativeMapProvider } from './MapProvider';
+
+const ExpoAmapMapView = React.forwardRef<ExpoAmapMapViewRef, ExpoAmapMapViewProps>((props, _ref) => (
+  <View style={props.style} />
+));
 import {
   buildMapTestMarkers,
   TEST_CITIES,

@@ -1,3 +1,0 @@
--keep class com.amap.api.maps.** { *; }
--keep class com.autonavi.** { *; }
--dontwarn com.amap.api.maps.**

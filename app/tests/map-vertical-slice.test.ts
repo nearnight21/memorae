@@ -513,24 +513,6 @@ test('海外标签保留完整 GeoNames 源，并为首轮验收城市提供受�
   }
 });
 
-test('高德原生 View 使用 Android 布局测量动态加入的 MapView', async () => {
-  const source = await readFile(
-    new URL(
-      '../modules/expo-amap-map/android/src/main/java/expo/modules/amapmap/ExpoAmapMapView.kt',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-  assert.match(source, /override val shouldUseAndroidLayout = true/);
-  assert.match(source, /fun setCityLabels\(/);
-  assert.match(source, /RenderedMarkerTag\.CityLabel/);
-  assert.match(source, /marker\.setClickable\(false\)/);
-  const cityBitmapSource = source.match(
-    /private fun createCityLabelBitmap[\s\S]*?private fun cityLabelWidth/,
-  )?.[0] ?? '';
-  assert.doesNotMatch(cityBitmapSource, /drawRoundRect|Paint\.Style\.STROKE/);
-});
-
 test('Release 签名插件只替换 release build type，不污染 debug build type', () => {
   const fixture = `def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 

@@ -1,15 +1,25 @@
 import type { MutableRefObject } from 'react';
-
 import type {
-  ClusterConfig,
   CityMapLabel,
+  ClusterConfig,
   ExpoAmapMapViewRef,
   LatLng,
   MapCamera,
   MapDiagnostics,
   PhotoMapMarker,
   ScreenPoint,
-} from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
+} from './mapSliceTypes';
+
+export type {
+  CityMapLabel,
+  ClusterConfig,
+  ExpoAmapMapViewRef,
+  LatLng,
+  MapCamera,
+  MapDiagnostics,
+  PhotoMapMarker,
+  ScreenPoint,
+};
 
 export interface MapProvider {
   moveCamera(camera: MapCamera): Promise<void>;
@@ -26,7 +36,7 @@ export function createNativeMapProvider(
   nativeViewRef: MutableRefObject<ExpoAmapMapViewRef | null>,
 ): MapProvider {
   function current(): ExpoAmapMapViewRef {
-    if (!nativeViewRef.current) throw new Error('高德地图尚未就绪。');
+    if (!nativeViewRef.current) throw new Error('地图尚未就绪。');
     return nativeViewRef.current;
   }
 

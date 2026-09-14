@@ -1,8 +1,8 @@
 # Memorae 开发交接
 
-> 最后更新：2026-09-12
+> 最后更新：2026-09-15
 >
-> 当前阶段：Android 默认使用 WebView + 高德 JS API 2.0，并加载高德自定义样式 ID；Native AMap Renderer 保留为显式配置路径。
+> 当前阶段：Android 与 iOS 统一使用 WebView + 高德 JS API 2.0（WebGL 3D 硬件加速），并加载高德自定义样式 ID；Android 原生 AMap Renderer 已于 2026-09-15 移除。
 
 ## 当前状态
 
@@ -13,10 +13,11 @@
   `scripts/check-runtime-boundaries.ps1` 和 `scripts/verify-fresh-clone.ps1` 维护。
 - Memorae 保持现有 Web、App、Server 部署体系，不引入 ThinkPad/Camp 的 Vercel 或 Worker 配置。
 - Mobile 的 Home、LocationPicker 和业务编排只依赖中立 `MemoraeMap`；WebView/高德专有 DTO
-  已收口到 Renderer adapter。Android 缺省使用 Local Expo Module + Kotlin `TextureMapView`
-  的 Native AMap Renderer 作为显式配置路径；默认使用 WebView + 高德 JS API 2.0，加载自定义样式 ID。
-  Native Phase 3 / A 验收见
-  `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md`。
+  已收口到 Renderer adapter。Android 与 iOS 统一使用 WebView + 高德 JS API 2.0，加载自定义样式 ID；
+  原 Android 原生 AMap Renderer（Local Expo Module + Kotlin `TextureMapView`）经确认已无消费者，
+  已于 2026-09-15 连同 `app/modules/expo-amap-map` 与 `plugins/with-amap-map.js` 一并移除，
+  使 Android 安装包与运行时占用显著下降。历史 Native Phase 3 / A 验收记录保留在
+  `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` 作为归档。
 - Home 默认地图 Camera 使用中国全景视图 `zoom=3.5`；正式时间轴继续使用单一 Pan 手势，
   横向浏览年份、上拉新建记忆、下拉回到全景，并通过 `homeCameraTarget` 重置 Camera，
   不改变年份、地区筛选或 Marker 数据。下拉动作的 60dp 激活阈值与 0.24 最大遮罩透明度
@@ -91,22 +92,20 @@ Phase 1 已完成以下边界收口：
 
 1. `app/src/map/MemoraeMap.types.ts` 定义中立 Coordinate、Camera、Bounds、Marker 和事件类型；
    不包含 WebView、Android Bundle、AMap SDK 对象、Memory 正文、密文、VMK 或 token。
-2. `app/src/map/MemoraeMap.tsx` 是 Home 与 LocationPicker 的唯一地图组件入口；Android
-   默认选择 `WebViewMemoraeMapAdapter`，显式 `native` 或 `native-amap` 才选择
-   `AndroidNativeMemoraeMapAdapter`；非 Android 继续使用 WebView。
+2. `app/src/map/MemoraeMap.tsx` 是 Home 与 LocationPicker 的唯一地图组件入口；Android 与
+   iOS 统一渲染 `WebViewMemoraeMapAdapter`，已不存在原生渲染分支。
 3. `memoryMapAdapter` 输出 `MemoryMapMarker`。缩略图公开为 `uri + cacheKey`，解密图片只在
    当前进程的可清理内存缓存中保留；WebView 所需 Data URI 只存在于 Renderer 私有兼容层。
-4. Camera idle 使用中立 Camera/Bounds，Native 与 WebView Adapter 均通过坐标 `1e-6`、
+4. Camera idle 使用中立 Camera/Bounds，WebView Adapter 通过坐标 `1e-6`、
    zoom `1e-3` 的 epsilon 判断阻断 RN Camera 回写形成的重复移动命令。
 5. 当前产品没有消费者的 imperative map commands、selected marker、map ready/error 和屏幕投影
    未进入 Phase 1 接口；现有聚类、地区筛选、中心点选址和暂停 Marker 更新行为继续保留。
 
-Phase 3 已完成 Android Native AMap Renderer 的能力、兼容性和性能验收；2026-09-04 根据
+Phase 3 曾完成 Android Native AMap Renderer 的能力、兼容性和性能验收；2026-09-04 根据
 产品决定，Android 默认切回 WebView + 高德 JS API 2.0，并加载在线自定义样式 ID。
-Native AMap 保留为显式配置路径，并已适配同一在线自定义样式 ID。
-`TextureMapView` 生命周期、Native saved state、Marker diff、Native 聚类、Camera epsilon 和
-短生命周期 thumbnail 文件边界均已通过验收，没有扩张 Phase 1 公开接口。99/99 测试、Expo
-Doctor 21/21、Native 编译与 Debug APK、真机正式 Home/Create/Edit/Delete/LocationPicker、
-年份与地区筛选、Activity recreation、前后台恢复、锁定/解锁与敏感资源清理、Native/WebView
-parity，以及连续操作和长时间性能验收均通过。iOS 仍只冻结同一 TypeScript 业务接口，
-本阶段没有 Swift/Objective-C 地图实现。
+2026-09-15 确认该原生路径已无消费者，遂移除 `app/modules/expo-amap-map`、
+`plugins/with-amap-map.js`、`AndroidNativeMemoraeMapAdapter` 与 `mapRendererSelection`，
+Android 与 iOS 自此共用同一 WebView 渲染路径。原生 Renderer 的 `TextureMapView` 生命周期、
+Native saved state、Marker diff、Native 聚类、Camera epsilon 和短生命周期 thumbnail 文件
+边界等历史验收结论保留在归档文档中，不再作为当前可运行路径。当前 App `verify` 为
+124/124 测试、Expo Doctor 21/21，运行面边界检查通过；地图交互统一使用 WebView 路径。

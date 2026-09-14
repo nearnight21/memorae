@@ -1,4 +1,4 @@
-import type { PhotoMapMarker } from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
+import type { PhotoMapMarker } from './mapSliceTypes';
 
 export interface ThumbnailSource {
   key: string;

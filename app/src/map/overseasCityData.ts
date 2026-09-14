@@ -2,7 +2,7 @@ import type {
   CityMapLabel,
   LatLng,
   MapBounds,
-} from '../../modules/expo-amap-map/src/ExpoAmapMap.types';
+} from './mapSliceTypes';
 import { OVERSEAS_CITY_TUPLES } from './generated/overseasCityData';
 import { OVERSEAS_CITY_NAMES_ZH } from './overseasCityNamesZh';
 
