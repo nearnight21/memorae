@@ -293,7 +293,7 @@ export default function AmapJsWebViewMap({
         injectedJavaScript={injectedRuntimeScript}
         webviewDebuggingEnabled={WEBVIEW_DEBUGGING_ENABLED}
         androidLayerType="hardware"
-        domStorageEnabled={false}
+        domStorageEnabled
         cacheEnabled
         scrollEnabled={false}
         bounces={false}

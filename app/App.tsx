@@ -1526,7 +1526,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       setHomeCameraTarget({
         latitude: memoryLocation.lat!,
         longitude: memoryLocation.lng!,
-        zoom: Math.max(homeViewport.camera.zoom, 14),
+        zoom: homeViewport.camera.zoom < 9 ? 9 : homeViewport.camera.zoom,
       });
     }
     void runTask(async () => { openMemory(memory); });

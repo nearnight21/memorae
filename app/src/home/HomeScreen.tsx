@@ -206,7 +206,7 @@ export default function HomeScreen({
       {!locationMode && (
         <View
           pointerEvents={chromeVisible ? 'box-none' : 'none'}
-          style={styles.overlay}
+          style={[styles.overlay, { paddingTop: Math.max(insets.top, androidTopInset()) }]}
         >
           <Animated.View pointerEvents="box-none" style={[styles.topRow, topRowAnimatedStyle]}>
             <View style={styles.regionArea}>
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#e3e8e5' },
   map: { ...StyleSheet.absoluteFill, zIndex: 2 },
   quietZone: { ...StyleSheet.absoluteFill, zIndex: 3 },
-  overlay: { flex: 1, paddingTop: androidTopInset(), zIndex: 4, justifyContent: 'space-between' },
+  overlay: { flex: 1, zIndex: 4, justifyContent: 'space-between' },
   topRow: { paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   regionArea: { width: 224, zIndex: 4 },
   moreButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', backgroundColor: 'rgba(235,245,250,0.68)', alignItems: 'center', justifyContent: 'center', shadowColor: '#36566b', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },

@@ -347,7 +347,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               ? 6
               : group.scope === 'province'
               ? (provinceHasSingleCity ? 9 : 6)
-              : group.scope === 'city' ? 9 : Math.min(14, zoom + 2);
+              : group.scope === 'city' ? 9 : (zoom >= 9 ? zoom : 9);
             const centerLat = group.centerLat ?? group.lat;
             const centerLng = group.centerLng ?? group.lng;
             setCamera(nextZoom, centerLng, centerLat);
@@ -427,7 +427,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           return;
         }
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '2D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('movestart', () => post({ type: 'cameraMoveStart' }));
           map.on('moveend', postCameraIdle);

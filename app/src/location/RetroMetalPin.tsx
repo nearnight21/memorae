@@ -7,10 +7,10 @@ interface Props {
 }
 
 /**
- * 手账复古金属选点指示器（Pin）
- * 结构：上部金属圆环徽章 + 中部正向下尖锥 + 下部垂直细针。
- * 针尖 100% 垂直指向正下方地面中心 (0, 0)，绝无偏斜。
- * 支持地图拖拽时悬浮抬起，停稳或选中时提供清脆的弹簧扎地（Bounce）反馈。
+ * Memorae 水晶晶体选点指示器（Pin）
+ * 视觉风格：与底部水晶时间轴、首屏地区控制条等保持高度一致的冰蓝通透水晶玻璃质感。
+ * 几何结构：正向上部水晶徽章 + 正向等腰尖锥 + 垂直细针，针尖 100% 垂直指向正下方地面 (0, 0)。
+ * 交互动效：拖拽时轻盈悬浮，停稳或选中地点时清脆弹跳扎定。
  */
 export default function RetroMetalPin({ isMoving = false, selectedTrigger = 0 }: Props) {
   const liftAnim = useRef(new Animated.Value(0)).current;
@@ -72,12 +72,12 @@ export default function RetroMetalPin({ isMoving = false, selectedTrigger = 0 }:
 
   const shadowOpacity = liftAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.38, 0.15],
+    outputRange: [0.32, 0.12],
   });
 
   return (
     <View pointerEvents="none" style={styles.anchor}>
-      {/* 地面接触投影光晕 */}
+      {/* 冰蓝冷青地面接触投影光晕 */}
       <Animated.View
         style={[
           styles.shadow,
@@ -88,7 +88,7 @@ export default function RetroMetalPin({ isMoving = false, selectedTrigger = 0 }:
         ]}
       />
 
-      {/* 悬浮与弹跳图钉主体 */}
+      {/* 悬浮与弹跳水晶图钉主体 */}
       <Animated.View
         style={[
           styles.pinWrapper,
@@ -100,20 +100,20 @@ export default function RetroMetalPin({ isMoving = false, selectedTrigger = 0 }:
           },
         ]}
       >
-        {/* 1. 顶部手账复古金属圆环 */}
-        <View style={styles.medalRing}>
-          <View style={styles.innerPearl}>
-            <View style={styles.coreDot} />
+        {/* 1. 顶部冰蓝水晶圆环徽章（与时间轴/首屏控件同材质） */}
+        <View style={styles.crystalRing}>
+          <View style={styles.crystalInner}>
+            <View style={styles.gemCore} />
           </View>
         </View>
 
-        {/* 2. 中部正向等腰尖锥：尖端 100% 朝正下方 */}
+        {/* 2. 中部正向等腰倒三角水晶锥：尖端 100% 朝正下方 */}
         <View style={styles.coneHolder}>
           <View style={styles.coneOuter} />
           <View style={styles.coneInner} />
         </View>
 
-        {/* 3. 底部垂直金属细针：直插 (0, 0) 地面 */}
+        {/* 3. 底部垂直钛晶细针：直插 (0, 0) 地面 */}
         <View style={styles.needleShaft}>
           <View style={styles.needleTip} />
         </View>
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#2A241E',
+    backgroundColor: '#36566b',
   },
   pinWrapper: {
     position: 'absolute',
@@ -149,41 +149,41 @@ const styles = StyleSheet.create({
     height: 48,
     justifyContent: 'flex-end',
   },
-  medalRing: {
+  crystalRing: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#C89B6D',
-    borderWidth: 2,
-    borderColor: '#754F31',
+    backgroundColor: 'rgba(235, 245, 250, 0.92)',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#1F1710',
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
+    shadowColor: '#36566b',
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
     zIndex: 2,
   },
-  innerPearl: {
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
-    backgroundColor: '#FAF6EE',
-    borderWidth: 1.2,
-    borderColor: 'rgba(117, 79, 49, 0.42)',
+  crystalInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(215, 235, 248, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(153, 194, 231, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coreDot: {
+  gemCore: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#754F31',
+    backgroundColor: '#2e4756',
   },
   coneHolder: {
     width: 14,
-    height: 11,
+    height: 10,
     alignItems: 'center',
     marginTop: -3,
     zIndex: 1,
@@ -194,10 +194,10 @@ const styles = StyleSheet.create({
     height: 0,
     borderLeftWidth: 7,
     borderRightWidth: 7,
-    borderTopWidth: 11,
+    borderTopWidth: 10,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#754F31',
+    borderTopColor: 'rgba(153, 194, 231, 0.88)',
   },
   coneInner: {
     position: 'absolute',
@@ -209,25 +209,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#C89B6D',
+    borderTopColor: 'rgba(240, 248, 253, 0.96)',
   },
   needleShaft: {
-    width: 2.5,
+    width: 2.2,
     height: 8,
-    backgroundColor: '#5C3D24',
+    backgroundColor: '#476d87',
     alignItems: 'center',
     marginTop: -1,
-    borderBottomLeftRadius: 1.25,
-    borderBottomRightRadius: 1.25,
+    borderBottomLeftRadius: 1.1,
+    borderBottomRightRadius: 1.1,
     zIndex: 0,
   },
   needleTip: {
     position: 'absolute',
     bottom: 0,
-    width: 1.5,
+    width: 1.4,
     height: 3,
-    backgroundColor: '#3E2715',
-    borderBottomLeftRadius: 0.75,
-    borderBottomRightRadius: 0.75,
+    backgroundColor: '#2e4756',
+    borderBottomLeftRadius: 0.7,
+    borderBottomRightRadius: 0.7,
   },
 });

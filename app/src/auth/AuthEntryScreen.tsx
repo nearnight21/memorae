@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
-import { androidTopInset } from '../ui/layout';
+import { useAppTopInset } from '../ui/layout';
 
 export type AuthEntryPhase = 'booting' | 'select' | 'account' | 'locked' | 'setup';
 
@@ -274,6 +274,7 @@ export default function AuthEntryScreen({
   onSelectCloud,
 }: AuthEntryScreenProps) {
   const { width, height } = useWindowDimensions();
+  const topInset = useAppTopInset();
   const [noticeMode, setNoticeMode] = useState<'none' | 'local' | 'cloud'>('none');
   const biometricTriggeredRef = useRef(false);
 
@@ -288,7 +289,7 @@ export default function AuthEntryScreen({
   }, [phase, biometricUnlockEnabled, onBiometricUnlock]);
 
   return (
-    <View style={styles.safeArea}>
+    <View style={[styles.safeArea, { paddingTop: topInset }]}>
       {/* 优雅温暖的水洗地图底图 */}
       <Image source={mapCanvas} resizeMode="cover" style={styles.mapCanvas} />
       <View pointerEvents="none" style={styles.mapWash} />
@@ -300,7 +301,7 @@ export default function AuthEntryScreen({
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { minHeight: Math.max(height - androidTopInset(), 680) },
+            { minHeight: Math.max(height - topInset, 680) },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -556,7 +557,6 @@ export default function AuthEntryScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: androidTopInset(),
     backgroundColor: '#f7f4ec',
   },
   root: {
