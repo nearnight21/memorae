@@ -252,13 +252,13 @@ export default function LocationPicker({
             <Text style={styles.cancelText}>取消</Text>
           </Pressable>
           <View style={styles.searchField}>
-            {searching ? <ActivityIndicator size="small" color="#8a7561" style={styles.searchIcon} /> : <Text style={styles.searchIcon}>⌕</Text>}
+            {searching ? <ActivityIndicator size="small" color="#476d87" style={styles.searchIcon} /> : <Text style={styles.searchIcon}>⌕</Text>}
             <TextInput
               accessibilityLabel="搜索地点或 POI"
               value={query}
               onChangeText={handleQueryChange}
               placeholder="搜索地点或 POI"
-              placeholderTextColor="rgba(102,91,80,0.72)"
+              placeholderTextColor="rgba(83,107,120,0.65)"
               style={styles.searchInput}
               returnKeyType="search"
             />
@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   topRow: { paddingTop: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
   cancelButton: { width: 30, height: 44, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: 'rgba(101,88,76,0.98)', fontSize: 14, fontWeight: '500' },
-  searchField: { flex: 1, height: 44, borderRadius: 22, backgroundColor: 'rgba(244,236,221,0.9)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, shadowColor: '#14120d', shadowOpacity: 0.16, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
-  searchIcon: { width: 20, color: 'rgba(102,91,80,0.86)', fontSize: 19, textAlign: 'center' },
-  searchInput: { flex: 1, paddingVertical: 0, marginLeft: 8, color: '#40382f', fontSize: 13 },
-  suggestionList: { marginTop: 8, marginHorizontal: 64, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(253,252,247,0.97)', shadowColor: '#14120d', shadowOpacity: 0.16, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
-  suggestionRow: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(117,79,49,0.15)' },
-  suggestionTitle: { color: '#40382f', fontSize: 13, fontWeight: '600' },
-  suggestionDetail: { color: '#786a5d', fontSize: 11, marginTop: 2 },
+  searchField: { flex: 1, height: 44, borderRadius: 22, backgroundColor: 'rgba(245,250,252,0.88)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, shadowColor: '#36566b', shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3 },
+  searchIcon: { width: 20, height: 20, lineHeight: 20, color: '#476d87', fontSize: 16, textAlign: 'center' },
+  searchInput: { flex: 1, height: 38, paddingVertical: 0, paddingHorizontal: 4, marginLeft: 6, color: '#2e4756', fontSize: 14, lineHeight: 18 },
+  suggestionList: { marginTop: 8, marginHorizontal: 64, borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(248,252,254,0.96)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.82)', shadowColor: '#36566b', shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  suggestionRow: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(153,194,231,0.25)' },
+  suggestionTitle: { color: '#2e4756', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  suggestionDetail: { color: '#688291', fontSize: 11, lineHeight: 15, marginTop: 2 },
   confirmRegion: { marginHorizontal: 20, marginBottom: 10, minHeight: 70, borderRadius: 16, paddingLeft: 16, paddingRight: 12, backgroundColor: 'rgba(249, 244, 235, 0.94)', borderWidth: 1, borderColor: 'rgba(215, 201, 182, 0.75)', flexDirection: 'row', alignItems: 'center', shadowColor: '#14120d', shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   confirmCopy: { flex: 1, minWidth: 0 },
   regionText: { color: 'rgba(64,56,47,0.95)', fontSize: 14, fontWeight: '500' },

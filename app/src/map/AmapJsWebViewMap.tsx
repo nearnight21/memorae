@@ -134,6 +134,7 @@ export interface AmapMapCamera {
   lng: number;
   zoom?: number;
   bounds?: AmapMapBounds;
+  animate?: boolean;
 }
 
 interface WebViewHandle {

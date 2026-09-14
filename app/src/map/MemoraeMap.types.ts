@@ -5,6 +5,7 @@ export interface Coordinate {
 
 export interface CameraState extends Coordinate {
   zoom: number;
+  animate?: boolean;
 }
 
 export interface MapBounds {

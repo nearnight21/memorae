@@ -105,11 +105,10 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
-      const setCamera = (zoom, lng, lat) => {
+      const setCamera = (zoom, lng, lat, animate = false) => {
         if (!map) return;
-        const immediately = !initialCameraPositioned;
-        initialCameraPositioned = true;
-        map.setZoomAndCenter(zoom, [lng, lat], immediately, 500);
+        const immediately = !animate;
+        map.setZoomAndCenter(zoom, [lng, lat], immediately, 600);
       };
       const postCameraIdle = () => {
         if (!map) return;
@@ -350,7 +349,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               : group.scope === 'city' ? 9 : (zoom >= 9 ? zoom : 9);
             const centerLat = group.centerLat ?? group.lat;
             const centerLng = group.centerLng ?? group.lng;
-            setCamera(nextZoom, centerLng, centerLat);
+            setCamera(nextZoom, centerLng, centerLat, true);
             post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: centerLat, lng: centerLng });
           });
           marker.setMap(map);
@@ -394,7 +393,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             && Math.abs(currentLng - message.lng) < 0.000001
             && Number.isFinite(currentZoom) && Math.abs(currentZoom - zoom) < 0.001
           ) return;
-          setCamera(zoom, message.lng, message.lat);
+          setCamera(zoom, message.lng, message.lat, Boolean(message.animate));
         } else if (message.type === 'clearSensitiveData') {
           window.__MEMORY_MARKERS__ = [];
           selectedId = null;
@@ -427,7 +426,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           return;
         }
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('movestart', () => post({ type: 'cameraMoveStart' }));
           map.on('moveend', postCameraIdle);
