@@ -2,7 +2,7 @@
   "expo": {
     "name": "所忆",
     "slug": "memory-recall-mobile",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "scheme": "memory-recall-vmk",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.memorae.cn",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#F3E6D7",
         "foregroundImage": "./assets/android-icon-foreground.png",
