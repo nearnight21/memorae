@@ -14,6 +14,7 @@ import {
   getDeviceUnlockRecord,
   saveDeviceUnlockRecord,
 } from '../storage/database';
+import { DEVICE_UNLOCK_LABEL } from './deviceUnlockLabels';
 
 const DEVICE_KEY_NAME = 'memory-recall.device-key.v1';
 const DEVICE_VMK_AAD = 'memory-recall:v1:device:vmk';
@@ -37,7 +38,7 @@ export function canUseDeviceUnlock(): boolean {
 
 export async function enableDeviceUnlock(session: VaultSessionV1): Promise<void> {
   if (!SecureStore.canUseBiometricAuthentication()) {
-    throw new Error('当前设备没有可用的指纹或安全生物识别。');
+    throw new Error(`当前设备没有可用的${DEVICE_UNLOCK_LABEL}。`);
   }
   const deviceKey = await nativeCryptoPrimitives.randomBytes(32);
   try {
@@ -73,11 +74,20 @@ export async function unlockWithDevice(
     getDeviceUnlockRecord(),
   ]);
   if (!storedKey || !storedRecord) {
-    throw new Error('本机解锁凭证不存在或已经失效，请使用密码。');
+    await disableDeviceUnlock();
+    throw new Error(`本机${DEVICE_UNLOCK_LABEL}凭证已经失效，请使用密码解锁后重新开启。`);
   }
-  const record = JSON.parse(storedRecord) as DeviceUnlockRecordV1;
+
+  let record: DeviceUnlockRecordV1;
+  try {
+    record = JSON.parse(storedRecord) as DeviceUnlockRecordV1;
+  } catch {
+    await disableDeviceUnlock();
+    throw new Error(`本机${DEVICE_UNLOCK_LABEL}凭证已经失效，请使用密码解锁后重新开启。`);
+  }
   if (record.schema !== 'memory-recall-device-unlock' || record.cryptoVersion !== 1) {
-    throw new Error('本机解锁凭证格式无效，请使用密码。');
+    await disableDeviceUnlock();
+    throw new Error(`本机${DEVICE_UNLOCK_LABEL}凭证已经失效，请使用密码解锁后重新开启。`);
   }
 
   const deviceKey = base64ToBytes(storedKey);

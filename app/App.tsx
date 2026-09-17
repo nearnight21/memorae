@@ -41,6 +41,10 @@ import {
   canUseDeviceUnlock,
   unlockWithDevice,
 } from './src/services/deviceUnlock';
+import {
+  DEVICE_UNLOCK_LABEL,
+  DEVICE_UNLOCK_STORAGE_LABEL,
+} from './src/services/deviceUnlockLabels';
 import { replaceWithEncryptedBundle } from './src/storage/bundle';
 import {
   downloadCiphertext,
@@ -790,14 +794,14 @@ export default function App({ testBootstrap }: AppProps = {}) {
       created.session,
       `私密空间创建完成，用时 ${Math.round(performance.now() - startedAt)} ms。`,
     );
-    if (Platform.OS === 'android' && canUseDeviceUnlock() && !deviceUnlockEnabled) {
+    if (canUseDeviceUnlock() && !deviceUnlockEnabled) {
       setTimeout(() => {
         Alert.alert(
-          '开启指纹解锁',
-          '是否开启本机指纹快速解锁私密空间？钥匙仅保存在本机 Android Keystore。',
+          `开启${DEVICE_UNLOCK_LABEL}解锁`,
+          `是否开启本机${DEVICE_UNLOCK_LABEL}快速解锁私密空间？钥匙仅保存在本机${DEVICE_UNLOCK_STORAGE_LABEL}。`,
           [
             { text: '暂不开启', style: 'cancel' },
-            { text: '开启指纹', onPress: () => void runTask(async () => { await enableDeviceUnlock(created.session); setDeviceUnlockEnabled(true); setStatus('指纹解锁已启用。'); }) },
+            { text: `开启${DEVICE_UNLOCK_LABEL}`, onPress: () => void runTask(async () => { await enableDeviceUnlock(created.session); setDeviceUnlockEnabled(true); setStatus(`${DEVICE_UNLOCK_LABEL}解锁已启用。`); }) },
           ],
         );
       }, 500);
@@ -817,27 +821,31 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
   async function quickUnlock(): Promise<void> {
     if (!vault) throw new Error('本机没有可解锁的私密空间。');
-    setStatus('等待系统指纹验证……');
+    setStatus(`等待系统${DEVICE_UNLOCK_LABEL}验证……`);
     const startedAt = performance.now();
-    const activeSession = await unlockWithDevice(vault);
-    await finishUnlock(
-      activeSession,
-      `本机指纹解锁成功，用时 ${Math.round(performance.now() - startedAt)} ms。`,
-    );
+    try {
+      const activeSession = await unlockWithDevice(vault);
+      await finishUnlock(
+        activeSession,
+        `本机${DEVICE_UNLOCK_LABEL}解锁成功，用时 ${Math.round(performance.now() - startedAt)} ms。`,
+      );
+    } finally {
+      setDeviceUnlockEnabled(await hasDeviceUnlock());
+    }
   }
 
   async function rememberThisDevice(): Promise<void> {
     if (!session) throw new Error('请先解锁。');
     await enableDeviceUnlock(session);
     setDeviceUnlockEnabled(true);
-    setStatus('设备钥匙已写入 Android Keystore；VMK 本身没有直接保存。');
+    setStatus(`设备钥匙已写入${DEVICE_UNLOCK_STORAGE_LABEL}；VMK 本身没有直接保存。`);
   }
 
   async function toggleDeviceUnlock(): Promise<void> {
     if (deviceUnlockEnabled) {
       await disableDeviceUnlock();
       setDeviceUnlockEnabled(false);
-      setStatus('指纹解锁已关闭。');
+      setStatus(`${DEVICE_UNLOCK_LABEL}解锁已关闭。`);
       return;
     }
     await rememberThisDevice();
@@ -1880,7 +1888,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onTogglePrivatePassword={() => setShowPrivatePassword((value) => !value)}
           onTogglePrivatePasswordConfirmation={() => setShowPrivatePassword((value) => !value)}
           onSubmit={() => void runTask(submitAuthEntry)}
-          biometricUnlockEnabled={Platform.OS === 'android' && deviceUnlockEnabled}
+          biometricUnlockEnabled={deviceUnlockEnabled}
           onBiometricUnlock={() => void runTask(quickUnlock)}
           onSelectLocal={() => void runTask(async () => {
             await saveAppProfile('local');
@@ -2058,7 +2066,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onEditMap={beginDefaultMapEditor}
           onRestoreMap={() => void runTask(restoreDefaultMapView)}
           deviceUnlockEnabled={deviceUnlockEnabled}
-          deviceUnlockAvailable={Platform.OS === 'android' && Boolean(session) && canUseDeviceUnlock()}
+          deviceUnlockAvailable={Boolean(session) && canUseDeviceUnlock()}
           onToggleDeviceUnlock={() => void runTask(toggleDeviceUnlock)}
           onBack={() => setUtilityRoute(null)}
         />

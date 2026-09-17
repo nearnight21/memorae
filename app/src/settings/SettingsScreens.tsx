@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { CameraState } from '../map/MemoraeMap';
 import { androidTopInset } from '../ui/layout';
 import { cameraCoordinateLabel, cameraZoomLabel } from './settingsModel';
+import { DEVICE_UNLOCK_LABEL } from '../services/deviceUnlockLabels';
 import type { UpdateCheckResult } from './updateService';
 
 export type UtilityRoute = 'settings' | 'help' | 'about' | 'support';
@@ -135,9 +136,9 @@ export function SettingsScreen({
       <Text style={styles.footnote}>首次进入地图和时间轴下拉回到全景时使用此视图。</Text>
       <Text style={styles.sectionLabel}>私密空间</Text>
       <View style={styles.listSection}>
-        <Row label="指纹解锁" detail={deviceUnlockAvailable ? (deviceUnlockEnabled ? '已开启' : '关闭') : '当前设备不可用'} onPress={deviceUnlockAvailable ? onToggleDeviceUnlock : undefined} />
+        <Row label={`${DEVICE_UNLOCK_LABEL}解锁`} detail={deviceUnlockAvailable ? (deviceUnlockEnabled ? '已开启' : '关闭') : '当前设备不可用'} onPress={deviceUnlockAvailable ? onToggleDeviceUnlock : undefined} />
       </View>
-      <Text style={styles.footnote}>指纹只保存在本机安全区域，私密空间密码仍是主恢复方式。</Text>
+      <Text style={styles.footnote}>设备钥匙只保存在本机安全区域，私密空间密码仍是主恢复方式。</Text>
     </Page>
   );
 }

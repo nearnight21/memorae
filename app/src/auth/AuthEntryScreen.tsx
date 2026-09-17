@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native-skia';
+import { DEVICE_UNLOCK_LABEL } from '../services/deviceUnlockLabels';
 import { useAppTopInset } from '../ui/layout';
 
 export type AuthEntryPhase = 'booting' | 'select' | 'account' | 'locked' | 'setup';
@@ -276,9 +278,18 @@ export default function AuthEntryScreen({
   const { width, height } = useWindowDimensions();
   const topInset = useAppTopInset();
   const [noticeMode, setNoticeMode] = useState<'none' | 'local' | 'cloud'>('none');
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const biometricTriggeredRef = useRef(false);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!appActive) return;
     if (phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock && !biometricTriggeredRef.current) {
       biometricTriggeredRef.current = true;
       const timer = setTimeout(() => {
@@ -286,7 +297,7 @@ export default function AuthEntryScreen({
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [phase, biometricUnlockEnabled, onBiometricUnlock]);
+  }, [appActive, phase, biometricUnlockEnabled, onBiometricUnlock]);
 
   return (
     <View style={[styles.safeArea, { paddingTop: topInset }]}>
@@ -498,7 +509,7 @@ export default function AuthEntryScreen({
                 {biometricUnlockEnabled && onBiometricUnlock ? (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="点击使用指纹解锁"
+                    accessibilityLabel={`点击使用${DEVICE_UNLOCK_LABEL}解锁`}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       onBiometricUnlock();
@@ -512,7 +523,7 @@ export default function AuthEntryScreen({
                       <View style={styles.fingerprintOuter} />
                       <View style={styles.fingerprintInner} />
                     </View>
-                    <Text style={styles.fingerprintText}>点击使用指纹解锁</Text>
+                    <Text style={styles.fingerprintText}>点击使用{DEVICE_UNLOCK_LABEL}解锁</Text>
                   </Pressable>
                 ) : null}
                 <SecurityBadge text="钥匙仅保存在本机内存，所忆服务器无法解密您的回忆" />

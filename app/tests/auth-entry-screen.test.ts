@@ -67,19 +67,31 @@ test('AuthEntryScreen 登录页主按钮为登录，下方为无边框纯文字�
   assert.match(source, /端到端加密与多端密文同步/);
 });
 
-test('AuthEntryScreen 支持指纹解锁自动唤起与高质感指纹快捷入口', () => {
+test('AuthEntryScreen 支持生物识别解锁自动唤起与平台化快捷入口', () => {
   const source = readFileSync(new URL('../src/auth/AuthEntryScreen.tsx', import.meta.url), 'utf8');
 
-  // 指纹解锁属性支持
+  // 生物识别解锁属性支持
   assert.match(source, /biometricUnlockEnabled/);
   assert.match(source, /onBiometricUnlock/);
 
-  // 指纹自动唤起
+  // 自动唤起仅在 App 处于前台时触发一次
   assert.match(source, /biometricTriggeredRef/);
   assert.match(source, /phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock/);
+  assert.match(source, /AppState\.addEventListener\('change'/);
+  assert.match(source, /if \(!appActive\) return;/);
 
-  // 指纹解锁专属按钮与视觉
-  assert.match(source, /accessibilityLabel="点击使用指纹解锁"/);
+  // 快捷入口文案按平台区分面容与指纹
+  assert.match(source, /DEVICE_UNLOCK_LABEL/);
+  assert.match(source, /accessibilityLabel=\{`点击使用\$\{DEVICE_UNLOCK_LABEL\}解锁`\}/);
   assert.match(source, /styles\.fingerprintButton/);
-  assert.match(source, /点击使用指纹解锁/);
+  assert.match(source, /点击使用\{DEVICE_UNLOCK_LABEL\}解锁/);
+});
+
+test('设备解锁文案按平台区分面容与指纹，且凭证失效时自动清理', () => {
+  const labels = readFileSync(new URL('../src/services/deviceUnlockLabels.ts', import.meta.url), 'utf8');
+  assert.match(labels, /Platform\.OS === 'ios' \? '面容 \/ 指纹' : '指纹'/);
+
+  const source = readFileSync(new URL('../src/services/deviceUnlock.ts', import.meta.url), 'utf8');
+  assert.match(source, /await disableDeviceUnlock\(\);/);
+  assert.match(source, /本机\$\{DEVICE_UNLOCK_LABEL\}凭证已经失效/);
 });
