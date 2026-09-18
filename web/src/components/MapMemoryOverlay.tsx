@@ -11,17 +11,20 @@ import {
   MapPin,
   MoreHorizontal,
   PenLine,
+  Plus,
   RefreshCw,
   Tag,
   Trash2,
   X,
 } from 'lucide-react';
-import { CategoryType, Memory } from '../types';
+import { Memory } from '../types';
+import type { MemoryTopic } from '../memory/topic';
 import { hasResolvedAdministrativeLocation, reverseGeocodeCoordinates } from '../lib/geo';
 import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
 import { getOrCreatePreviewRequest } from './previewRequests';
 import { journalReturnTransform, type JournalReturnTarget } from './journalReturn';
+import TopicBadge from './TopicBadge';
 
 interface ScreenPoint {
   x: number;
@@ -39,18 +42,12 @@ interface MapMemoryOverlayProps {
   onDeleteMemory?: (id: string) => Promise<void>;
   onLoadPreviewPhoto?: (photoId: string) => Promise<string>;
   onLoadOriginalPhoto?: (photoId: string) => Promise<string>;
+  topics?: MemoryTopic[];
+  topicCovers?: Record<string, string | null>;
+  onOpenTopic?: (topicId: string) => void;
+  onCreateTopic?: (name: string) => MemoryTopic | Promise<MemoryTopic> | void;
   readerMode?: 'reflection' | 'journal';
 }
-
-const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
-  { value: 'travel', label: '旅行' },
-  { value: 'growth', label: '成长' },
-  { value: 'motorcycle', label: '日常' },
-  { value: 'photography', label: '瞬间' },
-];
-
-const categoryLabel = (category: CategoryType) =>
-  CATEGORY_OPTIONS.find((option) => option.value === category)?.label ?? '未分类';
 
 const yearFromDate = (date: string, fallback: number) => {
   const year = Number.parseInt(date.trim().slice(0, 4), 10);
@@ -76,6 +73,10 @@ export default function MapMemoryOverlay({
   onDeleteMemory,
   onLoadPreviewPhoto,
   onLoadOriginalPhoto,
+  topics,
+  topicCovers,
+  onOpenTopic,
+  onCreateTopic,
   readerMode = 'reflection',
 }: MapMemoryOverlayProps) {
   const reduceMotion = useReducedMotion();
@@ -99,6 +100,10 @@ export default function MapMemoryOverlay({
   const pageTransition = { duration: openDuration, ease: [0.25, 0.1, 0.25, 1] as const };
   const contentFadeDuration = reduceMotion ? 0.08 : 0.17;
   const pageAngle = reduceMotion || narrowJournal ? 0 : 62;
+  const attachedTopics = useMemo(
+    () => (topics ?? []).filter((topic) => (memory.topicIds ?? []).includes(topic.id)),
+    [memory.topicIds, topics],
+  );
 
   useLayoutEffect(() => {
     if (isPresent || exitStarted.current || !scope.current) return;
@@ -216,6 +221,8 @@ export default function MapMemoryOverlay({
   const [locationResolution, setLocationResolution] = useState<'idle' | 'resolving' | 'resolved' | 'error'>(
     locationNeedsResolution(memory) ? 'idle' : 'resolved',
   );
+  const [topicPickerOpen, setTopicPickerOpen] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
   const locationRequestRef = useRef(0);
   const previewRequestsRef = useRef(new Map<string, Promise<string>>());
 
@@ -235,6 +242,8 @@ export default function MapMemoryOverlay({
     setLocationQuery('');
     setShowLocationMap(false);
     setLocationResolution(locationNeedsResolution(memory) ? 'idle' : 'resolved');
+    setTopicPickerOpen(false);
+    setNewTopicName('');
     locationRequestRef.current += 1;
   }, [memory.id]);
 
@@ -333,6 +342,30 @@ export default function MapMemoryOverlay({
       lat: undefined,
       lng: undefined,
     }));
+  };
+
+  const toggleDraftTopic = (topicId: string, attached: boolean) => {
+    setDraftMemory((current) => {
+      const ids = current.topicIds ?? [];
+      return {
+        ...current,
+        topicIds: attached ? ids.filter((id) => id !== topicId) : [...ids, topicId],
+      };
+    });
+  };
+
+  const createTopicInline = async () => {
+    const name = newTopicName.trim();
+    if (!name || !onCreateTopic) return;
+    const created = await onCreateTopic(name);
+    if (created && typeof created === 'object' && 'id' in created) {
+      setDraftMemory((current) => {
+        const ids = current.topicIds ?? [];
+        return ids.includes(created.id) ? current : { ...current, topicIds: [...ids, created.id] };
+      });
+    }
+    setNewTopicName('');
+    setTopicPickerOpen(false);
   };
 
   const saveMemory = async (): Promise<boolean> => {
@@ -794,11 +827,6 @@ export default function MapMemoryOverlay({
                     </span>
                   </>
                 )}
-                <span className="map-journal-meta-dot" aria-hidden="true">·</span>
-                <span className="map-journal-meta-tag font-sans">
-                  <Tag className="h-3 w-3 text-amber-900/50" aria-hidden="true" />
-                  <span>{categoryLabel(memory.category)}</span>
-                </span>
               </div>
             ) : (
               /* 编辑状态下的结构化表单排版：两行清晰分离 */
@@ -819,25 +847,75 @@ export default function MapMemoryOverlay({
                       />
                     </div>
                   </div>
+                </div>
 
-                  <div className="map-journal-field-group">
-                    <label htmlFor="edit-journal-category" className="map-journal-field-label">主题</label>
-                    <div className="map-journal-input-wrap">
-                      <Tag className="h-3.5 w-3.5 text-amber-900/50 ml-2.5 shrink-0" aria-hidden="true" />
-                      <select
-                        id="edit-journal-category"
-                        value={draftMemory.category}
-                        onChange={(event) => updateDraft('category', event.target.value as CategoryType)}
-                        className="map-journal-select"
-                        aria-label="编辑记忆主题"
-                      >
-                        {CATEGORY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <div className="map-journal-field-group">
+                  <label className="map-journal-field-label">主题</label>
+                  <div className="memory-topic-field">
+                    {(draftMemory.topicIds ?? []).map((topicId) => {
+                      const topic = (topics ?? []).find((entry) => entry.id === topicId);
+                      return (
+                        <span key={topicId} className="memory-topic-chip">
+                          <TopicBadge
+                            name={topic?.name ?? '未知主题'}
+                            cover={topicCovers?.[topicId] ?? null}
+                            seed={topicId}
+                          />
+                          <span className="memory-topic-chip-name">{topic?.name ?? '未知主题'}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleDraftTopic(topicId, true)}
+                            aria-label={`移除主题 ${topic?.name ?? ''}`}
+                          >
+                            <X size={11} strokeWidth={2} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      className="memory-topic-add"
+                      onClick={() => setTopicPickerOpen((open) => !open)}
+                      aria-expanded={topicPickerOpen}
+                    >
+                      <Plus size={12} strokeWidth={2} />
+                      添加
+                    </button>
+                    {topicPickerOpen && (
+                      <div className="memory-topic-menu is-inline" role="menu">
+                        {(topics ?? [])
+                          .filter((topic) => !(draftMemory.topicIds ?? []).includes(topic.id))
+                          .map((topic) => (
+                            <button
+                              key={topic.id}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                toggleDraftTopic(topic.id, false);
+                                setTopicPickerOpen(false);
+                              }}
+                            >
+                              {topic.name}
+                            </button>
+                          ))}
+                        <div className="memory-topic-create">
+                          <input
+                            value={newTopicName}
+                            maxLength={40}
+                            placeholder="新建主题名称"
+                            onChange={(event) => setNewTopicName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                void createTopicInline();
+                              }
+                            }}
+                            aria-label="新建主题名称"
+                          />
+                          <button type="button" onClick={() => void createTopicInline()}>新建</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -920,6 +998,46 @@ export default function MapMemoryOverlay({
               </div>
             )}
           </div>
+
+          {/* 主题：只读展示，点击回到地图并进入该主题。 */}
+          {!isEditing && attachedTopics.length > 0 && (
+            <div className="map-journal-topics" aria-label="主题">
+              <span className="map-journal-topics-label">
+                <Tag className="h-3.5 w-3.5" strokeWidth={1.6} aria-hidden="true" />
+                主题
+              </span>
+              <div className="map-journal-topics-list">
+                {attachedTopics.map((topic) => (
+                  <button
+                    key={topic.id}
+                    type="button"
+                    className="map-journal-topic-chip"
+                    onClick={() => onOpenTopic?.(topic.id)}
+                    title={`进入主题：${topic.name}`}
+                  >
+                    <span className="map-journal-topic-cover">
+                      <TopicBadge
+                        name={topic.name}
+                        cover={topicCovers?.[topic.id] ?? null}
+                        seed={topic.id}
+                      />
+                    </span>
+                    <span className="map-journal-topic-name">{topic.name}</span>
+                    <span className="map-journal-topic-caret" aria-hidden="true">›</span>
+                  </button>
+                ))}
+              </div>
+              {attachedTopics.length === 1 && onOpenTopic && (
+                <button
+                  type="button"
+                  className="map-journal-topic-enter"
+                  onClick={() => onOpenTopic(attachedTopics[0].id)}
+                >
+                  查看整段经历 →
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 双时态时光轴（The Thread） */}
           <div className="map-journal-thread">

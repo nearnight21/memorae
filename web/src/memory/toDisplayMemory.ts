@@ -37,6 +37,7 @@ export function toDisplayMemory(memory: VisibleMemoryV1 | VisibleMemoryV2): Memo
       year: Number(memory.date.slice(0, 4)),
       category: memory.category,
       tag: memory.tag,
+      topicIds: memory.topicIds ? [...memory.topicIds] : [],
       image: memory.thumbnailUrls[0] ?? memory.photoUrls[0] ?? '',
       gallery: memory.photoUrls,
       pastSelf: memory.pastSelf,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, ChevronLeft, History, List, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { Memory, type MemoryFilters, type MemoryLocationDraft } from '../types';
 import { hasResolvedAdministrativeLocation, normalizeLongitude, resolvePlace, geocodeAddress, reverseGeocodeCoordinates } from '../lib/geo';
 import { CITY_LABELS } from '../lib/labels';
@@ -11,6 +11,8 @@ import {
   filterMemories,
   isMemoryFiltersActive,
 } from '../lib/memoryFilters';
+import { filterMemoriesByTopic, topicCoverPhoto, topicMemoryStats } from '../lib/topicFilters';
+import type { MemoryTopic } from '../memory/topic';
 import {
   currentRegionForViewport,
   provinceForCity,
@@ -20,6 +22,7 @@ import {
 import MapMemoryOverlay from './MapMemoryOverlay';
 import type { JournalReturnTarget } from './journalReturn';
 import CrystalTimeline from './CrystalTimeline';
+import TopicSelector from './TopicSelector';
 
 // 底图模式：'amap' = 高德瓦片（国内直连、中文标注、浅色）；'dark' = CARTO 深色无标注 + 自绘中文标注层
 const TILE_MODE: 'amap' | 'dark' = 'amap';
@@ -49,7 +52,26 @@ interface MapViewProps {
   firstMemoryFeedback?: Memory | null;
   onDismissFirstMemoryFeedback?: () => void;
   onLock?: () => void;
-  onOpenRecall?: () => void;
+  /** 主题：把相关记忆组织成可重新进入的浏览上下文。 */
+  topics?: MemoryTopic[];
+  lastUsedAt?: Record<string, string>;
+  selectedTopicId?: string | null;
+  onSelectTopic?: (topicId: string | null) => void;
+  onCreateTopic?: (name: string) => MemoryTopic | Promise<MemoryTopic> | void;
+  onRenameTopic?: (topicId: string, name: string) => void | Promise<void>;
+  onDeleteTopic?: (topicId: string) => void | Promise<void>;
+  onOpenTopic?: (topicId: string) => void;
+  onAddMemoryToTopic?: (topicId: string) => void;
+  /** 主题多选：从地图直接挑选记忆加入主题。 */
+  onStartTopicPick?: (topicId: string) => void;
+  topicPickMode?: boolean;
+  topicPickSelectedIds?: string[];
+  topicPickLockedIds?: string[];
+  topicPickLabel?: string;
+  topicPickSubmitting?: boolean;
+  onToggleTopicPickMemory?: (memoryId: string) => void;
+  onCommitTopicPick?: () => void;
+  onCancelTopicPick?: () => void;
   readerMode?: 'reflection' | 'journal';
   /** 登录页只读地图背景：复用真实瓦片，但不显示或启用足迹业务控件。 */
   signedOutBackdrop?: boolean;
@@ -77,13 +99,6 @@ const countryOf = (m: Memory): string => m.country?.trim() || '';
 // 城市气泡只能使用行政城市字段；地点名可能是街道或景点，不能冒充城市标签。
 const cityOf = (m: Memory): string => m.city?.trim() || '';
 const cityGroupOf = (m: Memory): string => cityOf(m) || '未标注城市';
-
-const THEME_OPTIONS = [
-  { value: 'travel' as const, label: '旅行' },
-  { value: 'growth' as const, label: '成长' },
-  { value: 'motorcycle' as const, label: '日常' },
-  { value: 'photography' as const, label: '日常 · 瞬间' },
-];
 
 function groupBy<T>(list: T[], keyFn: (item: T) => string): Record<string, T[]> {
   const out: Record<string, T[]> = {};
@@ -167,7 +182,14 @@ const averageMemoryCoordinates = (list: Memory[]): [number, number] | null => {
   ];
 };
 
-function bubbleIcon(img: string, count: number, label: string, fallback?: string, selected = false): L.DivIcon {
+function bubbleIcon(
+  img: string,
+  count: number,
+  label: string,
+  fallback?: string,
+  selected = false,
+  pickState?: 'selected' | 'locked',
+): L.DivIcon {
   const primary = mapImageUrl(img || fallback || '');
   const fallbackUrl = fallback ? mapImageUrl(fallback) : undefined;
   const visibleLabel = shortPlaceLabel(label);
@@ -178,9 +200,10 @@ function bubbleIcon(img: string, count: number, label: string, fallback?: string
   return L.divIcon({
     className: 'map-bubble-wrap',
     html: `
-      <div class="map-bubble${selected ? ' is-selected' : ''}">
+      <div class="map-bubble${selected ? ' is-selected' : ''}${pickState === 'selected' ? ' is-topic-pick' : ''}${pickState === 'locked' ? ' is-topic-pick-locked' : ''}">
         <img src="${escHtml(primary)}" referrerpolicy="no-referrer" alt="" decoding="async" onerror="${escHtml(fallbackHandler)}" />
         ${count > 1 ? `<span class="map-bubble-count">${count}</span>` : ''}
+        ${pickState === 'locked' ? '<span class="map-bubble-locked">已在主题中</span>' : ''}
         <span class="map-bubble-label">${escHtml(visibleLabel)}</span>
       </div>
     `,
@@ -193,6 +216,12 @@ function yearRangeOf(memories: Memory[]): string {
   const years = memories.map((memory) => memory.year).filter(Number.isFinite).sort((left, right) => left - right);
   if (years.length === 0) return '未标注时间';
   return years[0] === years[years.length - 1] ? String(years[0]) : `${years[0]}-${years[years.length - 1]}`;
+}
+
+function formatTopicRange(start: string | null, end: string | null): string {
+  if (!start || !end) return '未标注时间';
+  const format = (value: string) => value.replace(/-/g, '.');
+  return start === end ? format(start) : `${format(start)} — ${format(end)}`;
 }
 
 function placeOf(memory: Memory): string {
@@ -220,7 +249,24 @@ export default function MapView({
   isFirstMemory = false,
   firstMemoryFeedback,
   onDismissFirstMemoryFeedback,
-  onOpenRecall,
+  topics = [],
+  lastUsedAt = {},
+  selectedTopicId = null,
+  onSelectTopic,
+  onCreateTopic,
+  onRenameTopic,
+  onDeleteTopic,
+  onOpenTopic,
+  onAddMemoryToTopic,
+  onStartTopicPick,
+  topicPickMode = false,
+  topicPickSelectedIds = [],
+  topicPickLockedIds = [],
+  topicPickLabel = '',
+  topicPickSubmitting = false,
+  onToggleTopicPickMemory,
+  onCommitTopicPick,
+  onCancelTopicPick,
   readerMode,
   signedOutBackdrop = false,
   embedded = false,
@@ -235,6 +281,31 @@ export default function MapView({
   const returnMarkersRef = useRef<Array<{ marker: L.Marker; memoryIds: string[] }>>([]);
   const currentMemoryIds = useRef(new Set<string>());
   currentMemoryIds.current = new Set(memories.map((memory) => memory.id));
+  // 多选模式通过 ref 读取，避免每次点选都重建气泡层。
+  const topicPickModeRef = useRef(topicPickMode);
+  topicPickModeRef.current = topicPickMode;
+  const topicPickSelectedRef = useRef<Set<string>>(new Set());
+  topicPickSelectedRef.current = new Set(topicPickSelectedIds);
+  const topicPickLockedRef = useRef<Set<string>>(new Set());
+  topicPickLockedRef.current = new Set(topicPickLockedIds);
+  const topicPickToggleRef = useRef(onToggleTopicPickMemory);
+  topicPickToggleRef.current = onToggleTopicPickMemory;
+
+  const pickStateFor = (list: Memory[]): 'selected' | 'locked' | undefined => {
+    if (!topicPickModeRef.current || list.length === 0) return undefined;
+    if (list.every((memory) => topicPickLockedRef.current.has(memory.id))) return 'locked';
+    if (list.every((memory) => topicPickSelectedRef.current.has(memory.id))) return 'selected';
+    return undefined;
+  };
+
+  const activateMemory = (memory: Memory) => {
+    if (topicPickModeRef.current) {
+      if (topicPickLockedRef.current.has(memory.id)) return;
+      topicPickToggleRef.current?.(memory.id);
+      return;
+    }
+    onSelectMemory(memory);
+  };
 
   const getReturnTarget = (memoryId: string): JournalReturnTarget | null => {
     const container = containerRef.current;
@@ -282,7 +353,6 @@ export default function MapView({
 
   const [focusedRegion, setFocusedRegion] = useState<RegionFocus | null>(null);
   const [viewportRegionCandidates, setViewportRegionCandidates] = useState<ViewportRegionCandidate[]>([]);
-  const [isResultListOpen, setIsResultListOpen] = useState(false);
   const [enriched, setEnriched] = useState<Memory[]>(memories);
   // zoom 变化后 +1，触发气泡按当前缩放级别重建（自适应层级）
   const [zoomTick, setZoomTick] = useState(0);
@@ -455,15 +525,35 @@ export default function MapView({
     ));
   }, [enriched]);
 
+  // 统一展示管道：全部记忆 → 主题 → 现有时间/地区筛选 → visibleMemories。
+  const topicScopedMemories = useMemo(
+    () => filterMemoriesByTopic(enriched, selectedTopicId),
+    [enriched, selectedTopicId]
+  );
   // App owns the canonical result. Prototype callers without the controlled
   // result still get the same filtering semantics locally.
   const localFiltered = useMemo(
-    () => filterMemories(enriched, activeFilters),
-    [enriched, activeFilters]
+    () => filterMemories(topicScopedMemories, activeFilters),
+    [topicScopedMemories, activeFilters]
   );
   const filtered = controlledFilteredMemories ?? localFiltered;
   const filteredUnlabeled = useMemo(() => filtered.filter((m) => !countryOf(m)), [filtered]);
   const filtersActive = isMemoryFiltersActive(activeFilters);
+  const selectedTopic = useMemo(
+    () => topics.find((topic) => topic.id === selectedTopicId) ?? null,
+    [selectedTopicId, topics]
+  );
+  const topicStats = useMemo(
+    () => topicMemoryStats(topicScopedMemories),
+    [topicScopedMemories]
+  );
+  const topicCovers = useMemo(() => {
+    const covers: Record<string, string | null> = {};
+    for (const topic of topics) {
+      covers[topic.id] = topicCoverPhoto(filterMemoriesByTopic(enriched, topic.id));
+    }
+    return covers;
+  }, [enriched, topics]);
   const contextMemories = useMemo(() => {
     if (!focusedRegion) return filtered;
     return filtered.filter((memory) => (
@@ -476,6 +566,23 @@ export default function MapView({
   }, [filtered, focusedRegion]);
   const contextTitle = focusedRegion ? shortPlaceLabel(focusedRegion.name) : '全部地区';
   const contextRange = yearRangeOf(contextMemories);
+
+  // 进入主题时按该主题带坐标的记忆自适应视野；单点用合理缩放，无坐标保持地图可用。
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !baseMapReady || !selectedTopicId) return;
+    const coordinates = topicScopedMemories
+      .filter((memory) => Number.isFinite(memory.lat) && Number.isFinite(memory.lng))
+      .map((memory) => [memory.lat as number, memory.lng as number] as [number, number]);
+    if (coordinates.length === 0) return;
+    if (coordinates.length === 1) {
+      map.flyTo(coordinates[0], POINT_ZOOM, { duration: 0.85 });
+      return;
+    }
+    map.flyToBounds(L.latLngBounds(coordinates), { padding: [90, 90], duration: 0.85, maxZoom: POINT_ZOOM });
+    // topicScopedMemories 在进入主题后更新，无需重复触发视野动画。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseMapReady, selectedTopicId]);
 
   // --- 地图生命周期 ---
   useEffect(() => {
@@ -770,10 +877,11 @@ export default function MapView({
           || await resolvePlace(countryOf(memory), cityOf(memory))
           || coords;
         map.flyTo(memoryCoords, POINT_ZOOM, { duration: 0.8 });
-        // 展示场景下，海外唯一记忆没有后续的城市/点位层级可点，直接展开详情。
-        if (openSingleForeignMemory) {
+        // 多选模式下点击即选中；展示场景下海外唯一记忆没有后续层级可点，直接展开详情。
+        if (topicPickModeRef.current) {
+          activateMemory(memory);
+        } else if (openSingleForeignMemory) {
           selectedDisplayCoordsRef.current = L.latLng(memoryCoords);
-          setIsResultListOpen(false);
           onSelectMemory(memory);
         }
       };
@@ -786,7 +894,7 @@ export default function MapView({
         );
         for (const { country, list, coords } of resolvedCountries) {
           if (cancelled || !coords) continue;
-          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) }, list)
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country, pickStateFor(list)) }, list)
             .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
@@ -810,7 +918,7 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country) }, list)
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, country, fallbackImageOf(list[0]), focusedRegion?.name === country, pickStateFor(list)) }, list)
             .on('click', () => { void handleCountryClick(coords, list); })
             .addTo(nextLayer);
         }
@@ -858,12 +966,12 @@ export default function MapView({
             coords,
             order: Math.min(...list.map((m) => Number(m.date.replaceAll('.', '')) || m.year)),
           });
-          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city) }, list)
+          memoryMarker(coords, { icon: bubbleIcon(list[0].image, list.length, city, fallbackImageOf(list[0]), focusedRegion?.name === city, pickStateFor(list)) }, list)
             .on('click', () => {
               map.flyTo(coords, POINT_ZOOM, { duration: 0.8 });
               // 城市只有一条当前筛选结果时，进入城市层级即可直接阅读；
               // 多条记忆仍停留在城市视图，避免替用户猜测要打开哪一条。
-              if (list.length === 1) onSelectMemory(list[0]);
+              if (list.length === 1) activateMemory(list[0]);
             })
             .addTo(nextLayer);
         }
@@ -920,10 +1028,13 @@ export default function MapView({
         for (const [key, list] of byCoord) {
           const [lat, lng] = key.split(',').map(Number);
           if (list.length === 1) {
-            const marker = memoryMarker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0])) }, list);
+            const marker = memoryMarker([lat, lng], { icon: bubbleIcon(list[0].image, 1, list[0].title, fallbackImageOf(list[0]), false, pickStateFor(list)) }, list);
             marker.on('click', () => {
+                if (topicPickModeRef.current) {
+                  activateMemory(list[0]);
+                  return;
+                }
                 selectedDisplayCoordsRef.current = marker.getLatLng();
-                setIsResultListOpen(false);
                 onSelectMemory(list[0]);
               })
               .addTo(nextLayer);
@@ -938,10 +1049,13 @@ export default function MapView({
             const a = startAngle + i * angleStep;
             const dLat = Math.cos(a) * spreadDeg;
             const dLng = (Math.sin(a) * spreadDeg) / lngScale;
-            const marker = memoryMarker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m)) }, [m]);
+            const marker = memoryMarker([lat + dLat, lng + dLng], { icon: bubbleIcon(m.image, 1, m.title, fallbackImageOf(m), false, pickStateFor([m])) }, [m]);
             marker.on('click', () => {
+                if (topicPickModeRef.current) {
+                  activateMemory(m);
+                  return;
+                }
                 selectedDisplayCoordsRef.current = marker.getLatLng();
-                setIsResultListOpen(false);
                 onSelectMemory(m);
               })
               .addTo(nextLayer);
@@ -968,6 +1082,39 @@ export default function MapView({
       cancelled = true;
     };
   }, [zoomTick, filtered, filtersActive, focusedRegion, openSingleForeignMemory]);
+
+  // 选中集合变化时只切换气泡类名，不重建整个气泡层。
+  useEffect(() => {
+    const selectedSet = new Set(topicPickSelectedIds);
+    const lockedSet = new Set(topicPickLockedIds);
+    for (const { marker, memoryIds } of returnMarkersRef.current) {
+      const element = marker.getElement()?.querySelector<HTMLElement>('.map-bubble');
+      if (!element) continue;
+      const allLocked = topicPickMode && memoryIds.length > 0
+        && memoryIds.every((id) => lockedSet.has(id));
+      const allSelected = topicPickMode && memoryIds.length > 0
+        && memoryIds.every((id) => selectedSet.has(id));
+      element.classList.toggle('is-topic-pick-locked', allLocked);
+      element.classList.toggle('is-topic-pick', !allLocked && allSelected);
+    }
+  }, [topicPickMode, topicPickLockedIds, topicPickSelectedIds]);
+
+  useEffect(() => {
+    if (!topicPickMode) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancelTopicPick?.();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        onCommitTopicPick?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancelTopicPick, onCommitTopicPick, topicPickMode]);
 
   const backToWorld = () => {
     setFocusedRegion(null);
@@ -1044,8 +1191,6 @@ export default function MapView({
         </motion.section>
       )}
 
-      {isResultListOpen && !selectedMemory && <div className="map-region-focus absolute inset-0 z-[1001]" aria-hidden="true" />}
-
       {/* 页面标题与地区层级 */}
       <header
         className="map-ui-header pointer-events-none absolute left-[96px] top-8 z-[1002]"
@@ -1063,6 +1208,13 @@ export default function MapView({
                   && other!.includes(part!)))
               .map((part) => <span key={part}>/ {part}</span>)}
           </nav>
+        ) : selectedTopic ? (
+          <section className="map-context-card pointer-events-auto" aria-label="当前主题范围">
+            <p>主题</p>
+            <h1>{selectedTopic.name}</h1>
+            <span>{topicStats.count} 段记忆 · {topicStats.placeCount} 个地点</span>
+            <span>{formatTopicRange(topicStats.start, topicStats.end)}</span>
+          </section>
         ) : (
           <section className="map-context-card pointer-events-auto" aria-label="当前足迹范围">
             <p>足迹 / {contextTitle}</p>
@@ -1095,10 +1247,6 @@ export default function MapView({
                   {availableCountries.map((country) => { const active = activeFilters.regions.includes(country); return <button key={country} type="button" onClick={() => updateFilters({ regions: active ? activeFilters.regions.filter((value) => value !== country) : [...activeFilters.regions, country] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{country}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
                   {availableCountries.length === 0 && <span className="map-ui-muted text-[11px]">暂无地区</span>}
                 </div>
-                <p className="map-ui-muted mb-1.5 mt-3 text-[10px] tracking-[0.12em]">主题</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {THEME_OPTIONS.map((theme) => { const active = activeFilters.themes.includes(theme.value); return <button key={theme.value} type="button" onClick={() => updateFilters({ themes: active ? activeFilters.themes.filter((value) => value !== theme.value) : [...activeFilters.themes, theme.value] })} className={`map-ui-option rounded-full border px-2.5 py-1 text-[11px] cursor-pointer ${active ? 'is-active' : ''}`}>{theme.label}{active && <Check className="ml-1 inline h-3 w-3" />}</button>; })}
-                </div>
                 <p className="map-ui-muted mt-3 text-[10px]">时间由底部水晶时间轴控制</p>
               </motion.div>}
             </AnimatePresence>
@@ -1106,17 +1254,9 @@ export default function MapView({
         )}
       </header>
 
-      {/* 回顾是全局浏览方式；当前结果列表保留在右侧中部。 */}
-      {!selectedMemory && <div className="absolute right-24 top-9 z-[1002] flex items-start gap-2">
-        {onOpenRecall && <button type="button" onClick={onOpenRecall} className="map-recall-crystal" aria-label="进入回顾">
-          <History className="h-4 w-4" strokeWidth={1.6} />
-          <span>回顾</span>
-        </button>}
-      </div>}
-
       {showTimeline && !selectedMemory && allYears.length > 0 && (
         <CrystalTimeline
-          memories={enriched}
+          memories={selectedTopic ? topicScopedMemories : enriched}
           filters={activeFilters}
           onFiltersChange={updateFilters}
           onAddMemory={onAddMemory}
@@ -1152,100 +1292,44 @@ export default function MapView({
         </button>
       )}
 
-      {!selectedMemory && (
-        <div className="map-create-dock absolute right-0 z-[1002]" aria-label="当前地点记忆入口">
-          <button
-            type="button"
-            onClick={() => setIsResultListOpen(true)}
-            className="map-create-dock-item map-create-recall-trigger"
-            aria-label={`查看当前地点的回顾入口，当前页面 ${contextMemories.length} 条记忆`}
-            title={`当前页面 ${contextMemories.length} 条记忆`}
-          >
-            <List className="h-[18px] w-[18px] shrink-0" strokeWidth={1.6} aria-hidden="true" />
-            <span className="map-create-dock-recall-short">回顾</span>
-            <span className="map-create-dock-recall-long">当前页面 {contextMemories.length} 条记忆</span>
-          </button>
+      {!selectedMemory && onSelectTopic && (
+        <div className="topic-selector-dock absolute right-5 top-[40%] z-[1002]">
+          <TopicSelector
+            topics={topics}
+            lastUsedAt={lastUsedAt}
+            selectedTopicId={selectedTopicId ?? null}
+            memories={enriched}
+            onSelectTopic={onSelectTopic}
+            onCreateTopic={onCreateTopic ?? (() => undefined)}
+            onRenameTopic={onRenameTopic ?? (() => undefined)}
+            onDeleteTopic={onDeleteTopic ?? (() => undefined)}
+            onAddMemory={onAddMemoryToTopic}
+            onPickMemories={onStartTopicPick}
+          />
         </div>
       )}
 
-      {/* 当前地图上下文的结果列表。抽屉开合不改变地图中心或缩放。 */}
-      <AnimatePresence>
-        {isResultListOpen && !selectedMemory && (
-          <motion.div
-            initial={{ x: 360, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 360, opacity: 0 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-            className="map-current-result-drawer-shell absolute top-0 right-0 z-[1003] h-full"
+      {topicPickMode && !selectedMemory && (
+        <div className="topic-pick-bar" role="status" aria-live="polite">
+          <span className="topic-pick-count">已选择 {topicPickSelectedIds.length} 条记忆</span>
+          <button
+            type="button"
+            className="topic-pick-commit"
+            disabled={topicPickSelectedIds.length === 0 || topicPickSubmitting}
+            onClick={() => onCommitTopicPick?.()}
           >
-            <button
-              type="button"
-              onClick={() => setIsResultListOpen(false)}
-              className="map-current-results-collapse"
-              aria-label="收起当前记忆列表"
-              title="收起当前记忆列表"
-            >
-              <ChevronLeft className="h-5 w-5" strokeWidth={1.7} aria-hidden="true" />
-            </button>
-            <aside className="map-memory-list-panel map-current-result-drawer h-full overflow-y-auto border-l backdrop-blur-md">
-              <div className="map-memory-list-header map-current-result-header sticky top-0 z-10 flex items-start justify-between border-b backdrop-blur-md">
-                <div>
-                  <h2>{contextTitle}</h2>
-                  <p>{contextMemories.length} 段记忆 · {contextRange}</p>
-                </div>
-                <button type="button" onClick={backToWorld} className="map-current-result-back">
-                  <ArrowLeft className="h-4 w-4" strokeWidth={1.6} />
-                  全部足迹
-                </button>
-              </div>
-              <div className="map-current-result-card-list">
-                {contextMemories.map((m) => {
-                  const photo = m.image || fallbackImageOf(m) || '';
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => {
-                        setIsResultListOpen(false);
-                        onSelectMemory(m);
-                      }}
-                      className="map-memory-list-card map-current-result-card group"
-                    >
-                      <div className="map-current-result-photo">
-                        {photo ? (
-                          <img
-                            src={photo}
-                            alt={m.title}
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              const fallback = fallbackImageOf(m);
-                              if (fallback && !e.currentTarget.dataset.fallbackApplied) {
-                                e.currentTarget.dataset.fallbackApplied = '1';
-                                e.currentTarget.src = fallback;
-                              } else {
-                                e.currentTarget.style.visibility = 'hidden';
-                              }
-                            }}
-                            className="map-memory-thumb transition-transform group-hover:scale-[1.03]"
-                          />
-                        ) : <span>暂无照片</span>}
-                      </div>
-                      <div className="map-current-result-copy">
-                        <span>{m.year}</span>
-                        <strong>{m.title}</strong>
-                        <em>{placeOf(m)}</em>
-                        <small>打开记忆 <b aria-hidden="true">→</b></small>
-                      </div>
-                    </button>
-                  );
-                })}
-                {contextMemories.length === 0 && (
-                  <p className="map-current-result-empty">当前条件下没有记忆。</p>
-                )}
-              </div>
-            </aside>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {topicPickSubmitting ? '添加中…' : `添加到「${topicPickLabel}」`}
+          </button>
+          <button
+            type="button"
+            className="topic-pick-cancel"
+            disabled={topicPickSubmitting}
+            onClick={() => onCancelTopicPick?.()}
+          >
+            取消
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedMemory && (
@@ -1260,6 +1344,10 @@ export default function MapView({
             onDeleteMemory={onDeleteMemory}
             onLoadPreviewPhoto={onLoadPreviewPhoto}
             onLoadOriginalPhoto={onLoadOriginalPhoto}
+            topics={topics}
+            topicCovers={topicCovers}
+            onOpenTopic={onOpenTopic}
+            onCreateTopic={onCreateTopic}
             readerMode={readerMode}
           />
         )}

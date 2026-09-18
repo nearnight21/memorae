@@ -12,6 +12,7 @@ import {
   type VaultSessionV1,
 } from '../crypto';
 import { createJpegPhotoVariant, PHOTO_VARIANT_SPECS } from '../photos/photoVariants';
+import { normalizeTopicIds, TOPIC_RECORD_ID } from '../memory/topic';
 import {
   deleteEncryptedPhotoVariants,
   getEncryptedPhotoVariant,
@@ -55,6 +56,7 @@ function toDisplayMemory(memory: MemoryV2, photoUrls: string[]): Memory {
     year: Number(memory.date.slice(0, 4)),
     category: memory.category,
     tag: memory.tag,
+    topicIds: memory.topicIds ? [...memory.topicIds] : [],
     image: photoUrls[0] ?? '',
     gallery: photoUrls.slice(1),
     photoIds: memory.photos.map((photo) => photo.id),
@@ -176,7 +178,7 @@ export async function loadProductMemories(session: VaultSessionV1): Promise<Memo
   const photoMap = new Map(encryptedPhotos.map((photo) => [`${photo.id}:${photo.kind}`, photo]));
   const visible: Memory[] = [];
   for (const encrypted of encryptedMemories) {
-    if (encrypted.deleted) continue;
+    if (encrypted.deleted || encrypted.id === TOPIC_RECORD_ID) continue;
     let result: Awaited<ReturnType<typeof decryptMemoryV2>>;
     try {
       result = await decryptMemoryV2(session, encrypted);
@@ -198,7 +200,7 @@ export async function loadProductLocations(session: VaultSessionV1): Promise<Mem
   const encryptedMemories = await listEncryptedMemories();
   const visible: Memory[] = [];
   for (const encrypted of encryptedMemories) {
-    if (encrypted.deleted) continue;
+    if (encrypted.deleted || encrypted.id === TOPIC_RECORD_ID) continue;
     let result: Awaited<ReturnType<typeof decryptMemoryV2>>;
     try {
       result = await decryptMemoryV2(session, encrypted);
@@ -293,6 +295,7 @@ function toMemoryV2(memory: Memory, photos: MemoryPhotoV1[], previous?: MemoryV2
         }
       : null,
     photos,
+    topicIds: normalizeTopicIds(memory.topicIds),
     createdAt: previous?.createdAt ?? now,
     updatedAt: now,
   };

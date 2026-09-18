@@ -30,6 +30,8 @@ export interface MemoryV2 {
   photos: MemoryPhotoV1[];
   createdAt: string;
   updatedAt: string;
+  /** 所属主题 id。旧密文没有该字段，读取时视为无主题。 */
+  topicIds?: string[];
 }
 
 export interface ReadMemoryV2Result {
@@ -116,6 +118,11 @@ export function assertMemoryV2(value: unknown): asserts value is MemoryV2 {
     }
   }
   assertPhotos(value.photos);
+  if (value.topicIds !== undefined) {
+    if (!Array.isArray(value.topicIds) || value.topicIds.some((id) => !isNonEmptyString(id))) {
+      throw new Error('MemoryV2 的主题引用无效。');
+    }
+  }
   for (const key of ['createdAt', 'updatedAt'] as const) {
     if (!isString(value[key]) || Number.isNaN(new Date(value[key]).getTime())) {
       throw new Error(`MemoryV2 的时间字段 ${key} 无效。`);

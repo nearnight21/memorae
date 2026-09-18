@@ -48,8 +48,20 @@ import MemoryDetailPanel from './components/MemoryDetailPanel';
 import AddMemoryDialog from './components/AddMemoryDialog';
 import TimelineView from './components/TimelineView';
 import MapView from './components/MapView';
-import SimpleRecallV2 from './components/SimpleRecallV2';
 import { getOrCreatePreviewRequest, openMemoryWithPreview } from './components/previewRequests';
+import {
+  addTopic,
+  createEmptyTopicCollection,
+  createMemoryTopic,
+  removeTopic,
+  renameTopic,
+  TOPIC_RECORD_ID,
+  touchTopic,
+  type MemoryTopic,
+  type TopicCollection,
+} from './memory/topic';
+import { loadTopicCollection, saveTopicCollection } from './product/topicStore';
+import { defaultTopicIdsForCreate, detachTopicFromMemories, filterMemoriesByTopic, attachTopicToMemories } from './lib/topicFilters';
 
 interface AppProps {
   session: VaultSessionV1;
@@ -88,6 +100,11 @@ export default function App({
   const [memories, setMemories] = useState<Memory[]>(initialMemories);
   const [filters, setFilters] = useState<MemoryFilters>(EMPTY_MEMORY_FILTERS);
   const [enrichedMemories, setEnrichedMemories] = useState<Memory[]>(initialMemories);
+  const [topicCollection, setTopicCollection] = useState<TopicCollection>(createEmptyTopicCollection);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [createTopicDraft, setCreateTopicDraft] = useState<string | null>(null);
+  const [topicPick, setTopicPick] = useState<{ topicId: string; selectedIds: string[] } | null>(null);
+  const [topicPickSubmitting, setTopicPickSubmitting] = useState(false);
 
   // Keep one normalized location shape in the shared source used by every view.
   // Missing hierarchy on old encrypted records is repaired from their saved
@@ -161,9 +178,42 @@ export default function App({
   }, [enqueueSilentSync, memories, session]);
 
   const filteredMemories = useMemo(
-    () => filterMemories(enrichedMemories, filters),
-    [enrichedMemories, filters],
+    () => filterMemories(
+      topicPick ? enrichedMemories : filterMemoriesByTopic(enrichedMemories, selectedTopicId),
+      filters,
+    ),
+    [enrichedMemories, filters, selectedTopicId, topicPick],
   );
+
+  const topicPickLockedIds = useMemo(() => {
+    if (!topicPick) return [] as string[];
+    return enrichedMemories
+      .filter((memory) => (memory.topicIds ?? []).includes(topicPick.topicId))
+      .map((memory) => memory.id);
+  }, [enrichedMemories, topicPick]);
+
+  // 主题集合整体作为一条加密记录保存，并复用现有记忆同步通道。
+  const persistTopics = useCallback(async (
+    next: TopicCollection,
+    extraMemoryIds: string[] = [],
+  ) => {
+    await saveTopicCollection(session, next);
+    setTopicCollection(next);
+    await enqueueSilentSync({
+      memoryIds: [TOPIC_RECORD_ID, ...extraMemoryIds],
+      photoRefs: [],
+    });
+  }, [enqueueSilentSync, session]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadTopicCollection(session).then((collection) => {
+      if (!cancelled) setTopicCollection(collection);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   // --- Board Scenery States (Continuous Timeline) ---
   const [scrollX, setScrollX] = useState<number>(0);
@@ -177,7 +227,6 @@ export default function App({
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [focusMemory, setFocusMemory] = useState<Memory | null>(null);
   const [firstMemoryFeedback, setFirstMemoryFeedback] = useState<Memory | null>(null);
-  const [showRecall, setShowRecall] = useState(false);
   const [windowWidth, setWindowWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
   // Formal product entry is the footprint map. Legacy view state remains in the
   // source for comparison while its navigation is disconnected from the UI.
@@ -324,9 +373,10 @@ export default function App({
   const [createPhoto, setCreatePhoto] = useState<File | null>(null);
   const [showGuide, setShowGuide] = useState<boolean>(false);
 
-  const openAddMemory = (location?: MemoryLocationDraft, photo?: File) => {
+  const openAddMemory = (location?: MemoryLocationDraft, photo?: File, topicId?: string | null) => {
     setCreateLocationDraft(location ?? null);
     setCreatePhoto(photo ?? null);
+    setCreateTopicDraft(topicId ?? selectedTopicId ?? null);
     setShowAddMemory(true);
   };
 
@@ -380,6 +430,12 @@ export default function App({
     setMemories(updated);
     if (memories.length === 0) setFirstMemoryFeedback(completedMemory);
 
+    if (completedMemory.topicIds?.length) {
+      let topicNext = topicCollection;
+      for (const topicId of completedMemory.topicIds) topicNext = touchTopic(topicNext, topicId);
+      if (topicNext !== topicCollection) void persistTopics(topicNext);
+    }
+
     // Dynamic focus onto the newly added memory's year
     const nextYearsList = Array.from(new Set([...updated.map(m => m.year), 2024, 2025, 2026])).sort((a, b) => a - b);
     const targetIdx = nextYearsList.indexOf(completedMemory.year);
@@ -418,6 +474,12 @@ export default function App({
     });
     handleUpdateMemory(updatedMem);
     if (locationChanged) setFocusMemory(updatedMem);
+
+    if (updatedMem.topicIds?.length) {
+      let topicNext = topicCollection;
+      for (const topicId of updatedMem.topicIds) topicNext = touchTopic(topicNext, topicId);
+      if (topicNext !== topicCollection) void persistTopics(topicNext);
+    }
   };
 
   const loadPhotoOnDemand = useCallback(async (
@@ -461,6 +523,103 @@ export default function App({
       setSelectedMemory(null);
     }
   };
+
+  const handleSelectTopic = useCallback((topicId: string | null) => {
+    setSelectedTopicId(topicId);
+    if (!topicId) return;
+    const next = touchTopic(topicCollection, topicId);
+    if (next !== topicCollection) void persistTopics(next);
+  }, [persistTopics, topicCollection]);
+
+  const handleCreateTopic = useCallback(async (name: string): Promise<MemoryTopic> => {
+    const topic = createMemoryTopic(name);
+    const next = touchTopic(addTopic(topicCollection, topic), topic.id);
+    await persistTopics(next);
+    setSelectedTopicId(topic.id);
+    return topic;
+  }, [persistTopics, topicCollection]);
+
+  const handleRenameTopic = useCallback(async (topicId: string, name: string) => {
+    await persistTopics(renameTopic(topicCollection, topicId, name));
+  }, [persistTopics, topicCollection]);
+
+  const handleDeleteTopic = useCallback(async (topicId: string) => {
+    const affected = memories.filter((memory) => (memory.topicIds ?? []).includes(topicId));
+    const detached = detachTopicFromMemories(memories, topicId);
+    const detachedById = new Map(detached.map((memory) => [memory.id, memory]));
+    for (const memory of affected) {
+      const updated = detachedById.get(memory.id);
+      if (updated) await saveProductMemory(session, updated);
+    }
+    await persistTopics(removeTopic(topicCollection, topicId), affected.map((memory) => memory.id));
+    if (affected.length > 0) {
+      setMemories(detached);
+      setEnrichedMemories(detached);
+    }
+    if (selectedTopicId === topicId) setSelectedTopicId(null);
+    setSelectedMemory((current) => (
+      current && affected.some((memory) => memory.id === current.id)
+        ? detachedById.get(current.id) ?? null
+        : current
+    ));
+  }, [memories, persistTopics, selectedTopicId, session]);
+
+  const handleOpenTopic = useCallback((topicId: string) => {
+    setSelectedMemory(null);
+    handleSelectTopic(topicId);
+  }, [handleSelectTopic]);
+
+  const handleAddMemoryToTopic = useCallback((topicId: string) => {
+    const next = touchTopic(topicCollection, topicId);
+    if (next !== topicCollection) void persistTopics(next);
+    setSelectedTopicId(topicId);
+    openAddMemory(undefined, undefined, topicId);
+    // openAddMemory 只依赖 setState，无需进入依赖数组。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistTopics, topicCollection]);
+
+  const handleStartTopicPick = useCallback((topicId: string) => {
+    setTopicPick({ topicId, selectedIds: [] });
+  }, []);
+
+  const handleToggleTopicPickMemory = useCallback((memoryId: string) => {
+    setTopicPick((current) => {
+      if (!current) return current;
+      if (topicPickLockedIds.includes(memoryId)) return current;
+      const selectedIds = current.selectedIds.includes(memoryId)
+        ? current.selectedIds.filter((id) => id !== memoryId)
+        : [...current.selectedIds, memoryId];
+      return { ...current, selectedIds };
+    });
+  }, [topicPickLockedIds]);
+
+  const handleCancelTopicPick = useCallback(() => {
+    setTopicPick(null);
+  }, []);
+
+  const handleCommitTopicPick = useCallback(async () => {
+    if (!topicPick || topicPickSubmitting) return;
+    const { topicId } = topicPick;
+    const selectedIds = topicPick.selectedIds.filter((id) => !topicPickLockedIds.includes(id));
+    setTopicPickSubmitting(true);
+    try {
+      const next = attachTopicToMemories(memories, topicId, selectedIds);
+      if (next !== memories) {
+        const changed = next.filter((memory, index) => memory !== memories[index]);
+        for (const memory of changed) {
+          await saveProductMemory(session, memory);
+        }
+        await enqueueSilentSync({ memoryIds: changed.map((memory) => memory.id), photoRefs: [] });
+        setMemories(next);
+        setEnrichedMemories(next);
+      }
+      const topicNext = touchTopic(topicCollection, topicId);
+      if (topicNext !== topicCollection) await persistTopics(topicNext);
+      setTopicPick(null);
+    } finally {
+      setTopicPickSubmitting(false);
+    }
+  }, [enqueueSilentSync, memories, persistTopics, session, topicCollection, topicPick, topicPickLockedIds, topicPickSubmitting]);
 
   // --- Filter active memories on the board matching selected timeline year ---
   const currentTimelineMemories = memories.filter(m => m.year === activeYear);
@@ -938,18 +1097,25 @@ export default function App({
             firstMemoryFeedback={firstMemoryFeedback}
             onDismissFirstMemoryFeedback={() => setFirstMemoryFeedback(null)}
             onLock={onLock}
-            onOpenRecall={() => setShowRecall(true)}
+            topics={topicCollection.topics}
+            lastUsedAt={topicCollection.lastUsedAt}
+            selectedTopicId={selectedTopicId}
+            onSelectTopic={handleSelectTopic}
+            onCreateTopic={handleCreateTopic}
+            onRenameTopic={handleRenameTopic}
+            onDeleteTopic={handleDeleteTopic}
+            onOpenTopic={handleOpenTopic}
+            onAddMemoryToTopic={handleAddMemoryToTopic}
+            onStartTopicPick={handleStartTopicPick}
+            topicPickMode={Boolean(topicPick)}
+            topicPickSelectedIds={topicPick?.selectedIds ?? []}
+            topicPickLockedIds={topicPickLockedIds}
+            topicPickSubmitting={topicPickSubmitting}
+            topicPickLabel={topicPick ? topicCollection.topics.find((topic) => topic.id === topicPick.topicId)?.name ?? '' : ''}
+            onToggleTopicPickMemory={handleToggleTopicPickMemory}
+            onCommitTopicPick={handleCommitTopicPick}
+            onCancelTopicPick={handleCancelTopicPick}
           />
-          {showRecall && (
-            <SimpleRecallV2
-              memories={filteredMemories}
-              onClose={() => setShowRecall(false)}
-              onSelectMemory={(memory) => {
-                setShowRecall(false);
-                handleSelectMemory(memory);
-              }}
-            />
-          )}
         </div>
       )}
 
@@ -974,12 +1140,16 @@ export default function App({
               setShowAddMemory(false);
               setCreateLocationDraft(null);
               setCreatePhoto(null);
+              setCreateTopicDraft(null);
             }}
             onAddMemory={handleAddMemory}
             onSaveMemory={handleSaveMemory}
             isFirstMemory={memories.length === 0}
             initialLocation={createLocationDraft ?? undefined}
             initialPhoto={createPhoto ?? undefined}
+            topics={topicCollection.topics}
+            initialTopicIds={defaultTopicIdsForCreate(createTopicDraft)}
+            onCreateTopic={handleCreateTopic}
           />
         )}
 

@@ -3,6 +3,7 @@ import { KeyRound, LoaderCircle, LockKeyhole, ShieldCheck } from 'lucide-react';
 import App from '../App';
 import MapView from '../components/MapView';
 import { createVault, decryptMemoryV2, destroyVaultSession, type VaultEnvelopeV1, type VaultSessionV1 } from '../crypto';
+import { TOPIC_RECORD_ID } from '../memory/topic';
 import {
   clearStoredAccountSession,
   getStoredAccountSession,
@@ -215,7 +216,11 @@ export default function ProductGate({
           }),
           storage: cipherSyncStorage,
           downloadPhotos: syncPhotosOnUnlock,
-          decryptMemory: async (memory) => (await decryptMemoryV2(activeSession, memory)).memory,
+          decryptMemory: async (memory) => {
+            // 主题集合是一条保留记录，不参与照片引用扫描。
+            if (memory.id === TOPIC_RECORD_ID) return { photos: [] };
+            return (await decryptMemoryV2(activeSession, memory)).memory;
+          },
         });
       } catch (syncError) {
         if (syncError instanceof VaultMismatchError) {

@@ -39,6 +39,8 @@ export interface Memory {
   /** Runtime-only encrypted photo references. They allow the reader to load an
    * original on demand without keeping every original decrypted in memory. */
   photoIds?: string[];
+  /** 所属主题（Topic）id 列表；旧记忆没有该字段时视为不属于任何主题。 */
+  topicIds?: string[];
   pastSelf: string; // "当时的我"
   presentSelf: string; // "现在的我"
   pinnedBy: PinnedBy;

@@ -8,10 +8,10 @@ import {
   Loader2,
   LoaderCircle,
   Plus,
-  Tag,
   X,
 } from 'lucide-react';
 import type { CategoryType, Memory, MemoryLocationDraft, PinnedBy } from '../types';
+import type { MemoryTopic } from '../memory/topic';
 import { selectLocalPhoto } from '../product/selectPhoto';
 import { readPhotoMetadata } from '../product/photoMetadata';
 import { hasResolvedAdministrativeLocation, resolvePlaceCandidate, reverseGeocodeCoordinates, type PlaceCandidate } from '../lib/geo';
@@ -19,6 +19,7 @@ import { convertGpsToAmap } from '../lib/locationApi';
 import { resolveLocationWithRetry } from '../lib/locationLookup';
 import LocationMapSelection from './LocationMapSelection';
 import LocationPicker from './LocationPicker';
+import TopicBadge from './TopicBadge';
 import './AddMemoryDialog.css';
 
 interface AddMemoryDialogProps {
@@ -29,6 +30,9 @@ interface AddMemoryDialogProps {
   isFirstMemory?: boolean;
   initialLocation?: MemoryLocationDraft;
   initialPhoto?: File;
+  topics?: MemoryTopic[];
+  initialTopicIds?: string[];
+  onCreateTopic?: (name: string) => MemoryTopic | Promise<MemoryTopic> | void;
 }
 
 type SaveState = 'idle' | 'saving' | 'error';
@@ -46,13 +50,6 @@ interface SelectedLocation {
   provider?: 'amap' | 'bigdatacloud';
   providerId?: string;
 }
-
-const CATEGORY_OPTIONS: Array<{ value: CategoryType; label: string }> = [
-  { value: 'travel', label: '旅行' },
-  { value: 'growth', label: '成长' },
-  { value: 'motorcycle', label: '日常' },
-  { value: 'photography', label: '瞬间' },
-];
 
 function defaultTag(category: CategoryType) {
   if (category === 'travel') return '足迹';
@@ -126,12 +123,18 @@ export default function AddMemoryDialog({
   isFirstMemory = false,
   initialLocation: initialLocationDraft,
   initialPhoto,
+  topics = [],
+  initialTopicIds = [],
+  onCreateTopic,
 }: AddMemoryDialogProps) {
   const isEditing = Boolean(memory);
   const initialLocation = selectedLocationFromMemory(memory) ?? selectedLocationFromDraft(initialLocationDraft);
   const [title, setTitle] = useState(memory?.title ?? '');
   const [date, setDate] = useState(() => dateInputValue(memory?.date ?? '', memory?.year));
-  const [category, setCategory] = useState<CategoryType>(memory?.category ?? 'travel');
+  const [category] = useState<CategoryType>(memory?.category ?? 'travel');
+  const [topicIds, setTopicIds] = useState<string[]>(() => memory?.topicIds ?? initialTopicIds);
+  const [topicPickerOpen, setTopicPickerOpen] = useState(false);
+  const [newTopicName, setNewTopicName] = useState('');
   const [pastSelf, setPastSelf] = useState(memory?.pastSelf ?? '');
   const [presentSelf, setPresentSelf] = useState(memory?.presentSelf ?? '');
   const [tag, setTag] = useState(memory?.tag ?? '');
@@ -363,6 +366,7 @@ export default function AddMemoryDialog({
           year: parsedYear,
           category,
           tag: tag.trim() || defaultTag(category),
+          topicIds,
           image: imageUrl,
           gallery: galleryImages.filter((image) => image && image !== imageUrl),
           pastSelf: pastSelf.trim(),
@@ -393,6 +397,7 @@ export default function AddMemoryDialog({
           year: parsedYear,
           category,
           tag: tag.trim() || defaultTag(category),
+          topicIds,
           image: imageUrl,
           gallery: galleryImages.filter((image) => image && image !== imageUrl),
           pastSelf: pastSelf.trim(),
@@ -417,6 +422,17 @@ export default function AddMemoryDialog({
       setSaveState('error');
       setValidationMessage('保存失败，请检查后重试。');
     }
+  };
+
+  const createTopicInline = async () => {
+    const name = newTopicName.trim();
+    if (!name || !onCreateTopic) return;
+    const created = await onCreateTopic(name);
+    if (created && typeof created === 'object' && 'id' in created) {
+      setTopicIds((ids) => (ids.includes(created.id) ? ids : [...ids, created.id]));
+    }
+    setNewTopicName('');
+    setTopicPickerOpen(false);
   };
 
   if (showLocationMap) {
@@ -611,22 +627,69 @@ export default function AddMemoryDialog({
 
                     {!isFirstMemory && (
                       <div className="map-journal-field-group">
-                        <label htmlFor="new-memory-category" className="map-journal-field-label">主题</label>
-                        <div className="map-journal-input-wrap">
-                          <Tag size={14} className="text-amber-900/50 ml-2.5 shrink-0" aria-hidden="true" />
-                          <select
-                            id="new-memory-category"
-                            value={category}
-                            onChange={(event) => setCategory(event.target.value as CategoryType)}
-                            className="map-journal-select"
-                            aria-label="主题"
+                        <label className="map-journal-field-label">主题</label>
+                        <div className="memory-topic-field">
+                          {topicIds.map((topicId) => {
+                            const topic = topics.find((entry) => entry.id === topicId);
+                            return (
+                              <span key={topicId} className="memory-topic-chip">
+                                <TopicBadge name={topic?.name ?? '未知主题'} seed={topicId} />
+                                <span className="memory-topic-chip-name">{topic?.name ?? '未知主题'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setTopicIds((ids) => ids.filter((id) => id !== topicId))}
+                                  aria-label={`移除主题 ${topic?.name ?? ''}`}
+                                >
+                                  <X size={11} strokeWidth={2} />
+                                </button>
+                              </span>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            className="memory-topic-add"
+                            onClick={() => setTopicPickerOpen((open) => !open)}
+                            aria-expanded={topicPickerOpen}
                           >
-                            {CATEGORY_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                            <Plus size={12} strokeWidth={2} />
+                            添加
+                          </button>
+                          {topicPickerOpen && (
+                            <div className="memory-topic-menu is-inline" role="menu">
+                              {topics.filter((topic) => !topicIds.includes(topic.id)).map((topic) => (
+                                <button
+                                  key={topic.id}
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setTopicIds((ids) => (ids.includes(topic.id) ? ids : [...ids, topic.id]));
+                                    setTopicPickerOpen(false);
+                                  }}
+                                >
+                                  {topic.name}
+                                </button>
+                              ))}
+                              {topics.every((topic) => topicIds.includes(topic.id)) && topics.length > 0 && (
+                                <p className="memory-topic-menu-empty">已选择全部主题</p>
+                              )}
+                              <div className="memory-topic-create">
+                                <input
+                                  value={newTopicName}
+                                  maxLength={40}
+                                  placeholder="新建主题名称"
+                                  onChange={(event) => setNewTopicName(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      void createTopicInline();
+                                    }
+                                  }}
+                                  aria-label="新建主题名称"
+                                />
+                                <button type="button" onClick={() => void createTopicInline()}>新建</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
