@@ -9,6 +9,8 @@ import {
   type VaultEnvelopeV1,
 } from '../crypto';
 import type { UploadPlan } from '../sync/syncActions';
+import type { TopicCommit } from '../topics/topicStore';
+import { writeTopicTransaction } from '../topics/topicPersistence';
 
 const DATABASE_NAMES = {
   cloud: 'memory-recall-vmk.db',
@@ -183,6 +185,14 @@ export async function saveEncryptedMemory(memory: EncryptedMemoryV1): Promise<vo
     memory.id,
     JSON.stringify(memory),
   );
+}
+
+/** 主题及记忆关联与上传计划一起落盘，任意一步失败均回滚。 */
+export async function commitTopicChanges(change: TopicCommit, shouldUpload: boolean, isActive: () => boolean): Promise<void> {
+  const database = await openDatabase();
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    await writeTopicTransaction(transaction, change, shouldUpload, isActive);
+  });
 }
 
 export async function listEncryptedMemories(): Promise<EncryptedMemoryV1[]> {

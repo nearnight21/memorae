@@ -6,6 +6,7 @@ import {
   type MemoryV2,
   type VaultSessionV1,
 } from '../crypto';
+import { TOPIC_RECORD_ID } from '../topics/topicModel';
 
 export interface MemoryCipherStorage {
   listMemories(): Promise<EncryptedMemoryV1[]>;
@@ -31,7 +32,7 @@ export async function loadDecryptedMemories(
   const decryptErrorTypes: string[] = [];
 
   for (const item of await storage.listMemories()) {
-    if (item.deleted) continue;
+    if (item.deleted || item.id === TOPIC_RECORD_ID) continue;
     let result: Awaited<ReturnType<typeof decryptMemoryV2>>;
     try {
       result = await decryptMemoryV2(primitives, session, item);

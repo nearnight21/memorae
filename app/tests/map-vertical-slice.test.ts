@@ -408,18 +408,6 @@ test('地图缩略图尺寸不再由照片数量决定，同省多段记忆按�
   assert.equal(currentHomeRegionLabel({ camera: { latitude: 30, longitude: 121.5, zoom: 9 }, bounds }, memories), '浙江 · 宁波');
 });
 
-test('Home 地区选择接通真实视野和相机导航，不再使用占位提示', async () => {
-  const appSource = await readFile(new URL('../App.tsx', import.meta.url), 'utf8');
-  const homeSource = await readFile(new URL('../src/home/HomeScreen.tsx', import.meta.url), 'utf8');
-  assert.match(appSource, /buildHomeRegionOptions/);
-  assert.match(appSource, /currentHomeRegionLabel/);
-  assert.match(appSource, /initialCamera=\{activeDefaultMapCamera\}/);
-  assert.match(appSource, /onRegionSelect=\{selectHomeRegion\}/);
-  assert.doesNotMatch(appSource, /地区选择入口已保留/);
-  assert.match(homeSource, /regionOptions\.map/);
-  assert.match(homeSource, /memoryCount\} 段/);
-});
-
 test('本地 Runtime 不加载所忆远程页面，只从高德域名加载地图脚本', async () => {
   const source = await readFile(new URL('../src/map/amapRuntimeHtml.ts', import.meta.url), 'utf8');
   const html = buildAmapRuntimeHtml('web-key', 'security-code');

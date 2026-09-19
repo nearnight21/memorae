@@ -16,6 +16,7 @@ import type { MemoryLocationV2 } from '../memory/memoryV2';
 import { useAppTopInset } from '../ui/layout';
 import { memoryHeroLayout } from '../ui/memoryOverlayLayout';
 import CrystalDatePicker from './CrystalDatePicker';
+import type { ReactNode } from 'react';
 
 export interface MemoryEditValues {
   title: string;
@@ -35,6 +36,7 @@ interface Props extends MemoryEditValues {
   onManagePhotos: () => void;
   onCancel: () => void;
   onSave: () => void;
+  topicField?: ReactNode;
 }
 
 function locationLabel(location: MemoryLocationV2 | null): string {
@@ -70,6 +72,7 @@ export default function MemoryEditOverlay({
   onManagePhotos,
   onCancel,
   onSave,
+  topicField,
 }: Props) {
   const { width, height } = useWindowDimensions();
   const count = Math.max(photoCount, photoUris.length);
@@ -143,6 +146,7 @@ export default function MemoryEditOverlay({
               <Text style={styles.chevron}>⌄</Text>
             </Pressable>
           </View>
+          {topicField}
           <View style={styles.originalFocus}>
             <TextInput
               accessibilityLabel="当时的我"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
@@ -31,6 +31,7 @@ interface Props {
   onMore: () => void;
   onPhotoDisplayed: (index: number) => void;
   onPhotoPress: (index: number) => void;
+  topicLinks?: ReactNode;
 }
 
 function formatDate(date: string): string {
@@ -52,6 +53,7 @@ export default function MemoryDetailOverlay({
   onMore,
   onPhotoDisplayed,
   onPhotoPress,
+  topicLinks,
 }: Props) {
   const { width, height } = useWindowDimensions();
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -382,6 +384,7 @@ export default function MemoryDetailOverlay({
               <Text style={styles.meta}>
                 {formatDate(memory.date)}  ·  {locationLabel(memory)}
               </Text>
+              {topicLinks}
               <View style={styles.thread}>
                 <View style={styles.threadRail}>
                   <View style={styles.threadPoint}>

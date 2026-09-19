@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -16,10 +16,8 @@ import MemoraeMap, {
   type MapMarkerPressEvent,
   type MemoryMapMarker,
 } from '../map/MemoraeMap';
-import type { HomeRegionOption } from '../map/homeMapModel';
 import type { MemoryV2 } from '../memory/memoryV2';
 import MobileTimeline from './MobileTimeline';
-import RegionControl from './RegionControl';
 import TimelineQuietZone from './TimelineQuietZone';
 import { androidTopInset } from '../ui/layout';
 import { ARC_HOME_BOTTOM_PADDING } from './timeline/arcTimelineGeometry';
@@ -36,12 +34,9 @@ interface Props {
   markers: readonly MemoryMapMarker[];
   memories: readonly MemoryV2[];
   selectedYear: string | null;
-  regionLabel: string;
-  regionOptions: readonly HomeRegionOption[];
   loading?: boolean;
   status?: string;
   onYearChange: (year: string | null) => void;
-  onRegionSelect: (region: HomeRegionOption) => void;
   onMarkerPress?: (event: MapMarkerPressEvent) => void;
   onClusterPress?: (event: MapClusterPressEvent) => void;
   onCameraMoveStart?: () => void;
@@ -58,18 +53,16 @@ interface Props {
   onBrowseTimeline?: () => void;
   onOpenMore?: () => void;
   chromeVisible?: boolean;
+  topicHeader?: ReactNode;
 }
 
 export default function HomeScreen({
   markers,
   memories,
   selectedYear,
-  regionLabel,
-  regionOptions,
-  loading = false,
+  loading,
   status,
   onYearChange,
-  onRegionSelect,
   onMarkerPress,
   onClusterPress,
   onCameraMoveStart,
@@ -86,9 +79,9 @@ export default function HomeScreen({
   onBrowseTimeline,
   onOpenMore,
   chromeVisible = true,
+  topicHeader,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [regionMenuOpen, setRegionMenuOpen] = useState(false);
   const createPullProgress = useSharedValue(0);
   const resetPullProgress = useSharedValue(0);
   const chromeProgress = useSharedValue(chromeVisible ? 1 : 0);
@@ -99,7 +92,6 @@ export default function HomeScreen({
 
   useEffect(() => {
     if (!chromeVisible || locationMode) {
-      setRegionMenuOpen(false);
       createPullProgress.value = 0;
       resetPullProgress.value = 0;
     }
@@ -177,11 +169,6 @@ export default function HomeScreen({
     transform: [{ scale: interpolate(resetPullProgress.value, [0, 0.72, 1], [0.94, 1, 1.02], Extrapolation.CLAMP) }],
   }), [resetPullProgress]);
 
-  function selectRegion(region: HomeRegionOption): void {
-    setRegionMenuOpen(false);
-    onRegionSelect(region);
-  }
-
   return (
     <View style={styles.root}>
       <View style={styles.map}>
@@ -210,46 +197,12 @@ export default function HomeScreen({
         >
           <Animated.View pointerEvents="box-none" style={[styles.topRow, topRowAnimatedStyle]}>
             <View style={styles.regionArea}>
-              <RegionControl
-                label={regionLabel}
-                expanded={regionMenuOpen}
-                onPress={() => setRegionMenuOpen((open) => !open)}
-              />
-              {regionMenuOpen && (
-                <View accessibilityRole="menu" style={styles.regionMenu}>
-                  <ScrollView bounces={false} contentContainerStyle={styles.regionMenuContent}>
-                    {regionOptions.map((region) => (
-                      <Pressable
-                        key={region.key}
-                        accessibilityRole="menuitem"
-                        accessibilityLabel={`${region.label}，${region.memoryCount} 段记忆`}
-                        onPress={() => selectRegion(region)}
-                        style={({ pressed }) => [styles.regionOption, pressed && styles.regionOptionPressed]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.regionOptionLabel,
-                            region.scope === 'province' && styles.regionProvince,
-                            region.scope === 'city' && styles.regionCity,
-                          ]}
-                        >
-                          {region.label}
-                        </Text>
-                        <Text style={styles.regionOptionCount}>{region.memoryCount} 段</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              {topicHeader}
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="打开更多菜单"
-              onPress={() => {
-                setRegionMenuOpen(false);
-                onOpenMore?.();
-              }}
+              onPress={() => onOpenMore?.()}
               style={({ pressed }) => [styles.moreButton, pressed && styles.moreButtonPressed]}
             >
               <View pointerEvents="none" style={styles.moreGlyph}>
@@ -310,19 +263,11 @@ const styles = StyleSheet.create({
   quietZone: { ...StyleSheet.absoluteFill, zIndex: 3 },
   overlay: { flex: 1, zIndex: 4, justifyContent: 'space-between' },
   topRow: { paddingTop: 16, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  regionArea: { width: 224, zIndex: 4 },
-  moreButton: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', backgroundColor: 'rgba(235,245,250,0.68)', alignItems: 'center', justifyContent: 'center', shadowColor: '#36566b', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  regionArea: { flex: 1, marginRight: 12, zIndex: 4 },
+  moreButton: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', backgroundColor: 'rgba(235,245,250,0.68)', alignItems: 'center', justifyContent: 'center', shadowColor: '#36566b', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   moreButtonPressed: { opacity: 0.72 },
   moreGlyph: { height: 5, flexDirection: 'row', alignItems: 'center', gap: 5 },
   moreDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#536b78' },
-  regionMenu: { marginTop: 8, maxHeight: 300, borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(245,250,252,0.88)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', shadowColor: '#36566b', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
-  regionMenuContent: { paddingVertical: 6 },
-  regionOption: { minHeight: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  regionOptionPressed: { backgroundColor: 'rgba(153,194,231,0.18)' },
-  regionOptionLabel: { flex: 1, color: '#35404a', fontSize: 14, lineHeight: 20, fontWeight: '600' },
-  regionProvince: { paddingLeft: 12, fontWeight: '500' },
-  regionCity: { paddingLeft: 24, color: '#626a64', fontWeight: '400' },
-  regionOptionCount: { color: '#71818c', fontSize: 12, lineHeight: 18 },
   messageSlot: { alignSelf: 'center', alignItems: 'center', gap: 6, maxWidth: 250, marginTop: 72 },
   message: { color: '#6e766f', fontSize: 12, lineHeight: 18, textAlign: 'center' },
   createOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 5, alignItems: 'center', justifyContent: 'center' },

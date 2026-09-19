@@ -23,10 +23,11 @@ export default function RegionControl({ label, onPress, expanded = false }: Prop
 
 const styles = StyleSheet.create({
   root: {
-    width: 144,
+    minWidth: 88,
+    maxWidth: 120,
     height: 34,
     borderRadius: 18,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  label: { flex: 1, color: '#35404a', fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  label: { flexShrink: 1, color: '#35404a', fontSize: 14, lineHeight: 20, fontWeight: '600' },
   chevron: { color: '#71818c', fontSize: 16, lineHeight: 18 },
   pressed: { opacity: 0.72 },
 });

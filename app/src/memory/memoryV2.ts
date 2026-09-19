@@ -28,6 +28,7 @@ export interface MemoryV2 {
   board: { px: number; py: number; rotation: number };
   location: MemoryLocationV2 | null;
   photos: MemoryPhotoV1[];
+  topicIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +117,9 @@ export function assertMemoryV2(value: unknown): asserts value is MemoryV2 {
     }
   }
   assertPhotos(value.photos);
+  if (value.topicIds !== undefined && (!Array.isArray(value.topicIds) || value.topicIds.some((id) => !isNonEmptyString(id)))) {
+    throw new Error('MemoryV2 的主题引用无效。');
+  }
   for (const key of ['createdAt', 'updatedAt'] as const) {
     if (!isString(value[key]) || Number.isNaN(new Date(value[key]).getTime())) {
       throw new Error(`MemoryV2 的时间字段 ${key} 无效。`);

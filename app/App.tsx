@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import {
   bytesToBase64,
@@ -79,14 +80,16 @@ import {
 } from './src/map/memoryMapAdapter';
 import { registerMapThumbnail, resetMapThumbnailCache } from './src/map/mapThumbnailCache';
 import {
-  buildHomeRegionOptions,
-  currentHomeRegionLabel,
   HOME_CHINA_CAMERA,
-  type HomeRegionOption,
 } from './src/map/homeMapModel';
 import { loadDecryptedMemories } from './src/memory/memoryStore';
 import { filterMemoriesByTimelineYear } from './src/home/timeline/timelineModel';
 import HomeScreen from './src/home/HomeScreen';
+import TopicScreens, { TopicButton, type TopicRoute } from './src/topics/TopicScreens';
+import TopicField from './src/topics/TopicField';
+import CrystalSurface from './src/ui/CrystalSurface';
+import { emptyTopics, memoriesInTopic, topicCamera, topicSummary, TOPIC_RECORD_ID, type TopicCollection } from './src/topics/topicModel';
+import { changeTopics, decryptSyncRecord, loadTopics, type TopicAction } from './src/topics/topicStore';
 import MemoryDetailOverlay, { type DetailPhotoState } from './src/detail/MemoryDetailOverlay';
 import PhotoViewerOverlay from './src/detail/PhotoViewerOverlay';
 import MemoryEditOverlay from './src/edit/MemoryEditOverlay';
@@ -140,6 +143,7 @@ import { effectiveDefaultMapCamera, normalizeDefaultMapCamera } from './src/sett
 import { checkForAppUpdate, SUPPORT_PROJECT_URL, type UpdateCheckResult } from './src/settings/updateService';
 import {
   clearEncryptedContent,
+  commitTopicChanges,
   deleteEncryptedPhotoVariants,
   getEncryptedPhoto,
   getEncryptedMemory,
@@ -180,6 +184,7 @@ interface EditDraftState {
   location: MemoryLocationV2 | null;
   photos: MemoryPhotoV1[];
   pendingPhotos: PendingPhoto[];
+  topicIds: string[];
 }
 
 interface PhotoViewerState {
@@ -247,10 +252,18 @@ interface AppProps {
 }
 
 export default function App({ testBootstrap }: AppProps = {}) {
+  const viewportSize = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('loading');
   const [vault, setVault] = useState<VaultEnvelopeV1 | null>(null);
   const [session, setSession] = useState<VaultSessionV1 | null>(null);
   const [memories, setMemories] = useState<MemoryV2[]>([]);
+  const [topicCollection, setTopicCollection] = useState<TopicCollection>(emptyTopics);
+  const [topicLoadError, setTopicLoadError] = useState('');
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [topicRoute, setTopicRoute] = useState<TopicRoute | null>(null);
+  const [topicFormBusy, setTopicFormBusy] = useState(false);
+  const [topicEntrySize, setTopicEntrySize] = useState({ width: 0, height: 0 });
+  const topicWriteQueue = useRef(Promise.resolve());
   const [thumbnailSources, setThumbnailSources] = useState<MemoryThumbnailSources>({});
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [locationPickerVisible, setLocationPickerVisible] = useState(false);
@@ -330,7 +343,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
   function persistPendingAccountUploadPlan(plan: UploadPlan | null): Promise<void> {
     uploadPlanWriteQueue.current = uploadPlanWriteQueue.current
       .catch(() => undefined)
-      .then(() => savePendingUploadPlan(plan));
+      .then(() => {
+        const pending = mergeUploadPlans(plan ?? { memoryIds: [], photoRefs: [] }, pendingAccountUploadPlan.current);
+        const durable = activeAccountUploadPlan.current ? mergeUploadPlans(pending, activeAccountUploadPlan.current) : pending;
+        return savePendingUploadPlan(durable.memoryIds.length || durable.photoRefs.length ? durable : null);
+      });
     return uploadPlanWriteQueue.current;
   }
 
@@ -343,21 +360,16 @@ export default function App({ testBootstrap }: AppProps = {}) {
     unlocked: '已解锁',
   })[mode], [mode]);
 
+  const topicMemories = useMemo(() => memoriesInTopic(memories, selectedTopicId), [memories, selectedTopicId]);
+  const selectedTopic = topicCollection.topics.find((topic) => topic.id === selectedTopicId);
+  const activeTopicSummary = useMemo(() => topicSummary(topicMemories), [topicMemories]);
   const visibleMemories = useMemo(
-    () => filterMemoriesByTimelineYear(memories, selectedYear),
-    [memories, selectedYear],
+    () => filterMemoriesByTimelineYear(topicMemories, selectedYear),
+    [topicMemories, selectedYear],
   );
   const mapMarkers = useMemo(
     () => memoriesToMapMarkers(visibleMemories, thumbnailSources),
     [thumbnailSources, visibleMemories],
-  );
-  const homeRegionOptions = useMemo(
-    () => buildHomeRegionOptions(visibleMemories),
-    [visibleMemories],
-  );
-  const homeRegionLabel = useMemo(
-    () => currentHomeRegionLabel(homeViewport, visibleMemories),
-    [homeViewport, visibleMemories],
   );
   const mobileLocationClient = useMemo(
     () => profile === 'local'
@@ -396,6 +408,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
         closeMemory();
         return true;
       }
+      if (topicRoute) {
+        setTopicRoute(null);
+        return true;
+      }
       if (defaultMapEditorVisible) {
         cancelDefaultMapEditor();
         return true;
@@ -423,7 +439,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       return false;
     });
     return () => subscription.remove();
-  }, [appMenuVisible, defaultMapEditorVisible, deleteConfirmVisible, moreActionsVisible, onboardingMode, photoManageVisible, locationPickerVisible, editDraft, draftVisible, photoViewer, selectedMemory, utilityRoute, cancelLocationPicker]);
+  }, [topicRoute, appMenuVisible, defaultMapEditorVisible, deleteConfirmVisible, moreActionsVisible, onboardingMode, photoManageVisible, locationPickerVisible, editDraft, draftVisible, photoViewer, selectedMemory, utilityRoute, cancelLocationPicker]);
 
   useEffect(() => {
     void (async () => {
@@ -588,11 +604,23 @@ export default function App({ testBootstrap }: AppProps = {}) {
     activeSession: VaultSessionV1,
     options: { loadThumbnails?: boolean } = {},
   ): Promise<number> {
+    await topicWriteQueue.current.catch(() => undefined);
     const snapshot = await loadDecryptedMemories(
       nativeCryptoPrimitives,
       activeSession,
       cipherSyncStorage,
     );
+    if (activeSession.destroyed) return 0;
+    try {
+      const topics = await loadTopics(nativeCryptoPrimitives, activeSession, await listEncryptedMemories());
+      if (activeSession.destroyed) return 0;
+      setTopicCollection(topics);
+      setTopicLoadError('');
+      setSelectedTopicId((id) => id && topics.topics.some((topic) => topic.id === id) ? id : null);
+    } catch {
+      if (activeSession.destroyed) return 0;
+      setTopicLoadError('主题暂时无法读取，请重新同步后再试。你的记忆仍可正常浏览。');
+    }
     memoriesRef.current = snapshot.memories;
     setMemories(snapshot.memories);
     const thumbnailRequestId = ++thumbnailLoadId.current;
@@ -638,11 +666,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
       },
       onPhotoPerformance: logPhotoPerformance,
       onMemoriesStored,
-      decryptMemory: async (memory) => (await decryptMemoryV2(
+      decryptMemory: async (memory) => decryptSyncRecord(
         nativeCryptoPrimitives,
         activeSession,
         memory,
-      )).memory,
+      ),
     });
     const result = await download;
     return {
@@ -752,6 +780,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
     if (session) destroyVaultSession(session);
     setSession(null);
     setMemories([]);
+    memoriesRef.current = [];
+    thumbnailLoadId.current += 1;
+    setTopicCollection(emptyTopics());
+    setSelectedTopicId(null);
+    setTopicRoute(null);
+    setTopicLoadError('');
     setThumbnailSources({});
     resetMapThumbnailCache();
     setSelectedYear(null);
@@ -929,7 +963,77 @@ export default function App({ testBootstrap }: AppProps = {}) {
     return true;
   }
 
+  async function applyTopicAction(action: TopicAction): Promise<void> {
+    const activeSession = session;
+    if (!activeSession || activeSession.destroyed) throw new Error('请先解锁私密空间。');
+    const operation = topicWriteQueue.current.catch(() => undefined).then(async () => {
+      if (activeSession.destroyed) throw new Error('私密空间已锁定。');
+      const result = await changeTopics(nativeCryptoPrimitives, activeSession, {
+        listMemories: listEncryptedMemories,
+        commit: async (change) => {
+          const commit = uploadPlanWriteQueue.current.catch(() => undefined).then(async () => {
+            await commitTopicChanges(change, profile !== 'local', () => !activeSession.destroyed);
+            if (profile !== 'local') pendingAccountUploadPlan.current = mergeUploadPlans(
+              pendingAccountUploadPlan.current, { memoryIds: change.records.map((record) => record.id), photoRefs: [] },
+            );
+          });
+          uploadPlanWriteQueue.current = commit;
+          await commit;
+        },
+      }, action);
+      if (activeSession.destroyed) throw new Error('私密空间已锁定。');
+      setTopicCollection(result.collection);
+      setTopicLoadError('');
+      for (const memory of result.memories) replaceMemoryInLocalState(memory);
+      if (action.kind === 'delete') {
+        setSelectedTopicId((id) => id === action.id ? null : id);
+        setEditDraft((draft) => draft ? { ...draft, topicIds: draft.topicIds.filter((id) => id !== action.id) } : draft);
+      }
+      queueAccountUpload({ memoryIds: result.memoryIds, photoRefs: [] },
+        () => '主题已同步。',
+        (error) => `主题已保存到本机，等待同步：${errorMessage(error)}`,
+      );
+    });
+    topicWriteQueue.current = operation;
+    await operation;
+  }
+
+  async function createTopic(name: string): Promise<string> {
+    const id = `topic_${nativeCryptoPrimitives.randomUUID()}`;
+    await applyTopicAction({ kind: 'create', id, name });
+    return id;
+  }
+
+  async function createDraftTopic(name: string): Promise<string> {
+    setTopicFormBusy(true);
+    try { return await createTopic(name); }
+    finally { setTopicFormBusy(false); }
+  }
+
+  function selectTopic(id: string | null, touch = true): void {
+    closeMemory();
+    setTopicRoute(null);
+    setSelectedTopicId(id);
+    setSelectedYear(null);
+    const target = id ? topicCamera(memoriesInTopic(memoriesRef.current, id), viewportSize.width, viewportSize.height) : activeDefaultMapCamera;
+    if (target) setHomeCameraTarget(target);
+    if (id && touch) void applyTopicAction({ kind: 'touch', id }).catch((error) => setStatus(errorMessage(error)));
+  }
+
+  function beginTopicRecord(): void {
+    if (!session || session.destroyed) return;
+    if (editDraft) { setDraftVisible(true); return; }
+    setEditDraft({
+      kind: 'create', original: null, baseVersion: null, title: '', date: todayValue(),
+      pastSelf: '', presentSelf: '', location: null, photos: [], pendingPhotos: [],
+      topicIds: selectedTopicId ? [selectedTopicId] : [],
+    });
+    editPendingPhotoPool.current.clear();
+    setDraftVisible(true);
+  }
+
   async function beginCreateMemory(): Promise<void> {
+    if (selectedTopicId && !onboardingMode) { beginTopicRecord(); return; }
     if (editDraft?.kind === 'create' && !draftVisible) {
       setDraftVisible(true);
       setStatus('已恢复尚未完成的新建草稿。');
@@ -958,6 +1062,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       location: photoLocation,
       photos: [],
       pendingPhotos: selection.photos,
+      topicIds: selectedTopicId ? [selectedTopicId] : [],
     });
     editPendingPhotoPool.current = new Map(
       selection.photos.map((photo) => [`pending:${photo.uri}`, photo]),
@@ -1087,6 +1192,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       location: selectedMemory.location ? { ...selectedMemory.location } : null,
       photos: selectedMemory.photos.map((photo) => ({ ...photo })),
       pendingPhotos: [],
+      topicIds: [...(selectedMemory.topicIds ?? [])],
     });
     setDraftVisible(true);
     editPendingPhotoPool.current.clear();
@@ -1210,7 +1316,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   async function saveEditedMemory(): Promise<void> {
-    if (!session || !editDraft) return;
+    if (!session || !editDraft || topicFormBusy) return;
     const draft = editDraft;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) throw new Error('日期请使用 YYYY-MM-DD 格式。');
     if (draft.kind === 'edit' && !draft.title.trim()) throw new Error('标题不能为空。');
@@ -1557,13 +1663,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setLocationCameraTarget(target);
   }
 
-  function selectHomeRegion(region: HomeRegionOption): void {
-    setHomeCameraTarget(region.camera);
-    setStatus(`已定位到${region.label}：${region.memoryCount} 段记忆。`);
-  }
-
   function resetHomeMapView(): void {
     setHomeCameraTarget({ ...activeDefaultMapCamera });
+    // 下拉复位同时退出主题上下文，回到"全部记忆"的完整范围。
+    setSelectedTopicId(null);
+    setSelectedYear(null);
     if (onboardingMode) {
       setTourState((current) => handleResetMapView(current));
     }
@@ -1658,6 +1762,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
     detailLoadId.current += 1;
     await disableDeviceUnlock();
     await replaceWithEncryptedBundle(bundle);
+    setTopicCollection(emptyTopics());
+    setTopicRoute(null);
+    setSelectedTopicId(null);
+    setTopicLoadError('');
+    memoriesRef.current = [];
+    thumbnailLoadId.current += 1;
     setVault(bundle.vault);
     setSession(null);
     setMemories([]);
@@ -1799,11 +1909,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
       client: createSyncClient(),
       storage: cipherSyncStorage,
       decryptMemory: session
-        ? async (memory) => (await decryptMemoryV2(
+        ? async (memory) => decryptSyncRecord(
           nativeCryptoPrimitives,
           session,
           memory,
-        )).memory
+        )
         : undefined,
     });
 
@@ -1838,6 +1948,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
             detailLoadId.current += 1;
             await disableDeviceUnlock();
             await clearEncryptedContent();
+            setTopicCollection(emptyTopics());
+            setTopicRoute(null);
+            setSelectedTopicId(null);
+            setTopicLoadError('');
+            memoriesRef.current = [];
+            thumbnailLoadId.current += 1;
             setVault(null);
             setSession(null);
             setMemories([]);
@@ -1924,14 +2040,43 @@ export default function App({ testBootstrap }: AppProps = {}) {
       <StatusBar style="dark" />
       <HomeScreen
         markers={mapMarkers}
-        memories={memories}
+        memories={topicMemories}
+        topicHeader={(
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`当前空间：${selectedTopic?.name ?? '全部记忆'}，打开主题中心`}
+              onPress={() => setTopicRoute('center')}
+              style={({ pressed }) => [styles.topicEntry, pressed && styles.topicEntryPressed]}
+            >
+              <View
+                style={styles.topicEntrySurface}
+                onLayout={(event) => {
+                  const { width, height } = event.nativeEvent.layout;
+                  setTopicEntrySize((current) => (
+                    current.width === width && current.height === height ? current : { width, height }
+                  ));
+                }}
+              >
+                {topicEntrySize.width > 0 && topicEntrySize.height > 0 && (
+                  <CrystalSurface width={topicEntrySize.width} height={topicEntrySize.height} />
+                )}
+                <Text numberOfLines={2} style={styles.topicEntryText}>{selectedTopic?.name ?? '全部记忆'}</Text>
+                <Text style={styles.topicEntryCaret}>▾</Text>
+              </View>
+            </Pressable>
+            <Text style={{ color: '#5d777d', fontSize: 12, lineHeight: 19 }}>{activeTopicSummary.count} 段记忆 · {activeTopicSummary.placeCount} 个地点{selectedTopic && activeTopicSummary.start ? `\n${activeTopicSummary.start} — ${activeTopicSummary.end}` : ''}</Text>
+            {selectedTopic && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
+                <TopicButton quiet label="管理记忆" onPress={() => setTopicRoute('list')} />
+              </View>
+            )}
+          </View>
+        )}
         selectedYear={selectedYear}
-        regionLabel={homeRegionLabel}
-        regionOptions={homeRegionOptions}
         loading={busy && memories.length === 0}
         status={status}
         onYearChange={setSelectedYear}
-        onRegionSelect={selectHomeRegion}
         onMarkerPress={handleMarkerPress}
         onClusterPress={({ count, label, coordinate }) => setStatus(
           label
@@ -1959,7 +2104,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
           }
         }}
         onOpenMore={() => setAppMenuVisible(true)}
-        chromeVisible={(!selectedMemory || detailClosing) && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible}
+        chromeVisible={(!selectedMemory || detailClosing) && !draftVisible && !locationPickerVisible && !defaultMapEditorVisible && !topicRoute}
         initialCamera={activeDefaultMapCamera}
         camera={locationPickerVisible ? locationCameraTarget : homeCameraTarget}
         mapUpdatesPaused={Boolean((selectedMemory && !detailClosing) || draftVisible || locationPickerVisible)}
@@ -1982,9 +2127,36 @@ export default function App({ testBootstrap }: AppProps = {}) {
           />
         ) : null}
       />
-      {selectedMemory && !editDraft && (
+      {topicRoute && (
+        <TopicScreens
+          key={`${topicRoute}:${selectedTopicId ?? 'all'}`}
+          route={topicRoute}
+          collection={topicCollection}
+          selectedTopicId={selectedTopicId}
+          memories={memories}
+          thumbnails={thumbnailSources}
+          loadError={topicLoadError}
+          hidden={Boolean(selectedMemory || draftVisible || locationPickerVisible)}
+          onClose={() => setTopicRoute(null)}
+          onSelect={selectTopic}
+          onCreate={async (name) => { const id = await createTopic(name); selectTopic(id, false); setTopicRoute('list'); }}
+          onRename={(id, name) => applyTopicAction({ kind: 'rename', id, name })}
+          onDelete={(id) => applyTopicAction({ kind: 'delete', id })}
+          onAttach={async (ids) => { if (!selectedTopicId) return; await applyTopicAction({ kind: 'attach', id: selectedTopicId, memoryIds: ids }); }}
+          onDetach={async (id) => { if (selectedTopicId) await applyTopicAction({ kind: 'detach', id: selectedTopicId, memoryIds: [id] }); }}
+          onOpenMemory={openMemory}
+          onRecord={beginTopicRecord}
+        />
+      )}
+      {selectedMemory && !draftVisible && (
         <MemoryDetailOverlay
           memory={selectedMemory}
+          topicLinks={<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {(selectedMemory.topicIds ?? []).map((id) => {
+              const topic = topicCollection.topics.find((item) => item.id === id);
+              return topic ? <TopicButton key={id} quiet label={`# ${topic.name}`} onPress={() => selectTopic(id)} /> : null;
+            })}
+          </View>}
           photoUris={detailPhotoUris}
           photoStates={detailPhotoStates}
           onClose={closeMemory}
@@ -2022,7 +2194,14 @@ export default function App({ testBootstrap }: AppProps = {}) {
           location={editDraft.location}
           photoCount={editDraft.photos.length + editDraft.pendingPhotos.length}
           photoUris={editPhotoUris(editDraft)}
-          busy={busy}
+          busy={busy || topicFormBusy}
+          topicField={<TopicField
+            topics={topicCollection.topics}
+            ids={editDraft.topicIds}
+            onChange={(topicIds) => setEditDraft((draft) => draft ? { ...draft, topicIds } : draft)}
+            onCreate={createDraftTopic}
+            disabled={busy || Boolean(topicLoadError)}
+          />}
           onChange={(field, value) => setEditDraft((current) => current ? { ...current, [field]: value } : current)}
           onLocation={openEditLocation}
           onManagePhotos={() => setPhotoManageVisible(true)}
@@ -2119,6 +2298,26 @@ export default function App({ testBootstrap }: AppProps = {}) {
 
 const styles = StyleSheet.create({
   homeRoot: { flex: 1, backgroundColor: '#e3e8e5' },
+  topicEntry: { alignSelf: 'flex-start', maxWidth: '100%' },
+  topicEntryPressed: { opacity: 0.85 },
+  topicEntrySurface: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 56,
+    maxWidth: '100%',
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 28,
+    backgroundColor: 'rgba(248,252,255,0.42)',
+    shadowColor: '#1d2f3d',
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  topicEntryText: { flexShrink: 1, color: '#1d2a32', fontSize: 25, fontWeight: '600', lineHeight: 32 },
+  topicEntryCaret: { color: '#5c7583', fontSize: 16, fontWeight: '600' },
   root: { flex: 1, backgroundColor: '#f3f0e8' },
   page: { padding: 18, paddingTop: 56, paddingBottom: 64, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

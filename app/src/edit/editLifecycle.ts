@@ -1,6 +1,7 @@
 import type { EncryptedMemoryV1 } from '../crypto';
 import type { MemoryV2 } from '../memory/memoryV2';
 import type { MemoryPhotoV1 } from '../memory/memoryV1';
+import { normalizeTopicIds } from '../topics/topicModel';
 
 export interface PhotoManageSelection {
   id: string;
@@ -14,6 +15,7 @@ export interface EditableMemoryValues {
   pastSelf: string;
   presentSelf: string;
   location: MemoryV2['location'];
+  topicIds?: string[];
 }
 
 export function buildCreatedMemory(
@@ -35,6 +37,7 @@ export function buildCreatedMemory(
     board: { px: 20, py: 20, rotation: 0 },
     location: values.location,
     photos: photos.map((photo) => ({ ...photo })),
+    topicIds: normalizeTopicIds(values.topicIds),
     createdAt,
     updatedAt: createdAt,
   };
@@ -48,6 +51,7 @@ export function buildEditedMemory(
 ): MemoryV2 {
   return {
     ...original,
+    topicIds: normalizeTopicIds(values.topicIds ?? original.topicIds),
     title: values.title.trim(),
     date: values.date,
     pastSelf: values.pastSelf,

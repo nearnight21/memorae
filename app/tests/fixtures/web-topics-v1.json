@@ -1,0 +1,97 @@
+{
+  "source": "Web encryptMemory/encryptMemoryV2；公开人工测试密钥 0x11/0x22/0x33，各 32 字节",
+  "topic": {
+    "id": "topics",
+    "topics": [
+      {
+        "id": "topic_web",
+        "name": "川藏旅行",
+        "createdAt": "2026-09-19T00:00:00.000Z",
+        "updatedAt": "2026-09-19T00:00:00.000Z"
+      }
+    ],
+    "lastUsedAt": {
+      "topic_web": "2026-09-19T00:00:00.000Z"
+    }
+  },
+  "memory": {
+    "schemaVersion": 2,
+    "id": "memory-web",
+    "title": "旅途",
+    "date": "2026-09-19",
+    "category": "growth",
+    "tag": "",
+    "pastSelf": "只有文字的记忆",
+    "presentSelf": "",
+    "pinnedBy": "pin",
+    "board": {
+      "px": 20,
+      "py": 20,
+      "rotation": 0
+    },
+    "location": null,
+    "photos": [],
+    "createdAt": "2026-09-19T00:00:00.000Z",
+    "updatedAt": "2026-09-19T00:00:00.000Z",
+    "topicIds": [
+      "topic_web",
+      "topic_other"
+    ]
+  },
+  "edited": {
+    "schemaVersion": 2,
+    "id": "memory-web",
+    "title": "编辑后的记忆",
+    "date": "2026-09-19",
+    "category": "growth",
+    "tag": "",
+    "pastSelf": "只有文字的记忆",
+    "presentSelf": "",
+    "pinnedBy": "pin",
+    "board": {
+      "px": 20,
+      "py": 20,
+      "rotation": 0
+    },
+    "location": null,
+    "photos": [],
+    "createdAt": "2026-09-19T00:00:00.000Z",
+    "updatedAt": "2026-09-19T00:00:00.000Z",
+    "topicIds": [
+      "topic_other"
+    ]
+  },
+  "topicCipher": {
+    "id": "topics",
+    "version": 1,
+    "cryptoVersion": 1,
+    "deleted": false,
+    "payload": {
+      "algorithm": "AES-256-GCM",
+      "iv": "/tlg5I9cg1IBc6vk",
+      "ciphertext": "9+8WjVDcgdPU9s2YtJIFVf3mxAH7udrqBvRaXk5FAZxynmB7Ky6QWxscorN/QKAj9V0TgclTdHfkMu7iS8YS4jVmd+UakxwbKEXWLiQqtBc8nh9wMHt6ONjN03kyRNGbdcIcxZV+uSrJk7qnpSwObP/Zwv/MbRYsAJDwTlaqS61Bcx63pQwx0z4zfMMe1j/di0K6/0o9dPWqePqzZcjPSNOlmuYbRyujiWwyDltnpPtlISmstfhOZORnHDK0uRt5AAFANuQInd/+OwfhDXkLRWchIukyPvk="
+    }
+  },
+  "memoryCipher": {
+    "id": "memory-web",
+    "version": 1,
+    "cryptoVersion": 1,
+    "deleted": false,
+    "payload": {
+      "algorithm": "AES-256-GCM",
+      "iv": "yMH4PgZ3peqLt54M",
+      "ciphertext": "Vgkd2FHlX3aDYfWCFpw/LDtVLbQkPwrQaqFs8GgplRRCAGVKuKA8DErn5pflEBdNLk1QjEVW9dJd6PDz1xq+9U2Kqikw17fctfU5NutjDHQyq0BEo9m8o78gJ8WxvZD4eLGbE6rGwky0Ej+1R0AmO0RV4WSNdnkgI23gH0lLmuWmYEjccLAJyfVZhYVayxcLO9JC+EcxHg+MPza59y9gtH9P74PGTVfEVuE5nuiSkT0u30FPct7Ol8+lf9z/Jc4LSpPLBOAG4tvQ3iH6Et0nyK9QAQeaRXqrcv7Nt0/HYoICO2Bi65ssk5cSYqFJ9i3tKW9GHVGe39VDTt6RkhT9VoRrDaUwaCxGwOZX1RaPQTat/Rg1kyPirmrEielnnHx1qnzOWnzQBmAq9esp1ntUqU4PloFOGp+qYh64wHuk9WIAIy3eiHAKtMGql9qxL1V4H2ydBMnFMfi7uWTwGaylQq3j3MCrs48iZ3KXGNURansDfExZ"
+    }
+  },
+  "editedCipher": {
+    "id": "memory-web",
+    "version": 2,
+    "cryptoVersion": 1,
+    "deleted": false,
+    "payload": {
+      "algorithm": "AES-256-GCM",
+      "iv": "Ez2F5cVIqlvMZ50x",
+      "ciphertext": "1v0+bi7rKSVPgECuuf0d9iv8PMAoSIuLiFKGN8ji5gVddAEdu8XFihpp3vKI66cJFuyOV8MokpII0y73FAcAblGADwYln9hERLuwjdhwABxZihqPGTh7ubpIL2WHy2247+1tKrDoOScWMPD/2Po4hE/kslXmE2mKothiK36NsmsnVmlJrXsDYepZJyQEBZUL5Ch6r/V9IJFZO3w2D8RBjyf0efRxsvXCjDoHJKpUT8ascUYuIQ734/ABX8VT3C7ylGFAY9tnn9b6S+DwKaRq3RJfypq/v88RKC7HBtR0+muxz1z3fQ2t5bAvbXUkWBvKGlubbFG4zSRBlF+aSzrldsnT2CBaY6uSZvlgrruc3+/WaGfKJmHM8PQskKjY16RvE/gyIP7ExzqLAP5pBYQrAPwH1/DEz/U8qrU2AWKrWGaAhWDac4XUFE37/JVxsZVlTxTE2k8Reh4NX/YQ4vWMNxK7RAfPdOqfmFq48wg/GGfwL7sd"
+    }
+  }
+}
