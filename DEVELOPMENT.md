@@ -50,6 +50,10 @@
   网络中断改用本地 `git format-patch` 应用（工作树内容为 5b2e2a3，网络恢复后执行
   `cd /srv/memorae && git checkout -- . && git pull --ff-only` 对齐）。验证：server 15 项、
   web 100 项测试通过；生产 `/health`、登录接口与页面文案均已核对。
+- App 端新增邮箱验证码注册入口（`EXPO_PUBLIC_MEMORY_RECALL_EMAIL_ENABLED` 开关）：登录页提供
+  “还没有账号？注册”，注册流程为邮箱验证码 + 设置登录密码（≥8 位），成功后自动登录并沿用
+  私密空间创建/解锁链路；登录密码与私密空间密码文案明确区分。验证：App `verify`（136 项测试、
+  Expo Doctor 21 项）通过，arm64 standalone 包已覆盖安装；真机注册验收待执行。
 
 ## 必须保持
 
