@@ -19,9 +19,14 @@ import { revokeRegisteredPhotos } from './photoRegistry';
 import type { Memory } from '../types';
 import { isAccountSessionActive, type StoredAccountSession } from '../sync/accountSession';
 import { cipherSyncStorage } from '../sync/cipherSyncStorage';
-import { MEMORY_RECALL_API_URL } from '../sync/config';
+import { MEMORY_RECALL_API_URL, WECHAT_LOGIN_ENABLED } from '../sync/config';
 import { downloadCiphertext, VaultMismatchError } from '../sync/syncActions';
-import { loginSyncSession, MemoryRecallSyncClient, SyncRequestError } from '../sync/syncClient';
+import {
+  exchangeWeChatLoginCode,
+  loginSyncSession,
+  MemoryRecallSyncClient,
+  SyncRequestError,
+} from '../sync/syncClient';
 import { privateSpaceUnlockErrorMessage, unlockPrivateSpaceLocally } from './privateSpaceUnlock';
 import photoBacking from '../assets/login/photo-backing.svg';
 import timeNodeCurrent from '../assets/login/time-node-current.svg';
@@ -56,6 +61,13 @@ const AUTH_TIMELINE = [
   { year: '2018', left: '63.8%', top: '44.4%', current: true },
   { year: '2026', left: '93.4%', top: '11.1%', current: false },
 ];
+
+function clearWeChatCallbackQuery(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('wechat_code');
+  url.searchParams.delete('wechat_error');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+}
 
 function AuthShell({ titleId, children }: AuthShellProps) {
   return (
@@ -131,19 +143,48 @@ export default function ProductGate({
           setPhase(storedVault ? 'locked' : 'setup');
           return;
         }
-        if (!storedAccount || !isAccountSessionActive(storedAccount)) {
-          if (storedAccount) await clearStoredAccountSession();
+        let activeAccount = storedAccount;
+        const callbackUrl = new URL(window.location.href);
+        const wechatCode = callbackUrl.searchParams.get('wechat_code');
+        const wechatError = callbackUrl.searchParams.get('wechat_error');
+        if (wechatCode) {
+          clearWeChatCallbackQuery();
+          try {
+            activeAccount = await exchangeWeChatLoginCode(MEMORY_RECALL_API_URL, wechatCode);
+            await saveStoredAccountSession(activeAccount);
+          } catch (exchangeError) {
+            setError(exchangeError instanceof Error ? exchangeError.message : '微信登录失败，请重试。');
+            activeAccount = null;
+          }
+        } else if (wechatError) {
+          clearWeChatCallbackQuery();
+          setError(
+            wechatError === 'wechat_denied'
+              ? '你取消了微信授权。'
+              : '微信登录暂时不可用，请稍后重试。',
+          );
+        }
+        if (!activeAccount || !isAccountSessionActive(activeAccount)) {
+          if (activeAccount) await clearStoredAccountSession();
           setPhase('account');
           return;
         }
-        setAccountSession(storedAccount);
+        setAccountSession(activeAccount);
         if (storedVault) {
+          try {
+            await validateAccountVault(activeAccount, storedVault);
+          } catch (validationError) {
+            setLocalVaultMismatch(validationError instanceof VaultMismatchError);
+            setError(privateSpaceUnlockErrorMessage(validationError));
+            setPhase('account');
+            return;
+          }
           setPhase('locked');
           return;
         }
         setPhase('locked');
         try {
-          await restoreRemoteVault(storedAccount);
+          await restoreRemoteVault(activeAccount);
         } catch (restoreError) {
           setError(privateSpaceUnlockErrorMessage(restoreError));
         }
@@ -363,6 +404,14 @@ export default function ProductGate({
     setAccountSession(null);
   };
 
+  const startWeChatLogin = () => {
+    if (!MEMORY_RECALL_API_URL || !WECHAT_LOGIN_ENABLED || busy) return;
+    const returnTo = `${window.location.origin}${window.location.pathname}`;
+    const url = new URL('/v1/auth/wechat/start', MEMORY_RECALL_API_URL);
+    url.searchParams.set('returnTo', returnTo);
+    window.location.assign(url.toString());
+  };
+
   if (phase === 'unlocked' && session) {
     if (unlockedRenderer) {
       return unlockedRenderer({
@@ -444,7 +493,19 @@ export default function ProductGate({
               {busy && <LoaderCircle className="animate-spin" size={18} aria-hidden="true" />}
               {busy ? '正在登录' : '登录'}
             </button>
-            <p className="account-login-invite-note">内测版本 · 仅限受邀账号</p>
+            {MEMORY_RECALL_API_URL && WECHAT_LOGIN_ENABLED && (
+              <button
+                className="account-login-wechat"
+                type="button"
+                onClick={startWeChatLogin}
+                disabled={busy}
+              >
+                微信登录 / 注册
+              </button>
+            )}
+            <p className="account-login-invite-note">
+              微信授权后会自动创建 Memorae 账号；私密空间密码仍只在本机设置。
+            </p>
         </form>
 
         {localVaultMismatch && (

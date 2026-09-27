@@ -23,6 +23,8 @@ export interface SyncLoginSession {
   expiresAt: string;
 }
 
+export interface WeChatLoginSession extends SyncLoginSession {}
+
 interface PhotoUploadGrant {
   status: 'upload';
   uploadId: string;
@@ -107,6 +109,29 @@ export async function loginSyncSession(
     throw new SyncRequestError(response.status, '暂时无法登录，请稍后再试。');
   }
   return response.json() as Promise<SyncLoginSession>;
+}
+
+export async function exchangeWeChatLoginCode(
+  baseUrl: string,
+  code: string,
+): Promise<WeChatLoginSession> {
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/wechat/exchange`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+  } catch {
+    throw new Error('暂时无法连接所忆，请稍后重试。');
+  }
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new SyncRequestError(response.status, '微信登录凭证已失效，请重新扫码。');
+    }
+    throw new SyncRequestError(response.status, '微信登录暂时不可用，请稍后重试。');
+  }
+  return response.json() as Promise<WeChatLoginSession>;
 }
 
 export class MemoryRecallSyncClient {

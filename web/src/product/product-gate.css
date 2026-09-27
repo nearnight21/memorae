@@ -402,6 +402,37 @@
   opacity: 0.66;
 }
 
+.account-login-wechat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, #2f9f68 55%, transparent);
+  border-radius: 8px;
+  background: rgba(47, 159, 104, 0.08);
+  color: #287e53;
+  font: 500 15px/24px "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.account-login-wechat:hover:not(:disabled) {
+  border-color: #2f9f68;
+  background: rgba(47, 159, 104, 0.15);
+}
+
+.account-login-wechat:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 3px;
+}
+
+.account-login-wechat:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
 .account-login-invite-note {
   margin: 20px 0 0;
   color: var(--color-text-primary);

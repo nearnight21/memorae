@@ -9,6 +9,12 @@ import {
   type RequestAuthenticator,
 } from './auth';
 import {
+  WeChatHandoffStore,
+  WeChatProvider,
+  WeChatProviderError,
+  type WeChatProviderOptions,
+} from './wechatAuth';
+import {
   encryptedMemorySchema,
   encryptedPhotoSchema,
   idParamsSchema,
@@ -46,6 +52,8 @@ export interface BuildAppOptions {
   photoTransfer?: DirectPhotoTransfer;
   /** 高德地点服务只由服务端持有 key，未配置时地点功能返回明确的 503。 */
   locationService?: LocationService;
+  /** 微信网站应用 OAuth；未配置时不注册微信登录路由。 */
+  wechat?: WeChatProviderOptions;
 }
 
 interface IdParams {
@@ -56,6 +64,20 @@ interface LoginBody {
   loginName: string;
   password: string;
   deviceId?: string;
+}
+
+interface WeChatStartQuery {
+  returnTo?: string;
+}
+
+interface WeChatCallbackQuery {
+  code?: string;
+  state?: string;
+  error?: string;
+}
+
+interface WeChatExchangeBody {
+  code: string;
 }
 
 interface PhotoVariantParams extends IdParams {
@@ -102,6 +124,33 @@ const loginSchema = {
   },
 } as const;
 
+const weChatStartSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    returnTo: { type: 'string', minLength: 1, maxLength: 1000 },
+  },
+} as const;
+
+const weChatCallbackSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    code: { type: 'string', minLength: 1, maxLength: 512 },
+    state: { type: 'string', minLength: 1, maxLength: 2000 },
+    error: { type: 'string', minLength: 1, maxLength: 100 },
+  },
+} as const;
+
+const weChatExchangeSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['code'],
+  properties: {
+    code: { type: 'string', minLength: 1, maxLength: 512 },
+  },
+} as const;
+
 const locationSuggestSchema = {
   type: 'object',
   additionalProperties: false,
@@ -127,6 +176,59 @@ function bearerToken(request: FastifyRequest): string | null {
   if (!value?.startsWith('Bearer ')) return null;
   const token = value.slice('Bearer '.length).trim();
   return token || null;
+}
+
+function cookieValue(request: FastifyRequest, name: string): string | null {
+  const header = request.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const [key, ...valueParts] = part.trim().split('=');
+    if (key === name) return decodeURIComponent(valueParts.join('='));
+  }
+  return null;
+}
+
+function weChatStateCookie(value: string, maxAge: number, secure: boolean): string {
+  return [
+    `memorae_wechat_state=${encodeURIComponent(value)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/v1/auth/wechat',
+    `Max-Age=${maxAge}`,
+    ...(secure ? ['Secure'] : []),
+  ].join('; ');
+}
+
+function validReturnTo(value: string | undefined, allowedOrigins: string[]): string {
+  const fallback = allowedOrigins[0];
+  if (!value) {
+    if (!fallback) throw new Error('微信登录缺少回调来源。');
+    return fallback;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('微信登录回调来源无效。');
+  }
+  if (!allowedOrigins.includes(parsed.origin)) {
+    throw new Error('微信登录回调来源未被允许。');
+  }
+  return parsed.toString();
+}
+
+function addWeChatResult(returnTo: string, code: string): string {
+  const url = new URL(returnTo);
+  url.searchParams.set('wechat_code', code);
+  url.hash = 'app';
+  return url.toString();
+}
+
+function addWeChatError(returnTo: string, code: string): string {
+  const url = new URL(returnTo);
+  url.searchParams.set('wechat_error', code);
+  url.hash = 'app';
+  return url.toString();
 }
 
 function currentAccountId(request: FastifyRequest): string {
@@ -194,6 +296,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       pathname === '/health'
       || request.method === 'OPTIONS'
       || (pathname === '/v1/auth/login' && request.method === 'POST')
+      || (pathname === '/v1/auth/wechat/start' && request.method === 'GET')
+      || (pathname === '/v1/auth/wechat/callback' && request.method === 'GET')
+      || (pathname === '/v1/auth/wechat/exchange' && request.method === 'POST')
       || pathname.startsWith('/v1/location/public/')
     ) {
       return;
@@ -218,6 +323,76 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       if (!session) {
         return reply.code(401).send({ error: '账号或密码无效。' });
       }
+      return reply.code(200).send(session);
+    });
+  }
+
+  if (options.wechat && authenticator.loginWeChat) {
+    const wechatOptions = options.wechat;
+    const provider = new WeChatProvider(wechatOptions);
+    const handoffs = new WeChatHandoffStore();
+    const allowedOrigins = options.allowedOrigins ?? [];
+
+    app.get<{ Querystring: WeChatStartQuery }>('/v1/auth/wechat/start', {
+      schema: { querystring: weChatStartSchema },
+    }, async (request, reply) => {
+      let returnTo: string;
+      try {
+        returnTo = validReturnTo(request.query.returnTo, allowedOrigins);
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : '微信登录回调来源无效。' });
+      }
+      const state = provider.createState(returnTo);
+      reply.header('set-cookie', weChatStateCookie(
+        state,
+        10 * 60,
+        provider.callbackUrl.startsWith('https://'),
+      ));
+      const url = new URL(provider.authorizationUrl);
+      url.searchParams.set('appid', wechatOptions.appId);
+      url.searchParams.set('redirect_uri', provider.callbackUrl);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', 'snsapi_login');
+      url.searchParams.set('state', state);
+      url.hash = 'wechat_redirect';
+      return reply.redirect(url.toString());
+    });
+
+    app.get<{ Querystring: WeChatCallbackQuery }>('/v1/auth/wechat/callback', {
+      schema: { querystring: weChatCallbackSchema },
+    }, async (request, reply) => {
+      const state = request.query.state;
+      const stateCookie = cookieValue(request, 'memorae_wechat_state');
+      const verifiedState = state && stateCookie === state ? provider.verifyState(state) : null;
+      if (!verifiedState) {
+        return reply.code(400).send({ error: '微信登录状态已失效，请重新发起登录。' });
+      }
+      reply.header('set-cookie', weChatStateCookie(
+        '',
+        0,
+        provider.callbackUrl.startsWith('https://'),
+      ));
+      if (request.query.error || !request.query.code) {
+        return reply.redirect(addWeChatError(verifiedState.returnTo, 'wechat_denied'));
+      }
+      try {
+        const identity = await provider.exchangeCode(request.query.code);
+        const session = await authenticator.loginWeChat!(identity, 'web-wechat');
+        const handoffCode = handoffs.issue(session);
+        return reply.redirect(addWeChatResult(verifiedState.returnTo, handoffCode));
+      } catch (error) {
+        if (error instanceof WeChatProviderError) {
+          return reply.redirect(addWeChatError(verifiedState.returnTo, 'wechat_unavailable'));
+        }
+        throw error;
+      }
+    });
+
+    app.post<{ Body: WeChatExchangeBody }>('/v1/auth/wechat/exchange', {
+      schema: { body: weChatExchangeSchema },
+    }, async (request, reply) => {
+      const session = handoffs.consume(request.body.code);
+      if (!session) return reply.code(401).send({ error: '微信登录凭证已失效，请重新登录。' });
       return reply.code(200).send(session);
     });
   }

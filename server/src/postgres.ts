@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Pool } from 'pg';
 import type {
@@ -7,8 +7,9 @@ import type {
   PasswordAuthStore,
   PasswordHashOptions,
   StoredSession,
+  WeChatIdentity,
 } from './auth';
-import { hashPassword } from './auth';
+import { hashPassword, weChatLoginName } from './auth';
 import type {
   EncryptedMemoryV1,
   EncryptedPhotoV1,
@@ -185,6 +186,34 @@ export class PostgresPasswordAuthStore implements PasswordAuthStore {
       passwordHash: account.password_hash,
       disabledAt: toIsoString(account.disabled_at),
     };
+  }
+
+  async findOrCreateWeChatAccount(identity: WeChatIdentity): Promise<PasswordAccount> {
+    const loginName = weChatLoginName(identity);
+    const existing = await this.findAccountByLogin(loginName);
+    if (existing) return existing;
+
+    const account: PasswordAccount = {
+      id: randomUUID(),
+      loginName,
+      // There is no password login path for a generated WeChat account. Keep the
+      // existing non-null schema contract with an unreachable random password.
+      passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+      disabledAt: null,
+    };
+    try {
+      await this.database.query(
+        `INSERT INTO accounts (id, login_name, password_hash)
+         VALUES ($1::uuid, $2, $3)`,
+        [account.id, account.loginName, account.passwordHash],
+      );
+      return account;
+    } catch (error) {
+      if ((error as { code?: string }).code !== '23505') throw error;
+      const concurrent = await this.findAccountByLogin(loginName);
+      if (concurrent) return concurrent;
+      throw error;
+    }
   }
 
   async createSession(session: NewStoredSession): Promise<void> {

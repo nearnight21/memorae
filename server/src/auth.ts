@@ -16,9 +16,17 @@ export interface LoginSession {
   expiresAt: string;
 }
 
+export interface WeChatIdentity {
+  /** unionid is stable across apps bound to the same WeChat Open Platform account. */
+  unionId?: string;
+  /** openid is app-scoped and is the fallback when unionid is unavailable. */
+  openId: string;
+}
+
 export interface RequestAuthenticator {
   authenticate(accessToken: string): Promise<AuthenticatedAccount | null>;
   login?(credentials: LoginCredentials): Promise<LoginSession | null>;
+  loginWeChat?(identity: WeChatIdentity, deviceId?: string): Promise<LoginSession>;
   logout?(accessToken: string): Promise<void>;
 }
 
@@ -43,6 +51,7 @@ export interface NewStoredSession extends StoredSession {
 
 export interface PasswordAuthStore {
   findAccountByLogin(loginName: string): Promise<PasswordAccount | null>;
+  findOrCreateWeChatAccount?(identity: WeChatIdentity): Promise<PasswordAccount>;
   createSession(session: NewStoredSession): Promise<void>;
   findSessionByTokenHash(tokenHash: string): Promise<StoredSession | null>;
   revokeSessionByTokenHash(tokenHash: string, revokedAt: string): Promise<void>;
@@ -71,6 +80,14 @@ const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function normalizeLoginName(value: string): string {
   return value.trim().toLowerCase();
+}
+
+export function weChatLoginName(identity: WeChatIdentity): string {
+  const subject = (identity.unionId ?? identity.openId).trim();
+  if (!subject || subject.length > 180) {
+    throw new Error('微信身份标识无效。');
+  }
+  return normalizeLoginName(`wechat:${subject}`);
 }
 
 function validateLoginCredentials(credentials: LoginCredentials): void {
@@ -169,6 +186,26 @@ export class PasswordSessionAuthenticator implements RequestAuthenticator {
     return { accessToken, expiresAt };
   }
 
+  async loginWeChat(identity: WeChatIdentity, deviceId?: string): Promise<LoginSession> {
+    const findOrCreate = this.store.findOrCreateWeChatAccount;
+    if (!findOrCreate) {
+      throw new Error('当前认证存储未启用微信注册。');
+    }
+    const account = await findOrCreate.call(this.store, identity);
+    const accessToken = randomBytes(32).toString('base64url');
+    const createdAt = this.now();
+    const expiresAt = new Date(createdAt.getTime() + this.sessionTtlMs).toISOString();
+    await this.store.createSession({
+      accountId: account.id,
+      tokenHash: tokenHash(this.options.tokenPepper, accessToken),
+      deviceId: deviceId?.trim() || null,
+      createdAt: createdAt.toISOString(),
+      expiresAt,
+      revokedAt: null,
+    });
+    return { accessToken, expiresAt };
+  }
+
   async authenticate(accessToken: string): Promise<AuthenticatedAccount | null> {
     if (!accessToken) return null;
     const session = await this.store.findSessionByTokenHash(
@@ -219,6 +256,21 @@ export class InMemoryPasswordAuthStore implements PasswordAuthStore {
   async findAccountByLogin(loginName: string): Promise<PasswordAccount | null> {
     const account = this.accountsByLogin.get(normalizeLoginName(loginName));
     return account ? { ...account } : null;
+  }
+
+  async findOrCreateWeChatAccount(identity: WeChatIdentity): Promise<PasswordAccount> {
+    const loginName = weChatLoginName(identity);
+    const existing = this.accountsByLogin.get(loginName);
+    if (existing) return { ...existing };
+    const account: PasswordAccount = {
+      id: `wechat-${randomBytes(12).toString('hex')}`,
+      loginName,
+      // The generated password is intentionally unreachable; WeChat is the login factor.
+      passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+      disabledAt: null,
+    };
+    this.accountsByLogin.set(loginName, account);
+    return { ...account };
   }
 
   async createSession(session: NewStoredSession): Promise<void> {

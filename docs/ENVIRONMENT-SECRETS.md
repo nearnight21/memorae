@@ -21,6 +21,7 @@
 | 变量 | 必需性 / 默认值 | 敏感级别 | Local 来源 | CI 来源 | Production 来源 | 用途 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `VITE_MEMORY_RECALL_API_URL` | 可选；留空为纯离线 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 密文同步 API 根地址。 |
+| `VITE_MEMORY_RECALL_WECHAT_ENABLED` | 可选，默认关闭；`1` 开启 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 显示微信登录/注册入口；Server 仍必须同时配置微信密钥。 |
 | `VITE_MEMORY_RECALL_AMAP_JS_API_KEY` | 仅 JS API 测试页需要 | 客户端凭据 | `web/.env.local` | 需要该测试时的受限 Variable/Secret | Web 构建变量 | 高德 Web JS API Key，会进入产物。 |
 | `VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE` | 与上项成对 | 客户端凭据 | `web/.env.local` | 同上 | Web 构建变量 | 高德 securityJsCode，会进入产物。 |
 | `DISABLE_HMR` | 可选，默认不关闭 | 本地配置 | 启动 Vite 前的 shell 环境 | 不需要 | 不需要 | 关闭 HMR 和文件监听；不是浏览器变量。 |
@@ -76,6 +77,10 @@ JSON 模式固定监听 `127.0.0.1`；`MEMORY_RECALL_LISTEN_HOST` 只影响 Post
 | `MEMORY_RECALL_DATABASE_URL` | PostgreSQL 模式必需 | Secret | 临时本地数据库凭据 | 临时 service Secret | 生产密钥管理 | PostgreSQL 连接串。 |
 | `MEMORY_RECALL_SESSION_TOKEN_PEPPER` | PostgreSQL 模式必需，至少 32 字符 | Secret | 仓库外本地环境 | 测试 Secret | 生产密钥管理 | 会话令牌摘要 pepper。 |
 | `MEMORY_RECALL_ALLOWED_ORIGINS` | PostgreSQL 模式必需 | 配置 | 本地测试 origins | job env | 部署环境变量 | 允许的 Web 来源列表。 |
+| `MEMORY_RECALL_WECHAT_APP_ID` | 微信注册可选 | Secret 元数据 | 仓库外本地环境 | 不参与普通 CI | 微信开放平台配置 | 网站应用 AppID。 |
+| `MEMORY_RECALL_WECHAT_APP_SECRET` | 与上项成组 | Secret | 仓库外本地环境 | 不参与普通 CI | 生产密钥管理 | 网站应用 AppSecret，仅由 Server 使用。 |
+| `MEMORY_RECALL_WECHAT_CALLBACK_URL` | 与微信配置成组 | 配置 | 本地 localhost 回调 | 不参与普通 CI | 生产部署环境变量 | 微信 OAuth 回调地址。 |
+| `MEMORY_RECALL_WECHAT_STATE_SECRET` | 与微信配置成组，至少 32 字符 | Secret | 仓库外本地环境 | 不参与普通 CI | 生产密钥管理 | OAuth state 签名密钥。 |
 | `MEMORY_RECALL_LISTEN_HOST` | 可选，数据库模式默认 `0.0.0.0` | 配置 | 进程环境 | job env | Compose 固定值/服务环境 | 容器内监听地址。 |
 | `MEMORY_RECALL_PORT` | 可选，`8788` | 配置 | 进程环境 | job env | Compose 固定值/服务环境 | 容器内 API 端口。 |
 | `MEMORY_RECALL_AMAP_WEB_SERVICE_KEY` | 地点 API 必需 | Secret | 仓库外本地环境 | 仅地点集成测试时注入 | 生产密钥管理 | 服务端高德 Web 服务 Key。 |

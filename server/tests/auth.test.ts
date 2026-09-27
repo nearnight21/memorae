@@ -132,3 +132,71 @@ test('password sessions authenticate one account without exposing another accoun
   });
   assert.equal(afterLogout.status, 401);
 });
+
+test('WeChat OAuth creates an account once and exchanges a one-time browser handoff', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'memory-recall-wechat-'));
+  const authStore = new InMemoryPasswordAuthStore();
+  const app = await buildApp({
+    store: new JsonCipherStore(join(directory, 'store.json')),
+    allowedOrigins: ['http://localhost:3000'],
+    authenticator: new PasswordSessionAuthenticator(authStore, {
+      tokenPepper: TOKEN_PEPPER,
+      passwordHash: TEST_PASSWORD_HASH,
+    }),
+    wechat: {
+      appId: 'wx-test-app',
+      appSecret: 'test-secret',
+      callbackUrl: 'http://localhost:8788/v1/auth/wechat/callback',
+      stateSecret: 'wechat-state-secret-at-least-32-characters',
+      exchangeCode: async (code) => {
+        assert.equal(code, 'test-code');
+        return { openId: 'openid-001', unionId: 'unionid-001' };
+      },
+    },
+  });
+  const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
+  context.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const start = await fetch(
+    `${baseUrl}/v1/auth/wechat/start?returnTo=${encodeURIComponent('http://localhost:3000/')}`,
+    { redirect: 'manual' },
+  );
+  assert.equal(start.status, 302);
+  const stateLocation = new URL(start.headers.get('location')!);
+  const state = stateLocation.searchParams.get('state');
+  assert.ok(state);
+  const stateCookie = start.headers.get('set-cookie')!.split(';', 1)[0];
+
+  const callback = await fetch(
+    `${baseUrl}/v1/auth/wechat/callback?code=test-code&state=${encodeURIComponent(state!)}`,
+    { headers: { cookie: stateCookie }, redirect: 'manual' },
+  );
+  assert.equal(callback.status, 302);
+  const handoffLocation = new URL(callback.headers.get('location')!);
+  const handoffCode = handoffLocation.searchParams.get('wechat_code');
+  assert.ok(handoffCode);
+  assert.equal(handoffLocation.hash, '#app');
+
+  const exchanged = await fetch(`${baseUrl}/v1/auth/wechat/exchange`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: handoffCode }),
+  });
+  assert.equal(exchanged.status, 200);
+  const session = await exchanged.json() as { accessToken: string; expiresAt: string };
+  assert.match(session.accessToken, /^[A-Za-z0-9_-]+$/);
+  assert.ok(Date.parse(session.expiresAt) > Date.now());
+
+  const replay = await fetch(`${baseUrl}/v1/auth/wechat/exchange`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: handoffCode }),
+  });
+  assert.equal(replay.status, 401);
+
+  const account = await authStore.findAccountByLogin('wechat:unionid-001');
+  assert.ok(account);
+});

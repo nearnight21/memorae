@@ -13,6 +13,7 @@ import {
   TencentCosObjectStore,
   type TencentCosObjectStoreOptions,
 } from './tencentCos';
+import type { WeChatProviderOptions } from './wechatAuth';
 
 function cosOptionsFromEnvironment(): TencentCosObjectStoreOptions | null {
   const values = {
@@ -34,6 +35,24 @@ function locationServiceFromEnvironment(): LocationService | undefined {
   return key ? new AmapWebLocationService({ key }) : undefined;
 }
 
+function weChatOptionsFromEnvironment(): WeChatProviderOptions | undefined {
+  const values = {
+    appId: process.env.MEMORY_RECALL_WECHAT_APP_ID?.trim(),
+    appSecret: process.env.MEMORY_RECALL_WECHAT_APP_SECRET?.trim(),
+    callbackUrl: process.env.MEMORY_RECALL_WECHAT_CALLBACK_URL?.trim(),
+    stateSecret: process.env.MEMORY_RECALL_WECHAT_STATE_SECRET?.trim(),
+  };
+  const configured = Object.values(values).filter(Boolean).length;
+  if (!configured) return undefined;
+  if (configured !== 4) {
+    throw new Error('微信登录配置必须同时设置 AppID、AppSecret、回调地址和 state secret。');
+  }
+  if (values.stateSecret!.length < 32) {
+    throw new Error('MEMORY_RECALL_WECHAT_STATE_SECRET 至少需要 32 个字符。');
+  }
+  return values as WeChatProviderOptions;
+}
+
 async function main(): Promise<void> {
   const port = Number(process.env.MEMORY_RECALL_PORT ?? 8788);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -44,6 +63,7 @@ async function main(): Promise<void> {
     .map((origin) => origin.trim())
     .filter(Boolean);
   const locationService = locationServiceFromEnvironment();
+  const wechat = weChatOptionsFromEnvironment();
   const databaseUrl = process.env.MEMORY_RECALL_DATABASE_URL;
   if (databaseUrl) {
     const tokenPepper = process.env.MEMORY_RECALL_SESSION_TOKEN_PEPPER;
@@ -66,6 +86,7 @@ async function main(): Promise<void> {
       }),
       allowedOrigins,
       locationService,
+      wechat,
     });
     const cleanupExpiredPhotos = async () => {
       if (!cosStore) return;

@@ -6,3 +6,5 @@ const isProductionBuild = import.meta.env?.PROD === true;
 export const MEMORY_RECALL_API_URL = (
   configuredApiUrl || (isProductionBuild ? window.location.origin : '')
 ).replace(/\/+$/, '');
+
+export const WECHAT_LOGIN_ENABLED = import.meta.env?.VITE_MEMORY_RECALL_WECHAT_ENABLED === '1';

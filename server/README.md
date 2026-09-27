@@ -1,11 +1,12 @@
 # Memorae 密文服务器
 
 这是 Android 与 Web 的密文同步后端。它有两种启动模式：本地开发使用 JSON 文件和固定测试令牌；
-试运行使用 PostgreSQL、受邀请账号和短期会话令牌。两种模式的密文 API 协议相同。
+试运行使用 PostgreSQL、短期会话令牌，并可选接入微信网页登录自动创建账号。两种模式的密文 API
+协议相同。
 
-它不包含公开注册、手机验证码或密码找回。未配置 COS 时，照片密文临时保存在 PostgreSQL 的
-JSONB 列中；配置私有腾讯云 COS 后，只有已加密的照片 `content` 进入 COS。登录密码只负责获得
-同步 API 权限，不能解开或重置私密空间密码。
+未配置微信时，账号仍由管理员创建；当前不包含手机验证码或密码找回。未配置 COS 时，照片密文临时
+保存在 PostgreSQL 的 JSONB 列中；配置私有腾讯云 COS 后，只有已加密的照片 `content` 进入 COS。
+登录密码只负责获得同步 API 权限，不能解开或重置私密空间密码。
 
 ## 本地运行
 
@@ -70,10 +71,35 @@ $env:MEMORY_RECALL_LISTEN_HOST = '0.0.0.0'
 npm.cmd start
 ```
 
+### 微信网页登录注册（可选）
+
+这是当前最短的公开注册路径：Web 点击“微信登录 / 注册”后跳转微信扫码，首次确认会自动创建
+Memorae 账号，随后回到 Web 并建立短期会话。需要在微信开放平台创建并审核网站应用，将回调地址
+配置为同一个 HTTPS 域名下的 `/v1/auth/wechat/callback`；服务端只保存微信身份映射，不接触微信密码。
+私密空间密码仍由 Memorae 本地创建和保护。
+
+```powershell
+$env:MEMORY_RECALL_WECHAT_APP_ID = '微信开放平台 AppID'
+$env:MEMORY_RECALL_WECHAT_APP_SECRET = '部署机密钥管理中的 AppSecret'
+$env:MEMORY_RECALL_WECHAT_CALLBACK_URL = 'https://你的Web域名/v1/auth/wechat/callback'
+$env:MEMORY_RECALL_WECHAT_STATE_SECRET = '至少32字符的随机服务端密钥'
+```
+
+Web 构建时还需开启按钮：
+
+```powershell
+$env:VITE_MEMORY_RECALL_WECHAT_ENABLED = '1'
+```
+
+四个服务端变量必须同时存在；缺少任一项时微信路由不会启用。当前 OAuth 回跳凭证保存在单实例
+内存中并且只能兑换一次，适合先在单台服务上跑通注册；多实例部署前应迁移到共享短期存储。
+
 设置 `MEMORY_RECALL_DATABASE_URL` 后，程序不会读取 `MEMORY_RECALL_LOCAL_TOKEN`。未设置数据库
 地址时，仍按上节的 JSON 本地模式启动。数据库迁移保存在 `migrations/`；账号、会话、钥匙信封、
 记忆密文和照片密文都按 `account_id` 隔离。`POST /v1/auth/login` 接受 `loginName`、`password` 和可选
-`deviceId`，成功后返回 `accessToken` 与 `expiresAt`。
+`deviceId`，成功后返回 `accessToken` 与 `expiresAt`。微信启用后还注册 `GET /v1/auth/wechat/start`、
+`GET /v1/auth/wechat/callback` 和 `POST /v1/auth/wechat/exchange`，其中最后一个接口只接受一次性
+浏览器回跳凭证。
 
 要把照片 `content` 迁到私有腾讯云 COS，必须同时配置以下四项；少任何一项服务都会拒绝启动。
 API 生成随机对象路径并保留三次失败清理尝试，客户端不接触长期 COS 密钥：
@@ -96,7 +122,9 @@ GET 和 SHA-256 校验，照片字节没有经过 API；Android/Web 三档真实
 ## 接口
 
 - `GET /health`：检查服务是否启动，不需要令牌。
-- `POST /v1/auth/login`、`POST /v1/auth/logout`：PostgreSQL 模式登录及撤销当前短期会话。
+- `POST /v1/auth/login`、`POST /v1/auth/logout`：PostgreSQL 模式密码登录及撤销当前短期会话。
+- `GET /v1/auth/wechat/start`、`GET /v1/auth/wechat/callback`、`POST /v1/auth/wechat/exchange`：
+  配置微信网站应用后使用的扫码登录、OAuth 回调和一次性会话兑换。
 - `PUT /v1/vault`、`GET /v1/vault`：保存或读取加密后的钥匙信封。
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
 - `PUT /v1/photos/:id`、`GET /v1/photos/:id`：仅在未配置 COS 时注册，供本地回归保存或读取原图密文。
@@ -142,7 +170,8 @@ npm.cmd run test:postgres
 ## 当前限制
 
 - 本地 JSON 模式只有一个固定测试用户和令牌；它只供开发回归。
-- PostgreSQL 模式只允许管理员创建受邀请账号，尚无公开注册或账号管理界面。
+- PostgreSQL 模式未配置微信时只允许管理员创建受邀请账号；微信注册目前是网站端 MVP，尚无账号管理界面。
+- 微信 OAuth 回跳凭证暂存单实例内存，多实例或进程重启会让未完成的回跳失效。
 - 未配置 COS 时照片密文暂存在 PostgreSQL JSONB 中；该回退路径不适合大文件或生产使用。
 - 服务端和 Android/Web 的三档短期签名直传直下、复合唯一键、幂等上传、摘要校验和过期清理已实现；
   真实 COS 最小单档链路已通过，三档真实照片和双端公网恢复尚未验收。配置 COS 后旧中转接口关闭。
