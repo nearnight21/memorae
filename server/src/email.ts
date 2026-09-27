@@ -1,9 +1,11 @@
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { connect as connectTls, type TLSSocket } from 'node:tls';
 import { connect as connectTcp, type Socket } from 'node:net';
+import { emailLoginName } from './auth';
 import type {
   EmailVerificationRecord,
   LoginSession,
+  PasswordAccount,
 } from './auth';
 
 export interface EmailSender {
@@ -155,6 +157,7 @@ export class SmtpEmailSender implements EmailSender {
 }
 
 export interface EmailRegistrationStore {
+  findAccountByLogin?(loginName: string): Promise<PasswordAccount | null>;
   createEmailVerification(record: EmailVerificationRecord): Promise<void>;
   findLatestEmailVerification(email: string): Promise<EmailVerificationRecord | null>;
   countEmailVerificationsSince(email: string, since: string): Promise<number>;
@@ -206,8 +209,14 @@ export class EmailRegistrationService {
     return email;
   }
 
-  async requestCode(value: string): Promise<void> {
+  async requestCode(value: string, scene?: 'login' | 'register'): Promise<void> {
     const email = this.normalizeEmail(value);
+    const findAccount = this.store.findAccountByLogin?.bind(this.store);
+    if (scene && findAccount) {
+      const account = await findAccount(emailLoginName(email));
+      if (scene === 'register' && account) throw new EmailRegistrationError(409, '该邮箱已注册，请直接登录。');
+      if (scene === 'login' && !account) throw new EmailRegistrationError(404, '该邮箱尚未注册，请先注册。');
+    }
     const now = this.now();
     const recent = await this.store.countEmailVerificationsSince(
       email,

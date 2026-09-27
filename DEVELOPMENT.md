@@ -40,6 +40,11 @@
   仅在相机停稳后打开；点击单条记忆时记录点击前相机，下滑或按钮收起详情时按同一套飞行动画
   反向回到展开视角；手势拖动保持无惯性（`animateEnable: false`）。验证：App `verify`
   （135 项测试、Expo Doctor 21 项）通过，arm64 standalone 包已覆盖安装；真机验收待执行。
+- 生产 Server 已从旧 Monorepo checkout 迁移到新仓：新增 `/srv/memorae`（`feature/app-ui` 浅克隆），
+  Compose 项目名保持 `deploy` 以复用 `deploy_postgres-data` 数据卷与原 `.env` 配置，系统 Caddy
+  的 `/v1/*`、`/health` 反代与 `127.0.0.1:8788` 端口不变；旧 `/srv/thinkpad/memory-recall-server`
+  保留为回滚余量。邮箱验证码注册已在生产启用（SMTP 暂用本地 QQ 邮箱配置，切换正式邮件服务前保持），
+  微信未配置；生产 Web 已重新构建部署并开启邮箱入口，`/`、`/thinkpad/`、`/health` 验证通过。
 
 ## 必须保持
 

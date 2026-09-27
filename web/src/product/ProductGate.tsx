@@ -132,6 +132,7 @@ export default function ProductGate({
   const [emailCode, setEmailCode] = useState('');
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const [emailNotice, setEmailNotice] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
@@ -424,7 +425,7 @@ export default function ProductGate({
     setError('');
     setEmailNotice('');
     try {
-      await requestEmailVerificationCode(MEMORY_RECALL_API_URL, email.trim());
+      await requestEmailVerificationCode(MEMORY_RECALL_API_URL, email.trim(), authMode);
       setEmailCodeSent(true);
       setEmailNotice('验证码已发送，请检查邮箱。');
     } catch (requestError) {
@@ -509,19 +510,27 @@ export default function ProductGate({
   }
 
   if (phase === 'account') {
+    const switchAuthMode = (mode: 'login' | 'register') => {
+      if (mode === authMode) return;
+      setAuthMode(mode);
+      setEmailCodeSent(false);
+      setEmailCode('');
+      setEmailNotice('');
+      setError('');
+    };
     return (
       <AuthShell titleId="account-login-title">
         <div className="account-login-form">
             {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && (
               <form
                 className="account-login-email"
-                aria-label="邮箱注册或登录"
+                aria-label={authMode === 'register' ? '邮箱注册' : '邮箱验证码登录'}
                 onSubmit={(event) => {
                   event.preventDefault();
                   void (emailCodeSent ? verifyEmail() : requestEmailCode());
                 }}
               >
-                <p className="account-login-method-label">邮箱验证码注册 / 登录</p>
+                <p className="account-login-method-label">{authMode === 'register' ? '注册新账号' : '邮箱验证码登录'}</p>
                 <label className="account-login-field" htmlFor="account-email">
                   <span>邮箱</span>
                   <input
@@ -560,7 +569,7 @@ export default function ProductGate({
                     </label>
                     <button className="account-login-code account-login-code-primary" type="submit" disabled={busy || emailCode.length !== 6}>
                       {busy && <LoaderCircle className="animate-spin" size={16} aria-hidden="true" />}
-                      完成注册 / 登录
+                      {authMode === 'register' ? '完成注册' : '登录'}
                     </button>
                     <button className="account-login-code account-login-code-secondary" type="button" onClick={() => setEmailCodeSent(false)} disabled={busy}>
                       更换邮箱
@@ -571,6 +580,8 @@ export default function ProductGate({
             )}
             {emailNotice && <p className="account-login-notice" role="status">{emailNotice}</p>}
             {error && <p className="account-login-error" role="alert">{error}</p>}
+            {authMode === 'login' && (
+              <>
             {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && <p className="account-login-divider">或使用账号密码登录</p>}
             <form className="account-login-password-form" onSubmit={handleSubmit}>
             <label className="account-login-field" htmlFor="account-login-name">
@@ -624,6 +635,20 @@ export default function ProductGate({
               >
                 微信登录 / 注册
               </button>
+            )}
+              </>
+            )}
+            {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && (
+              <p className="account-login-mode-switch">
+                {authMode === 'register' ? '已有账号？' : '还没有账号？'}
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode(authMode === 'register' ? 'login' : 'register')}
+                  disabled={busy}
+                >
+                  {authMode === 'register' ? '登录' : '注册'}
+                </button>
+              </p>
             )}
             {(WECHAT_LOGIN_ENABLED || EMAIL_LOGIN_ENABLED) && (
               <p className="account-login-invite-note">

@@ -268,3 +268,71 @@ test('email verification creates an account and consumes a code once', async (co
   assert.equal(replay.status, 401);
   assert.ok(await authStore.findAccountByLogin('email:new.user@example.com'));
 });
+
+test('email registration and login use distinct scenes', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'memory-recall-email-scene-'));
+  const authStore = new InMemoryPasswordAuthStore();
+  const sentCodes: string[] = [];
+  const app = await buildApp({
+    store: new JsonCipherStore(join(directory, 'store.json')),
+    allowedOrigins: ['http://localhost:3000'],
+    authenticator: new PasswordSessionAuthenticator(authStore, {
+      tokenPepper: TOKEN_PEPPER,
+      passwordHash: TEST_PASSWORD_HASH,
+    }),
+    emailStore: authStore,
+    email: {
+      codeSecret: 'test-only-email-code-secret-at-least-32-chars',
+      requestIntervalMs: 0,
+      sender: {
+        async sendVerificationCode(_email, code) {
+          sentCodes.push(code);
+        },
+      },
+    },
+  });
+  const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
+  context.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const post = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const loginMissing = await post('/v1/auth/email/request-code', {
+    email: 'scene.user@example.com',
+    scene: 'login',
+  });
+  assert.equal(loginMissing.status, 404);
+
+  const registerNew = await post('/v1/auth/email/request-code', {
+    email: 'scene.user@example.com',
+    scene: 'register',
+  });
+  assert.equal(registerNew.status, 204);
+  assert.match(sentCodes[0], /^\d{6}$/);
+
+  const verified = await post('/v1/auth/email/verify', {
+    email: 'scene.user@example.com',
+    code: sentCodes[0],
+  });
+  assert.equal(verified.status, 200);
+  assert.ok(await authStore.findAccountByLogin('email:scene.user@example.com'));
+
+  const registerExisting = await post('/v1/auth/email/request-code', {
+    email: 'scene.user@example.com',
+    scene: 'register',
+  });
+  assert.equal(registerExisting.status, 409);
+
+  const loginExisting = await post('/v1/auth/email/request-code', {
+    email: 'scene.user@example.com',
+    scene: 'login',
+  });
+  assert.equal(loginExisting.status, 204);
+  assert.match(sentCodes[1], /^\d{6}$/);
+});

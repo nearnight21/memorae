@@ -497,6 +497,31 @@
   text-align: center;
 }
 
+.account-login-mode-switch {
+  margin: 16px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.account-login-mode-switch button {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.account-login-mode-switch button:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
 .account-login-invite-note {
   margin: 20px 0 0;
   color: var(--color-text-primary);

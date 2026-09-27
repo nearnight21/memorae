@@ -91,6 +91,7 @@ interface WeChatExchangeBody {
 
 interface EmailCodeRequestBody {
   email: string;
+  scene?: 'login' | 'register';
 }
 
 interface EmailCodeVerifyBody {
@@ -174,7 +175,10 @@ const emailCodeRequestSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['email'],
-  properties: { email: { type: 'string', minLength: 3, maxLength: 190 } },
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 190 },
+    scene: { type: 'string', enum: ['login', 'register'] },
+  },
 } as const;
 
 const emailCodeVerifySchema = {
@@ -449,7 +453,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       schema: { body: emailCodeRequestSchema },
     }, async (request, reply) => {
       try {
-        await emailService.requestCode(request.body.email);
+        await emailService.requestCode(request.body.email, request.body.scene);
         return reply.code(204).send();
       } catch (error) {
         if (error instanceof EmailRegistrationError) {
