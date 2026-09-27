@@ -97,6 +97,7 @@ interface EmailCodeRequestBody {
 interface EmailCodeVerifyBody {
   email: string;
   code: string;
+  password?: string;
   deviceId?: string;
 }
 
@@ -188,6 +189,7 @@ const emailCodeVerifySchema = {
   properties: {
     email: { type: 'string', minLength: 3, maxLength: 190 },
     code: { type: 'string', minLength: 6, maxLength: 6 },
+    password: { type: 'string', minLength: 8, maxLength: 128 },
     deviceId: { type: 'string', maxLength: 200 },
   },
 } as const;
@@ -471,6 +473,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         const session = await emailService.verifyCode(
           request.body.email,
           request.body.code,
+          request.body.password,
           request.body.deviceId ?? 'web-email',
         );
         return reply.code(200).send(session);

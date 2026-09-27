@@ -164,13 +164,14 @@ export async function verifyEmailCode(
   baseUrl: string,
   email: string,
   code: string,
+  password?: string,
 ): Promise<EmailLoginSession> {
   let response: Response;
   try {
     response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/email/verify`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, code, deviceId: 'web-email' }),
+      body: JSON.stringify({ email, code, ...(password ? { password } : {}), deviceId: 'web-email' }),
     });
   } catch {
     throw new Error('暂时无法连接所忆，请稍后重试。');

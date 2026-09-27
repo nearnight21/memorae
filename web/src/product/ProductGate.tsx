@@ -133,6 +133,8 @@ export default function ProductGate({
   const [emailCodeSent, setEmailCodeSent] = useState(false);
   const [emailNotice, setEmailNotice] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerPasswordConfirmation, setRegisterPasswordConfirmation] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
@@ -425,7 +427,7 @@ export default function ProductGate({
     setError('');
     setEmailNotice('');
     try {
-      await requestEmailVerificationCode(MEMORY_RECALL_API_URL, email.trim(), authMode);
+      await requestEmailVerificationCode(MEMORY_RECALL_API_URL, email.trim(), 'register');
       setEmailCodeSent(true);
       setEmailNotice('验证码已发送，请检查邮箱。');
     } catch (requestError) {
@@ -437,11 +439,19 @@ export default function ProductGate({
 
   const verifyEmail = async () => {
     if (!MEMORY_RECALL_API_URL || busy) return;
+    if (registerPassword.length < 8) {
+      setError('密码至少需要 8 个字符。');
+      return;
+    }
+    if (registerPassword !== registerPasswordConfirmation) {
+      setError('两次输入的密码不一致。');
+      return;
+    }
     setBusy(true);
     setError('');
     setEmailNotice('');
     try {
-      const login = await verifyEmailCode(MEMORY_RECALL_API_URL, email.trim(), emailCode.trim());
+      const login = await verifyEmailCode(MEMORY_RECALL_API_URL, email.trim(), emailCode.trim(), registerPassword);
       try {
         if (vault) await validateAccountVault(login, vault);
       } catch (validationError) {
@@ -516,21 +526,23 @@ export default function ProductGate({
       setEmailCodeSent(false);
       setEmailCode('');
       setEmailNotice('');
+      setRegisterPassword('');
+      setRegisterPasswordConfirmation('');
       setError('');
     };
     return (
       <AuthShell titleId="account-login-title">
         <div className="account-login-form">
-            {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && (
+            {authMode === 'register' && MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && (
               <form
                 className="account-login-email"
-                aria-label={authMode === 'register' ? '邮箱注册' : '邮箱验证码登录'}
+                aria-label="邮箱注册"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void (emailCodeSent ? verifyEmail() : requestEmailCode());
                 }}
               >
-                <p className="account-login-method-label">{authMode === 'register' ? '注册新账号' : '邮箱验证码登录'}</p>
+                <p className="account-login-method-label">注册新账号</p>
                 <label className="account-login-field" htmlFor="account-email">
                   <span>邮箱</span>
                   <input
@@ -567,9 +579,33 @@ export default function ProductGate({
                         required
                       />
                     </label>
-                    <button className="account-login-code account-login-code-primary" type="submit" disabled={busy || emailCode.length !== 6}>
+                    <label className="account-login-field" htmlFor="account-register-password">
+                      <span>设置密码</span>
+                      <input
+                        id="account-register-password"
+                        type="password"
+                        value={registerPassword}
+                        onChange={(event) => setRegisterPassword(event.target.value)}
+                        autoComplete="new-password"
+                        placeholder="至少 8 位密码"
+                        required
+                      />
+                    </label>
+                    <label className="account-login-field" htmlFor="account-register-password-confirmation">
+                      <span>确认密码</span>
+                      <input
+                        id="account-register-password-confirmation"
+                        type="password"
+                        value={registerPasswordConfirmation}
+                        onChange={(event) => setRegisterPasswordConfirmation(event.target.value)}
+                        autoComplete="new-password"
+                        placeholder="再次输入密码"
+                        required
+                      />
+                    </label>
+                    <button className="account-login-code account-login-code-primary" type="submit" disabled={busy || emailCode.length !== 6 || registerPassword.length < 8}>
                       {busy && <LoaderCircle className="animate-spin" size={16} aria-hidden="true" />}
-                      {authMode === 'register' ? '完成注册' : '登录'}
+                      完成注册
                     </button>
                     <button className="account-login-code account-login-code-secondary" type="button" onClick={() => setEmailCodeSent(false)} disabled={busy}>
                       更换邮箱
@@ -582,7 +618,6 @@ export default function ProductGate({
             {error && <p className="account-login-error" role="alert">{error}</p>}
             {authMode === 'login' && (
               <>
-            {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && <p className="account-login-divider">或使用账号密码登录</p>}
             <form className="account-login-password-form" onSubmit={handleSubmit}>
             <label className="account-login-field" htmlFor="account-login-name">
               <span>账号</span>
@@ -593,7 +628,7 @@ export default function ProductGate({
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                placeholder="请输入所忆账号"
+                placeholder="请输入邮箱或所忆账号"
                 required
               />
             </label>
@@ -650,9 +685,9 @@ export default function ProductGate({
                 </button>
               </p>
             )}
-            {(WECHAT_LOGIN_ENABLED || EMAIL_LOGIN_ENABLED) && (
+            {authMode === 'register' && EMAIL_LOGIN_ENABLED && (
               <p className="account-login-invite-note">
-                首次验证后会自动创建 Memorae 账号；私密空间密码仍只在本机设置。
+                注册后可用邮箱和密码登录；私密空间密码仍只在本机设置。
               </p>
             )}
         </div>

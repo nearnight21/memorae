@@ -21,12 +21,14 @@ test('booting 阶段直接使用新版登录外壳而不是旧私密空间卡片
   assert.doesNotMatch(setupFallback, /phase === 'booting'/);
 });
 
-test('登录与注册为独立视图，默认登录并可互相切换', () => {
+test('登录与注册为独立视图，注册需设置密码，登录页不出现验证码', () => {
   assert.match(productGateSource, /useState<'login' \| 'register'>\('login'\)/);
-  assert.match(productGateSource, /authMode === 'register' \? '注册新账号' : '邮箱验证码登录'/);
-  assert.match(productGateSource, /authMode === 'register' \? '完成注册' : '登录'/);
-  assert.match(productGateSource, /authMode === 'register' \? '已有账号？' : '还没有账号？'/);
-  assert.match(productGateSource, /switchAuthMode\(authMode === 'register' \? 'login' : 'register'\)/);
-  assert.match(productGateSource, /requestEmailVerificationCode\(MEMORY_RECALL_API_URL, email\.trim\(\), authMode\)/);
-  assert.match(productGateSource, /authMode === 'login' && \(/);
+  assert.match(productGateSource, /authMode === 'register' && MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED/);
+  assert.match(productGateSource, /requestEmailVerificationCode\(MEMORY_RECALL_API_URL, email\.trim\(\), 'register'\)/);
+  assert.match(productGateSource, /verifyEmailCode\(MEMORY_RECALL_API_URL, email\.trim\(\), emailCode\.trim\(\), registerPassword\)/);
+  assert.match(productGateSource, /account-register-password/);
+  assert.match(productGateSource, /还没有账号？/);
+  assert.match(productGateSource, /已有账号？/);
+  assert.doesNotMatch(productGateSource, /邮箱验证码登录/);
+  assert.doesNotMatch(productGateSource, /完成注册 \/ 登录/);
 });

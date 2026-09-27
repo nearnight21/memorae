@@ -64,6 +64,7 @@ export interface PasswordAuthStore {
   findAccountByLogin(loginName: string): Promise<PasswordAccount | null>;
   findOrCreateWeChatAccount?(identity: WeChatIdentity): Promise<PasswordAccount>;
   findOrCreateEmailAccount?(email: string): Promise<PasswordAccount>;
+  createEmailAccount?(email: string, password: string): Promise<PasswordAccount>;
   createEmailVerification?(record: EmailVerificationRecord): Promise<void>;
   findLatestEmailVerification?(email: string): Promise<EmailVerificationRecord | null>;
   countEmailVerificationsSince?(email: string, since: string): Promise<number>;
@@ -111,6 +112,14 @@ export function emailLoginName(email: string): string {
   const normalized = email.trim().toLowerCase();
   if (!normalized || normalized.length > 190) throw new Error('邮箱地址无效。');
   return normalizeLoginName(`email:${normalized}`);
+}
+
+function accountLoginName(value: string): string {
+  const normalized = normalizeLoginName(value);
+  if (!normalized.includes(':') && normalized.indexOf('@') > 0) {
+    return emailLoginName(normalized);
+  }
+  return normalized;
 }
 
 function validateLoginCredentials(credentials: LoginCredentials): void {
@@ -188,7 +197,7 @@ export class PasswordSessionAuthenticator implements RequestAuthenticator {
   async login(credentials: LoginCredentials): Promise<LoginSession | null> {
     validateLoginCredentials(credentials);
     const account = await this.store.findAccountByLogin(
-      normalizeLoginName(credentials.loginName),
+      accountLoginName(credentials.loginName),
     );
     if (!account || account.disabledAt) return null;
     if (!await argon2Verify({ password: credentials.password, hash: account.passwordHash })) {
@@ -322,6 +331,20 @@ export class InMemoryPasswordAuthStore implements PasswordAuthStore {
       id: `email-${randomBytes(12).toString('hex')}`,
       loginName,
       passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+      disabledAt: null,
+    };
+    this.accountsByLogin.set(loginName, account);
+    return { ...account };
+  }
+
+  async createEmailAccount(email: string, password: string): Promise<PasswordAccount> {
+    const loginName = emailLoginName(email);
+    const existing = this.accountsByLogin.get(loginName);
+    if (existing) return { ...existing };
+    const account: PasswordAccount = {
+      id: `email-${randomBytes(12).toString('hex')}`,
+      loginName,
+      passwordHash: await hashPassword(password),
       disabledAt: null,
     };
     this.accountsByLogin.set(loginName, account);

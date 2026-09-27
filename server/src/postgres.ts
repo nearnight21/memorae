@@ -242,6 +242,31 @@ export class PostgresPasswordAuthStore implements PasswordAuthStore {
     }
   }
 
+  async createEmailAccount(email: string, password: string): Promise<PasswordAccount> {
+    const loginName = emailLoginName(email);
+    const existing = await this.findAccountByLogin(loginName);
+    if (existing) return existing;
+    const account: PasswordAccount = {
+      id: randomUUID(),
+      loginName,
+      passwordHash: await hashPassword(password),
+      disabledAt: null,
+    };
+    try {
+      await this.database.query(
+        `INSERT INTO accounts (id, login_name, password_hash)
+         VALUES ($1::uuid, $2, $3)`,
+        [account.id, account.loginName, account.passwordHash],
+      );
+      return account;
+    } catch (error) {
+      if ((error as { code?: string }).code !== '23505') throw error;
+      const concurrent = await this.findAccountByLogin(loginName);
+      if (concurrent) return concurrent;
+      throw error;
+    }
+  }
+
   async createEmailVerification(record: EmailVerificationRecord): Promise<void> {
     await this.database.query(
       `INSERT INTO email_verification_codes

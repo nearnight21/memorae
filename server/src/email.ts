@@ -158,6 +158,7 @@ export class SmtpEmailSender implements EmailSender {
 
 export interface EmailRegistrationStore {
   findAccountByLogin?(loginName: string): Promise<PasswordAccount | null>;
+  createEmailAccount?(email: string, password: string): Promise<PasswordAccount>;
   createEmailVerification(record: EmailVerificationRecord): Promise<void>;
   findLatestEmailVerification(email: string): Promise<EmailVerificationRecord | null>;
   countEmailVerificationsSince(email: string, since: string): Promise<number>;
@@ -236,7 +237,7 @@ export class EmailRegistrationService {
     });
   }
 
-  async verifyCode(value: string, code: string, deviceId?: string): Promise<LoginSession> {
+  async verifyCode(value: string, code: string, password?: string, deviceId?: string): Promise<LoginSession> {
     const email = this.normalizeEmail(value);
     if (!/^\d{6}$/.test(code.trim())) throw new EmailRegistrationError(401, '验证码不正确或已过期。');
     const record = await this.store.findLatestEmailVerification(email);
@@ -250,6 +251,15 @@ export class EmailRegistrationService {
     }
     if (!await this.store.consumeEmailVerification(record.id, now.toISOString())) {
       throw new EmailRegistrationError(401, '验证码不正确或已过期。');
+    }
+    if (password !== undefined) {
+      if (password.length < 8) throw new EmailRegistrationError(400, '密码至少需要 8 个字符。');
+      const findAccount = this.store.findAccountByLogin?.bind(this.store);
+      const createAccount = this.store.createEmailAccount?.bind(this.store);
+      if (!findAccount || !createAccount) throw new EmailRegistrationError(503, '邮箱注册暂时不可用。');
+      const existing = await findAccount(emailLoginName(email));
+      if (existing) throw new EmailRegistrationError(409, '该邮箱已注册，请直接登录。');
+      await createAccount(email, password);
     }
     return this.authenticator.loginEmail(email, deviceId);
   }

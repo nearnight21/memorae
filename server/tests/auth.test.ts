@@ -336,3 +336,66 @@ test('email registration and login use distinct scenes', async (context) => {
   assert.equal(loginExisting.status, 204);
   assert.match(sentCodes[1], /^\d{6}$/);
 });
+
+test('email registration with a password can sign in via email login', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'memory-recall-email-password-'));
+  const authStore = new InMemoryPasswordAuthStore();
+  let sentCode = '';
+  const app = await buildApp({
+    store: new JsonCipherStore(join(directory, 'store.json')),
+    allowedOrigins: ['http://localhost:3000'],
+    authenticator: new PasswordSessionAuthenticator(authStore, {
+      tokenPepper: TOKEN_PEPPER,
+      passwordHash: TEST_PASSWORD_HASH,
+    }),
+    emailStore: authStore,
+    email: {
+      codeSecret: 'test-only-email-code-secret-at-least-32-chars',
+      requestIntervalMs: 0,
+      sender: {
+        async sendVerificationCode(_email, code) {
+          sentCode = code;
+        },
+      },
+    },
+  });
+  const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
+  context.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const post = (path: string, body: unknown) => fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const codeRequest = await post('/v1/auth/email/request-code', {
+    email: 'password.user@example.com',
+    scene: 'register',
+  });
+  assert.equal(codeRequest.status, 204);
+  assert.match(sentCode, /^\d{6}$/);
+
+  const registered = await post('/v1/auth/email/verify', {
+    email: 'password.user@example.com',
+    code: sentCode,
+    password: 'correct-horse-battery',
+  });
+  assert.equal(registered.status, 200, await registered.clone().text());
+  const session = await registered.json() as { accessToken: string };
+  assert.match(session.accessToken, /^[A-Za-z0-9_-]+$/);
+
+  const loginWithEmail = await post('/v1/auth/login', {
+    loginName: 'password.user@example.com',
+    password: 'correct-horse-battery',
+  });
+  assert.equal(loginWithEmail.status, 200, await loginWithEmail.clone().text());
+
+  const wrongPassword = await post('/v1/auth/login', {
+    loginName: 'password.user@example.com',
+    password: 'wrong-password-1',
+  });
+  assert.equal(wrongPassword.status, 401);
+});
