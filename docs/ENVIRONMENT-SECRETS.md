@@ -37,6 +37,7 @@
 | 变量 | 必需性 / 默认值 | 敏感级别 | Local 来源 | CI / EAS 来源 | Production 来源 | 用途 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `EXPO_PUBLIC_MEMORY_RECALL_API_URL` | 可选，当前默认 `https://memorae.cn` | 公开配置 | `app/.env.local` 或进程环境 | EAS Environment / CI Variable | 正式 App 构建环境 | App 密文同步 API 根地址。 |
+| `EXPO_PUBLIC_MEMORY_RECALL_EMAIL_ENABLED` | 可选，默认关闭；`1` 开启 | 公开配置 | `app/.env.local` 或构建注入 | EAS Environment / CI Variable | 正式 App 构建环境 | 显示 App 邮箱验证码注册入口；Server 仍须同时配置 SMTP。 |
 | `MEMORY_RECALL_AMAP_ANDROID_KEY` | Native 地图必需 | 客户端凭据 | 构建进程环境 | EAS Secret / 受控 Runner Secret | 正式 Android 构建环境 | prebuild 时写入 Manifest；必须匹配包名与签名 SHA-1。 |
 | `EXPO_PUBLIC_AMAP_WEB_KEY` | WebView 地图必需 | 客户端凭据 | `app/.env.local` | EAS Environment/Secret | 正式 App 构建环境 | WebView Runtime 高德 JS Key。 |
 | `EXPO_PUBLIC_AMAP_WEB_SECURITY_CODE` | 与上项成对 | 客户端凭据 | `app/.env.local` | 同上 | 正式 App 构建环境 | WebView securityJsCode。 |

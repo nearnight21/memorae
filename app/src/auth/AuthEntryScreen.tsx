@@ -18,7 +18,7 @@ import { Canvas, Circle, Path, RadialGradient, vec } from '@shopify/react-native
 import { DEVICE_UNLOCK_LABEL } from '../services/deviceUnlockLabels';
 import { useAppTopInset } from '../ui/layout';
 
-export type AuthEntryPhase = 'booting' | 'select' | 'account' | 'locked' | 'setup';
+export type AuthEntryPhase = 'booting' | 'select' | 'account' | 'register' | 'locked' | 'setup';
 
 interface AuthEntryScreenProps {
   phase: AuthEntryPhase;
@@ -30,13 +30,28 @@ interface AuthEntryScreenProps {
   showPrivatePassword: boolean;
   error: string;
   busy: boolean;
+  emailRegisterEnabled: boolean;
+  registerEmail: string;
+  registerCode: string;
+  registerCodeSent: boolean;
+  registerPassword: string;
+  registerPasswordConfirmation: string;
+  showRegisterPassword: boolean;
   onAccountChange: (value: string) => void;
   onAccountPasswordChange: (value: string) => void;
   onPrivatePasswordChange: (value: string) => void;
   onPrivatePasswordConfirmationChange: (value: string) => void;
+  onRegisterEmailChange: (value: string) => void;
+  onRegisterCodeChange: (value: string) => void;
+  onRegisterPasswordChange: (value: string) => void;
+  onRegisterPasswordConfirmationChange: (value: string) => void;
   onToggleAccountPassword: () => void;
   onTogglePrivatePassword: () => void;
   onTogglePrivatePasswordConfirmation: () => void;
+  onToggleRegisterPassword: () => void;
+  onSendRegisterCode: () => void;
+  onOpenRegister: () => void;
+  onBackToLogin: () => void;
   onSubmit: () => void;
   onBiometricUnlock?: () => void;
   biometricUnlockEnabled?: boolean;
@@ -108,9 +123,15 @@ function PasswordField({
 function AccountInputField({
   value,
   onChangeText,
+  placeholder = '邮箱 / 所忆账号',
+  keyboardType = 'default',
+  maxLength,
 }: {
   value: string;
   onChangeText: (text: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'email-address' | 'number-pad';
+  maxLength?: number;
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -118,10 +139,12 @@ function AccountInputField({
     <View style={[styles.field, focused && styles.fieldFocused]}>
       <TextInput
         style={styles.fieldInput}
-        placeholder="手机号 / 账号"
+        placeholder={placeholder}
         placeholderTextColor="#9f998e"
         autoCapitalize="none"
         autoCorrect={false}
+        keyboardType={keyboardType}
+        maxLength={maxLength}
         value={value}
         onChangeText={onChangeText}
         onFocus={() => setFocused(true)}
@@ -262,13 +285,28 @@ export default function AuthEntryScreen({
   showPrivatePassword,
   error,
   busy,
+  emailRegisterEnabled,
+  registerEmail,
+  registerCode,
+  registerCodeSent,
+  registerPassword,
+  registerPasswordConfirmation,
+  showRegisterPassword,
   onAccountChange,
   onAccountPasswordChange,
   onPrivatePasswordChange,
   onPrivatePasswordConfirmationChange,
+  onRegisterEmailChange,
+  onRegisterCodeChange,
+  onRegisterPasswordChange,
+  onRegisterPasswordConfirmationChange,
   onToggleAccountPassword,
   onTogglePrivatePassword,
   onTogglePrivatePasswordConfirmation,
+  onToggleRegisterPassword,
+  onSendRegisterCode,
+  onOpenRegister,
+  onBackToLogin,
   onSubmit,
   onBiometricUnlock,
   biometricUnlockEnabled,
@@ -461,6 +499,20 @@ export default function AuthEntryScreen({
                   />
                   <ErrorSlot message={error} />
                   <PrimaryButton label="登录" busy={busy} onPress={onSubmit} />
+                  {emailRegisterEnabled ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="注册新账号"
+                      hitSlop={12}
+                      onPress={() => {
+                        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        onOpenRegister();
+                      }}
+                      style={styles.textLinkButton}
+                    >
+                      <Text style={styles.textLinkButtonText}>还没有账号？注册</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="本地模式"
@@ -486,6 +538,66 @@ export default function AuthEntryScreen({
                   </Pressable>
                 </>
               )
+            ) : phase === 'register' ? (
+              <>
+                <View style={styles.formHeader}>
+                  <Text style={styles.title}>注册新账号</Text>
+                  <Text style={styles.subtitle}>邮箱验证码注册，注册后可用邮箱和密码登录</Text>
+                </View>
+                <View style={styles.formGap} />
+                <AccountInputField
+                  value={registerEmail}
+                  onChangeText={onRegisterEmailChange}
+                  placeholder="邮箱地址"
+                  keyboardType="email-address"
+                />
+                {!registerCodeSent ? (
+                  <>
+                    <ErrorSlot message={error} />
+                    <PrimaryButton label="发送验证码" busy={busy} onPress={onSendRegisterCode} />
+                  </>
+                ) : (
+                  <>
+                    <AccountInputField
+                      value={registerCode}
+                      onChangeText={onRegisterCodeChange}
+                      placeholder="6 位验证码"
+                      keyboardType="number-pad"
+                      maxLength={6}
+                    />
+                    <PasswordField
+                      placeholder="登录密码（至少 8 位）"
+                      value={registerPassword}
+                      visible={showRegisterPassword}
+                      onChangeText={onRegisterPasswordChange}
+                      onToggle={onToggleRegisterPassword}
+                    />
+                    <PasswordField
+                      placeholder="确认登录密码"
+                      value={registerPasswordConfirmation}
+                      visible={showRegisterPassword}
+                      onChangeText={onRegisterPasswordConfirmationChange}
+                      onToggle={onToggleRegisterPassword}
+                      onSubmitEditing={onSubmit}
+                    />
+                    <ErrorSlot message={error} />
+                    <PrimaryButton label="完成注册" busy={busy} onPress={onSubmit} />
+                  </>
+                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="返回登录"
+                  hitSlop={12}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    onBackToLogin();
+                  }}
+                  style={styles.textLinkButton}
+                >
+                  <Text style={styles.textLinkButtonText}>已有账号？登录</Text>
+                </Pressable>
+                <SecurityBadge text="注册后可用邮箱和密码登录；私密空间密码仍只在本机设置" />
+              </>
             ) : phase === 'locked' ? (
               <>
                 <View style={styles.formHeader}>

@@ -95,3 +95,23 @@ test('设备解锁文案按平台区分面容与指纹，且凭证失效时自�
   assert.match(source, /await disableDeviceUnlock\(\);/);
   assert.match(source, /本机\$\{DEVICE_UNLOCK_LABEL\}凭证已经失效/);
 });
+
+test('App 注册入口与网页一致，且区分登录密码与私密空间密码', () => {
+  const source = readFileSync(new URL('../src/auth/AuthEntryScreen.tsx', import.meta.url), 'utf8');
+  assert.match(source, /'booting' \| 'select' \| 'account' \| 'register' \| 'locked' \| 'setup'/);
+  assert.match(source, /还没有账号？注册/);
+  assert.match(source, /已有账号？登录/);
+  assert.match(source, /phase === 'register'/);
+  assert.match(source, /登录密码（至少 8 位）/);
+  assert.match(source, /注册后可用邮箱和密码登录；私密空间密码仍只在本机设置/);
+  assert.match(source, /emailRegisterEnabled/);
+  assert.match(source, /onSendRegisterCode/);
+  assert.match(source, /onBackToLogin/);
+
+  const appSource = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+  assert.match(appSource, /EXPO_PUBLIC_MEMORY_RECALL_EMAIL_ENABLED === '1'/);
+  assert.match(appSource, /requestEmailVerificationCode\(AUTH_API_URL, registerEmail\.trim\(\), 'register'\)/);
+  assert.match(appSource, /verifyEmailCode\(AUTH_API_URL, registerEmail\.trim\(\), registerCode\.trim\(\), registerPassword\)/);
+  assert.match(appSource, /mode === 'register'/);
+  assert.match(appSource, /登录密码至少需要 8 个字符/);
+});

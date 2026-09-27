@@ -58,7 +58,7 @@ import {
   sanitizePhotoPerformanceMetric,
   type PhotoPerformanceMetric,
 } from './src/services/performanceDiagnostics';
-import { loginSyncSession, MemoryRecallSyncClient, PhotoVariantNotFoundError, SyncRequestError } from './src/sync/syncClient';
+import { loginSyncSession, MemoryRecallSyncClient, PhotoVariantNotFoundError, requestEmailVerificationCode, SyncRequestError, verifyEmailCode } from './src/sync/syncClient';
 import AuthEntryScreen, { type AuthEntryPhase } from './src/auth/AuthEntryScreen';
 import {
   clearStoredAccountSession,
@@ -194,11 +194,12 @@ interface PhotoViewerState {
   originalUri: string | null;
 }
 
-type Mode = 'loading' | 'select' | 'account' | 'setup' | 'locked' | 'unlocked';
+type Mode = 'loading' | 'select' | 'account' | 'register' | 'setup' | 'locked' | 'unlocked';
 type SyncAuthMode = 'account' | 'token';
 
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
 const AUTH_API_URL = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'https://memorae.cn';
+const EMAIL_REGISTER_ENABLED = process.env.EXPO_PUBLIC_MEMORY_RECALL_EMAIL_ENABLED === '1';
 
 function todayValue(): string {
   return new Date().toISOString().slice(0, 10);
@@ -304,6 +305,12 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [locationNetworkConsent, setLocationNetworkConsent] = useState(false);
   const [accountLoginName, setAccountLoginName] = useState('');
   const [accountLoginPassword, setAccountLoginPassword] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerCode, setRegisterCode] = useState('');
+  const [registerCodeSent, setRegisterCodeSent] = useState(false);
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerPasswordConfirmation, setRegisterPasswordConfirmation] = useState('');
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [showPrivatePassword, setShowPrivatePassword] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -357,6 +364,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     loading: '启动中',
     select: '选择模式',
     account: '账号登录',
+    register: '注册账号',
     setup: '未创建',
     locked: '已锁定',
     unlocked: '已解锁',
@@ -580,6 +588,41 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setAccountSession(login);
     setAccountLoginPassword('');
     setAuthError('');
+    if (remoteVault) {
+      await saveVaultEnvelope(remoteVault);
+      setVault(remoteVault);
+      setMode('locked');
+    } else {
+      setVault(null);
+      setMode('setup');
+    }
+  }
+
+  async function sendRegisterCode(): Promise<void> {
+    if (!EMAIL_REGISTER_ENABLED) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(registerEmail.trim())) throw new Error('请输入有效的邮箱地址。');
+    await requestEmailVerificationCode(AUTH_API_URL, registerEmail.trim(), 'register');
+    setRegisterCodeSent(true);
+    setStatus('验证码已发送，请检查邮箱。');
+  }
+
+  async function submitEmailRegistration(): Promise<void> {
+    if (!EMAIL_REGISTER_ENABLED) return;
+    if (!/^\d{6}$/.test(registerCode.trim())) throw new Error('请输入 6 位验证码。');
+    if (registerPassword.length < 8) throw new Error('登录密码至少需要 8 个字符。');
+    if (registerPassword !== registerPasswordConfirmation) throw new Error('两次输入的登录密码不一致。');
+    const login = await verifyEmailCode(AUTH_API_URL, registerEmail.trim(), registerCode.trim(), registerPassword);
+    const remoteVault = await readRemoteVault(login);
+    await saveStoredAccountSession(login);
+    await saveAppProfile('cloud');
+    configureStorageProfile('cloud');
+    setProfile('cloud');
+    setAccountSession(login);
+    setRegisterCode('');
+    setRegisterPassword('');
+    setRegisterPasswordConfirmation('');
+    setAuthError('');
+    setStatus('注册成功，已登录所忆账号。');
     if (remoteVault) {
       await saveVaultEnvelope(remoteVault);
       setVault(remoteVault);
@@ -1619,6 +1662,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setAuthError('');
     try {
       if (mode === 'account') await submitAccountLogin();
+      else if (mode === 'register') await submitEmailRegistration();
       else if (mode === 'setup') await createPrivateSpace();
       else if (mode === 'locked') await unlockWithPassword();
     } catch (error) {
@@ -2011,11 +2055,13 @@ export default function App({ testBootstrap }: AppProps = {}) {
       ? 'booting'
       : mode === 'account'
         ? 'account'
-        : mode === 'select'
-          ? 'select'
-        : mode === 'locked'
-          ? 'locked'
-          : 'setup';
+        : mode === 'register'
+          ? 'register'
+          : mode === 'select'
+            ? 'select'
+          : mode === 'locked'
+            ? 'locked'
+            : 'setup';
     return (
       <>
         <StatusBar style="dark" />
@@ -2029,13 +2075,38 @@ export default function App({ testBootstrap }: AppProps = {}) {
           showPrivatePassword={showPrivatePassword}
           error={authError}
           busy={busy}
+          emailRegisterEnabled={EMAIL_REGISTER_ENABLED}
+          registerEmail={registerEmail}
+          registerCode={registerCode}
+          registerCodeSent={registerCodeSent}
+          registerPassword={registerPassword}
+          registerPasswordConfirmation={registerPasswordConfirmation}
+          showRegisterPassword={showRegisterPassword}
           onAccountChange={setAccountLoginName}
           onAccountPasswordChange={setAccountLoginPassword}
           onPrivatePasswordChange={setPassword}
           onPrivatePasswordConfirmationChange={setPasswordConfirmation}
+          onRegisterEmailChange={(value) => {
+            setRegisterEmail(value);
+            setRegisterCodeSent(false);
+            setRegisterCode('');
+          }}
+          onRegisterCodeChange={setRegisterCode}
+          onRegisterPasswordChange={setRegisterPassword}
+          onRegisterPasswordConfirmationChange={setRegisterPasswordConfirmation}
           onToggleAccountPassword={() => setShowAccountPassword((value) => !value)}
           onTogglePrivatePassword={() => setShowPrivatePassword((value) => !value)}
           onTogglePrivatePasswordConfirmation={() => setShowPrivatePassword((value) => !value)}
+          onToggleRegisterPassword={() => setShowRegisterPassword((value) => !value)}
+          onSendRegisterCode={() => void runTask(sendRegisterCode)}
+          onOpenRegister={() => {
+            setAuthError('');
+            setMode('register');
+          }}
+          onBackToLogin={() => {
+            setAuthError('');
+            setMode('account');
+          }}
           onSubmit={() => void runTask(submitAuthEntry)}
           biometricUnlockEnabled={deviceUnlockEnabled}
           onBiometricUnlock={() => void runTask(quickUnlock)}
