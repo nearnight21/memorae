@@ -1,6 +1,6 @@
 # Memorae 开发交接
 
-> 最后更新：2026-09-17
+> 最后更新：2026-09-27
 >
 > 当前阶段：Android 与 iOS 统一使用 WebView + 高德 JS API 2.0（WebGL 3D 硬件加速），并加载高德自定义样式 ID；Android 原生 AMap Renderer 已于 2026-09-15 移除。
 
@@ -35,6 +35,11 @@
   SecureStore 设备钥匙、锁屏入口与自动唤起链路；iOS 重录面容或指纹导致凭证失效时会自动清理
   记录并回退到密码解锁；自动唤起仅在 App 处于前台时触发一次。本轮只改 JS，未重新构建原生包，
   iOS 面容真机验收待下次 EAS 构建后执行。验证：App `verify`（125 项测试、Expo Doctor 21 项）通过。
+- 地图气泡点击交互闭环：相机推进改为 WebView 内自绘 requestAnimationFrame 飞行（zoom 与中心
+  同步插值、600ms），飞行期间抑制高德原生相机事件、停稳后统一发出一次 `cameraIdle`，手账详情
+  仅在相机停稳后打开；点击单条记忆时记录点击前相机，下滑或按钮收起详情时按同一套飞行动画
+  反向回到展开视角；手势拖动保持无惯性（`animateEnable: false`）。验证：App `verify`
+  （135 项测试、Expo Doctor 21 项）通过，arm64 standalone 包已覆盖安装；真机验收待执行。
 
 ## 必须保持
 

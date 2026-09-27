@@ -32,6 +32,7 @@ export function toWebViewCamera(camera: CameraState): AmapMapCamera {
     lat: camera.latitude,
     lng: camera.longitude,
     zoom: camera.zoom,
+    ...(camera.animate !== undefined ? { animate: camera.animate } : {}),
   };
 }
 

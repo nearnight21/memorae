@@ -102,8 +102,12 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /document\.addEventListener\('message', handleMessage\)/);
   assert.doesNotMatch(runtimeSource, /#map \{ width: calc\(100% \+ 400px\); \}/);
   assert.match(runtimeSource, /const cameraCenter = \(\) => map\?\.getCenter\?\.\(\) \|\| null/);
-  assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat/);
-  assert.match(runtimeSource, /map\.setZoomAndCenter\(zoom, \[lng, lat\], immediately/);
+  assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
+  assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat/);
+  assert.match(runtimeSource, /window\.requestAnimationFrame\(step\)/);
+  assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
+  assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
+  assert.match(runtimeSource, /animateEnable: false/);
   assert.doesNotMatch(runtimeSource, /CAMERA_FOCUS_OFFSET_X|containerToLngLat|map\.panBy/);
   assert.match(runtimeSource, /postCameraIdle/);
   assert.match(runtimeSource, /message\.type === 'setCamera'/);
@@ -281,7 +285,7 @@ test('正式 Home 对时间轴和安静区提供平滑入场与出场过渡，�
   assert.match(detailSource, /onDismissStart\?:\s*\(\)\s*=>\s*void/);
   assert.match(detailSource, /detailDismissing\.current = true;\s*\r?\n\s*onDismissStart\?\.()/);
   assert.match(appSource, /const \[detailClosing, setDetailClosing\] = useState\(false\)/);
-  assert.match(appSource, /onDismissStart=\{\(\) => setDetailClosing\(true\)\}/);
+  assert.match(appSource, /onDismissStart=\{\(\) => \{[\s\S]{0,120}setDetailClosing\(true\)/);
   assert.match(appSource, /chromeVisible=\{\(!selectedMemory \|\| detailClosing\)/);
 });
 
@@ -303,6 +307,34 @@ test('正式 App 只把有效地点坐标送入本地地图，不把正文或照
   assert.match(source, /provider: 'amap'/);
   assert.match(source, /handleMarkerPress/);
   assert.doesNotMatch(source, /AmapJsWebViewMap|AmapWebViewMarker|AmapMapCamera/);
+});
+
+test('气泡点击推进使用平滑相机动画，停稳后打开详情并在收起时反向飞回展开视角', async () => {
+  const [appSource, runtimeSource, adapterSource] = await Promise.all([
+    readFile(new URL('../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/map/amapRuntimeHtml.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/map/webViewMapAdapterModel.ts', import.meta.url), 'utf8'),
+  ]);
+  // runtime 层：zoom 与中心同步插值的自绘飞行，飞行期间抑制原生相机事件，结束后统一停稳
+  assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
+  assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat, duration = 600\)/);
+  assert.match(runtimeSource, /if \(token !== flightToken \|\| !map\) return/);
+  assert.match(runtimeSource, /map\.on\('zoomend', \(\) => \{ if \(flightActive\) return; render\(\); postCameraIdle\(\); \}\)/);
+  assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
+  assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
+  assert.match(runtimeSource, /animateEnable: false/);
+  // RN 层：animate 从中立 CameraState 透传到 WebView camera DTO
+  assert.match(adapterSource, /animate !== undefined \? \{ animate: camera\.animate \}/);
+  // App 层：单条气泡只在需要位移或缩放时才飞行动画，等待停稳后再打开详情
+  assert.match(appSource, /pendingOpenMemoryRef/);
+  assert.match(appSource, /animate: true/);
+  assert.match(appSource, /zoomDelta > 0\.05/);
+  assert.match(appSource, /if \(pendingOpenMemoryRef\.current === memory\)/);
+  // App 层：收起详情时用同一套飞行动画反向回到点击前记录的展开视角
+  assert.match(appSource, /detailReturnCameraRef\.current = \{ \.\.\.homeViewport\.camera \}/);
+  assert.match(appSource, /function restoreDetailCamera\(\): void \{/);
+  assert.match(appSource, /setHomeCameraTarget\(\{ \.\.\.returnCamera, animate: true \}\)/);
+  assert.match(appSource, /onDismissStart=\{\(\) => \{[\s\S]{0,80}restoreDetailCamera\(\)/);
 });
 
 test('真实 MemoryV2 到地图 Marker 的适配只暴露坐标，并能反查详情', () => {

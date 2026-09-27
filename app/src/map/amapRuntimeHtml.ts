@@ -55,7 +55,6 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       let map = null;
       let selectedId = null;
       let tileTimeout = null;
-      let initialCameraPositioned = false;
       const notice = document.getElementById('notice');
       const post = (message) => window.ReactNativeWebView?.postMessage(JSON.stringify(message));
       post({ type: 'runtimeStarted' });
@@ -105,11 +104,61 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
-      const setCamera = (zoom, lng, lat) => {
+      let flightToken = 0;
+      let flightActive = false;
+      const cancelCameraFlight = () => {
+        flightToken += 1;
+        flightActive = false;
+      };
+      const animateCamera = (targetZoom, targetLng, targetLat, duration = 600) => {
+        const center = cameraCenter();
+        const startLng = center ? (typeof center.getLng === 'function' ? center.getLng() : center[0]) : null;
+        const startLat = center ? (typeof center.getLat === 'function' ? center.getLat() : center[1]) : null;
+        const startZoom = map.getZoom?.();
+        if (!Number.isFinite(startLng) || !Number.isFinite(startLat) || !Number.isFinite(startZoom)) {
+          map.setZoomAndCenter(targetZoom, [targetLng, targetLat], true);
+          return;
+        }
+        const token = ++flightToken;
+        flightActive = true;
+        post({ type: 'cameraMoveStart' });
+        const startedAt = window.performance?.now?.() ?? Date.now();
+        const easeInOutCubic = (progress) => (
+          progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2
+        );
+        const step = () => {
+          if (token !== flightToken || !map) return;
+          const now = window.performance?.now?.() ?? Date.now();
+          const progress = Math.min(1, (now - startedAt) / duration);
+          const eased = easeInOutCubic(progress);
+          map.setZoomAndCenter(
+            startZoom + (targetZoom - startZoom) * eased,
+            [
+              startLng + (targetLng - startLng) * eased,
+              startLat + (targetLat - startLat) * eased,
+            ],
+            true,
+          );
+          if (progress < 1) {
+            window.requestAnimationFrame(step);
+            return;
+          }
+          flightActive = false;
+          render();
+          postCameraIdle();
+        };
+        window.requestAnimationFrame(step);
+      };
+      const setCamera = (zoom, lng, lat, animate = false) => {
         if (!map) return;
-        const immediately = !initialCameraPositioned;
-        initialCameraPositioned = true;
-        map.setZoomAndCenter(zoom, [lng, lat], immediately, 500);
+        if (animate) {
+          animateCamera(zoom, lng, lat);
+          return;
+        }
+        cancelCameraFlight();
+        map.setZoomAndCenter(zoom, [lng, lat], true);
       };
       const postCameraIdle = () => {
         if (!map) return;
@@ -350,7 +399,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
               : group.scope === 'city' ? 9 : (zoom >= 9 ? zoom : 9);
             const centerLat = group.centerLat ?? group.lat;
             const centerLng = group.centerLng ?? group.lng;
-            setCamera(nextZoom, centerLng, centerLat);
+            setCamera(nextZoom, centerLng, centerLat, true);
             post({ type: 'clusterPressed', ids, count, scope: group.scope, label: group.label, lat: centerLat, lng: centerLng });
           });
           marker.setMap(map);
@@ -394,10 +443,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
             && Math.abs(currentLng - message.lng) < 0.000001
             && Number.isFinite(currentZoom) && Math.abs(currentZoom - zoom) < 0.001
           ) return;
-          setCamera(zoom, message.lng, message.lat);
+          setCamera(zoom, message.lng, message.lat, Boolean(message.animate));
         } else if (message.type === 'clearSensitiveData') {
           window.__MEMORY_MARKERS__ = [];
           selectedId = null;
+          cancelCameraFlight();
           render();
         }
       };
@@ -429,10 +479,10 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         try {
           map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: false, rotateEnable: false, pitchEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
-          map.on('movestart', () => post({ type: 'cameraMoveStart' }));
-          map.on('moveend', postCameraIdle);
-          map.on('zoomstart', () => post({ type: 'cameraMoveStart' }));
-          map.on('zoomend', () => { render(); postCameraIdle(); });
+          map.on('movestart', () => { if (!flightActive) post({ type: 'cameraMoveStart' }); });
+          map.on('moveend', () => { if (!flightActive) postCameraIdle(); });
+          map.on('zoomstart', () => { if (!flightActive) post({ type: 'cameraMoveStart' }); });
+          map.on('zoomend', () => { if (flightActive) return; render(); postCameraIdle(); });
           map.on('complete', () => {
             if (tileTimeout) window.clearTimeout(tileTimeout);
             setNotice('', false);
