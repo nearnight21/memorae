@@ -105,6 +105,9 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat/);
   assert.match(runtimeSource, /window\.requestAnimationFrame\(step\)/);
+  assert.match(runtimeSource, /supportsSmoothCameraFlight/);
+  assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
+  assert.match(runtimeSource, /lastCameraIdleSignature/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
   assert.match(runtimeSource, /animateEnable: false/);
@@ -319,6 +322,8 @@ test('气泡点击推进使用平滑相机动画，停稳后打开详情并在�
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat, duration = 600\)/);
   assert.match(runtimeSource, /if \(token !== flightToken \|\| !map\) return/);
+  assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
+  assert.match(runtimeSource, /const signature = \[lat\.toFixed\(6\), lng\.toFixed\(6\)/);
   assert.match(runtimeSource, /map\.on\('zoomend', \(\) => \{ if \(flightActive\) return; render\(\); postCameraIdle\(\); \}\)/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);

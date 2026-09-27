@@ -104,8 +104,13 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
+      // WKWebView on iOS can briefly clear the WebGL map surface while it is
+      // being updated every frame. Keep iOS on the immediate camera path;
+      // Android can use the smoother interpolated flight.
+      const supportsSmoothCameraFlight = !/iPad|iPhone|iPod/i.test(navigator.userAgent || '');
       let flightToken = 0;
       let flightActive = false;
+      let lastCameraIdleSignature = null;
       const cancelCameraFlight = () => {
         flightToken += 1;
         flightActive = false;
@@ -153,7 +158,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       };
       const setCamera = (zoom, lng, lat, animate = false) => {
         if (!map) return;
-        if (animate) {
+        if (animate && supportsSmoothCameraFlight) {
           animateCamera(zoom, lng, lat);
           return;
         }
@@ -176,7 +181,12 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           east: northEast.getLng(),
           west: southWest.getLng(),
         } : undefined;
-        if (Number.isFinite(lat) && Number.isFinite(lng)) post({ type: 'cameraIdle', lat, lng, zoom, bounds: cameraBounds });
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const signature = [lat.toFixed(6), lng.toFixed(6), Number.isFinite(zoom) ? zoom.toFixed(3) : ''].join(':');
+          if (signature === lastCameraIdleSignature) return;
+          lastCameraIdleSignature = signature;
+          post({ type: 'cameraIdle', lat, lng, zoom, bounds: cameraBounds });
+        }
       };
       const fallbackPhoto = () => {
         const fallback = document.createElement('span');
