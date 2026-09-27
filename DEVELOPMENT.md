@@ -45,6 +45,11 @@
   的 `/v1/*`、`/health` 反代与 `127.0.0.1:8788` 端口不变；旧 `/srv/thinkpad/memory-recall-server`
   保留为回滚余量。邮箱验证码注册已在生产启用（SMTP 暂用本地 QQ 邮箱配置，切换正式邮件服务前保持），
   微信未配置；生产 Web 已重新构建部署并开启邮箱入口，`/`、`/thinkpad/`、`/health` 验证通过。
+- 登录与注册拆分：默认登录（邮箱或账号 + 密码），注册为独立视图（邮箱验证码 + 设置密码），
+  注册后可直接用邮箱和密码登录；登录页不再出现验证码入口。生产 Server 因服务器到 GitHub
+  网络中断改用本地 `git format-patch` 应用（工作树内容为 5b2e2a3，网络恢复后执行
+  `cd /srv/memorae && git checkout -- . && git pull --ff-only` 对齐）。验证：server 15 项、
+  web 100 项测试通过；生产 `/health`、登录接口与页面文案均已核对。
 
 ## 必须保持
 
