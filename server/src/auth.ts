@@ -23,10 +23,21 @@ export interface WeChatIdentity {
   openId: string;
 }
 
+export interface EmailVerificationRecord {
+  id: string;
+  email: string;
+  codeHash: string;
+  expiresAt: string;
+  attempts: number;
+  consumedAt: string | null;
+  createdAt: string;
+}
+
 export interface RequestAuthenticator {
   authenticate(accessToken: string): Promise<AuthenticatedAccount | null>;
   login?(credentials: LoginCredentials): Promise<LoginSession | null>;
   loginWeChat?(identity: WeChatIdentity, deviceId?: string): Promise<LoginSession>;
+  loginEmail?(email: string, deviceId?: string): Promise<LoginSession>;
   logout?(accessToken: string): Promise<void>;
 }
 
@@ -52,6 +63,12 @@ export interface NewStoredSession extends StoredSession {
 export interface PasswordAuthStore {
   findAccountByLogin(loginName: string): Promise<PasswordAccount | null>;
   findOrCreateWeChatAccount?(identity: WeChatIdentity): Promise<PasswordAccount>;
+  findOrCreateEmailAccount?(email: string): Promise<PasswordAccount>;
+  createEmailVerification?(record: EmailVerificationRecord): Promise<void>;
+  findLatestEmailVerification?(email: string): Promise<EmailVerificationRecord | null>;
+  countEmailVerificationsSince?(email: string, since: string): Promise<number>;
+  incrementEmailVerificationAttempts?(id: string): Promise<void>;
+  consumeEmailVerification?(id: string, consumedAt: string): Promise<boolean>;
   createSession(session: NewStoredSession): Promise<void>;
   findSessionByTokenHash(tokenHash: string): Promise<StoredSession | null>;
   revokeSessionByTokenHash(tokenHash: string, revokedAt: string): Promise<void>;
@@ -88,6 +105,12 @@ export function weChatLoginName(identity: WeChatIdentity): string {
     throw new Error('微信身份标识无效。');
   }
   return normalizeLoginName(`wechat:${subject}`);
+}
+
+export function emailLoginName(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || normalized.length > 190) throw new Error('邮箱地址无效。');
+  return normalizeLoginName(`email:${normalized}`);
 }
 
 function validateLoginCredentials(credentials: LoginCredentials): void {
@@ -206,6 +229,24 @@ export class PasswordSessionAuthenticator implements RequestAuthenticator {
     return { accessToken, expiresAt };
   }
 
+  async loginEmail(email: string, deviceId?: string): Promise<LoginSession> {
+    const findOrCreate = this.store.findOrCreateEmailAccount;
+    if (!findOrCreate) throw new Error('当前认证存储未启用邮箱注册。');
+    const account = await findOrCreate.call(this.store, email);
+    const accessToken = randomBytes(32).toString('base64url');
+    const createdAt = this.now();
+    const expiresAt = new Date(createdAt.getTime() + this.sessionTtlMs).toISOString();
+    await this.store.createSession({
+      accountId: account.id,
+      tokenHash: tokenHash(this.options.tokenPepper, accessToken),
+      deviceId: deviceId?.trim() || null,
+      createdAt: createdAt.toISOString(),
+      expiresAt,
+      revokedAt: null,
+    });
+    return { accessToken, expiresAt };
+  }
+
   async authenticate(accessToken: string): Promise<AuthenticatedAccount | null> {
     if (!accessToken) return null;
     const session = await this.store.findSessionByTokenHash(
@@ -271,6 +312,51 @@ export class InMemoryPasswordAuthStore implements PasswordAuthStore {
     };
     this.accountsByLogin.set(loginName, account);
     return { ...account };
+  }
+
+  async findOrCreateEmailAccount(email: string): Promise<PasswordAccount> {
+    const loginName = emailLoginName(email);
+    const existing = this.accountsByLogin.get(loginName);
+    if (existing) return { ...existing };
+    const account: PasswordAccount = {
+      id: `email-${randomBytes(12).toString('hex')}`,
+      loginName,
+      passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+      disabledAt: null,
+    };
+    this.accountsByLogin.set(loginName, account);
+    return { ...account };
+  }
+
+  private readonly emailVerificationRecords = new Map<string, EmailVerificationRecord>();
+
+  async createEmailVerification(record: EmailVerificationRecord): Promise<void> {
+    this.emailVerificationRecords.set(record.id, { ...record });
+  }
+
+  async findLatestEmailVerification(email: string): Promise<EmailVerificationRecord | null> {
+    const normalized = email.trim().toLowerCase();
+    return [...this.emailVerificationRecords.values()]
+      .filter((record) => record.email === normalized && !record.consumedAt)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
+  }
+
+  async countEmailVerificationsSince(email: string, since: string): Promise<number> {
+    const normalized = email.trim().toLowerCase();
+    return [...this.emailVerificationRecords.values()]
+      .filter((record) => record.email === normalized && record.createdAt >= since).length;
+  }
+
+  async incrementEmailVerificationAttempts(id: string): Promise<void> {
+    const record = this.emailVerificationRecords.get(id);
+    if (record) record.attempts += 1;
+  }
+
+  async consumeEmailVerification(id: string, consumedAt: string): Promise<boolean> {
+    const record = this.emailVerificationRecords.get(id);
+    if (!record || record.consumedAt) return false;
+    record.consumedAt = consumedAt;
+    return true;
   }
 
   async createSession(session: NewStoredSession): Promise<void> {

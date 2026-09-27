@@ -8,3 +8,4 @@ export const MEMORY_RECALL_API_URL = (
 ).replace(/\/+$/, '');
 
 export const WECHAT_LOGIN_ENABLED = import.meta.env?.VITE_MEMORY_RECALL_WECHAT_ENABLED === '1';
+export const EMAIL_LOGIN_ENABLED = import.meta.env?.VITE_MEMORY_RECALL_EMAIL_ENABLED === '1';

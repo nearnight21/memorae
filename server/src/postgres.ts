@@ -8,8 +8,9 @@ import type {
   PasswordHashOptions,
   StoredSession,
   WeChatIdentity,
+  EmailVerificationRecord,
 } from './auth';
-import { hashPassword, weChatLoginName } from './auth';
+import { emailLoginName, hashPassword, weChatLoginName } from './auth';
 import type {
   EncryptedMemoryV1,
   EncryptedPhotoV1,
@@ -214,6 +215,100 @@ export class PostgresPasswordAuthStore implements PasswordAuthStore {
       if (concurrent) return concurrent;
       throw error;
     }
+  }
+
+  async findOrCreateEmailAccount(email: string): Promise<PasswordAccount> {
+    const loginName = emailLoginName(email);
+    const existing = await this.findAccountByLogin(loginName);
+    if (existing) return existing;
+    const account: PasswordAccount = {
+      id: randomUUID(),
+      loginName,
+      passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+      disabledAt: null,
+    };
+    try {
+      await this.database.query(
+        `INSERT INTO accounts (id, login_name, password_hash)
+         VALUES ($1::uuid, $2, $3)`,
+        [account.id, account.loginName, account.passwordHash],
+      );
+      return account;
+    } catch (error) {
+      if ((error as { code?: string }).code !== '23505') throw error;
+      const concurrent = await this.findAccountByLogin(loginName);
+      if (concurrent) return concurrent;
+      throw error;
+    }
+  }
+
+  async createEmailVerification(record: EmailVerificationRecord): Promise<void> {
+    await this.database.query(
+      `INSERT INTO email_verification_codes
+         (id, email, code_hash, expires_at, attempts, consumed_at, created_at)
+       VALUES ($1::uuid, $2, $3, $4::timestamptz, $5, $6::timestamptz, $7::timestamptz)`,
+      [record.id, record.email, record.codeHash, record.expiresAt, record.attempts, record.consumedAt, record.createdAt],
+    );
+  }
+
+  async findLatestEmailVerification(email: string): Promise<EmailVerificationRecord | null> {
+    const result = await this.database.query<{
+      id: string;
+      email: string;
+      code_hash: string;
+      expires_at: string | Date;
+      attempts: number;
+      consumed_at: string | Date | null;
+      created_at: string | Date;
+    }>(
+      `SELECT id::text, email, code_hash, expires_at, attempts, consumed_at, created_at
+       FROM email_verification_codes
+       WHERE email = $1 AND consumed_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [email.trim().toLowerCase()],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      email: row.email,
+      codeHash: row.code_hash,
+      expiresAt: new Date(row.expires_at).toISOString(),
+      attempts: row.attempts,
+      consumedAt: row.consumed_at ? new Date(row.consumed_at).toISOString() : null,
+      createdAt: new Date(row.created_at).toISOString(),
+    };
+  }
+
+  async countEmailVerificationsSince(email: string, since: string): Promise<number> {
+    const result = await this.database.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM email_verification_codes
+       WHERE email = $1 AND created_at >= $2::timestamptz`,
+      [email.trim().toLowerCase(), since],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async incrementEmailVerificationAttempts(id: string): Promise<void> {
+    await this.database.query(
+      `UPDATE email_verification_codes
+       SET attempts = attempts + 1
+       WHERE id = $1::uuid AND consumed_at IS NULL`,
+      [id],
+    );
+  }
+
+  async consumeEmailVerification(id: string, consumedAt: string): Promise<boolean> {
+    const result = await this.database.query(
+      `UPDATE email_verification_codes
+       SET consumed_at = $2::timestamptz
+       WHERE id = $1::uuid AND consumed_at IS NULL
+       RETURNING id`,
+      [id, consumedAt],
+    );
+    return Boolean(result.rowCount);
   }
 
   async createSession(session: NewStoredSession): Promise<void> {

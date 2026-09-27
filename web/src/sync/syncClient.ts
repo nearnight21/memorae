@@ -25,6 +25,8 @@ export interface SyncLoginSession {
 
 export interface WeChatLoginSession extends SyncLoginSession {}
 
+export interface EmailLoginSession extends SyncLoginSession {}
+
 interface PhotoUploadGrant {
   status: 'upload';
   uploadId: string;
@@ -132,6 +134,51 @@ export async function exchangeWeChatLoginCode(
     throw new SyncRequestError(response.status, '微信登录暂时不可用，请稍后重试。');
   }
   return response.json() as Promise<WeChatLoginSession>;
+}
+
+export async function requestEmailVerificationCode(baseUrl: string, email: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/email/request-code`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+  } catch {
+    throw new Error('暂时无法连接所忆，请稍后重试。');
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.status === 429 || response.status === 400) {
+      throw new SyncRequestError(response.status, body?.error ?? '邮箱地址无效或请求过于频繁。');
+    }
+    throw new SyncRequestError(response.status, body?.error ?? '验证码邮件暂时无法发送，请稍后重试。');
+  }
+}
+
+export async function verifyEmailCode(
+  baseUrl: string,
+  email: string,
+  code: string,
+): Promise<EmailLoginSession> {
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/+$/, '')}/v1/auth/email/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, code, deviceId: 'web-email' }),
+    });
+  } catch {
+    throw new Error('暂时无法连接所忆，请稍后重试。');
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    if (response.status === 401) {
+      throw new SyncRequestError(response.status, body?.error ?? '验证码不正确或已过期。');
+    }
+    throw new SyncRequestError(response.status, body?.error ?? '邮箱登录暂时不可用，请稍后重试。');
+  }
+  return response.json() as Promise<EmailLoginSession>;
 }
 
 export class MemoryRecallSyncClient {

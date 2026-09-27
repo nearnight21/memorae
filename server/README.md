@@ -4,7 +4,7 @@
 试运行使用 PostgreSQL、短期会话令牌，并可选接入微信网页登录自动创建账号。两种模式的密文 API
 协议相同。
 
-未配置微信时，账号仍由管理员创建；当前不包含手机验证码或密码找回。未配置 COS 时，照片密文临时
+未配置微信和邮箱时，账号仍由管理员创建；当前不包含手机验证码或密码找回。未配置 COS 时，照片密文临时
 保存在 PostgreSQL 的 JSONB 列中；配置私有腾讯云 COS 后，只有已加密的照片 `content` 进入 COS。
 登录密码只负责获得同步 API 权限，不能解开或重置私密空间密码。
 
@@ -91,6 +91,30 @@ Web 构建时还需开启按钮：
 $env:VITE_MEMORY_RECALL_WECHAT_ENABLED = '1'
 ```
 
+### 邮箱验证码注册（可选）
+
+这是不依赖微信开放平台的最短注册方式：用户输入邮箱，服务端发送一次性验证码；首次验证自动创建
+账号，之后仍可用同一邮箱验证码登录。验证码只保存哈希，10 分钟过期，单个邮箱默认 60 秒内不能
+重复发送，最多尝试 5 次。
+
+```powershell
+$env:MEMORY_RECALL_EMAIL_SMTP_HOST = 'smtp.example.com'
+$env:MEMORY_RECALL_EMAIL_SMTP_PORT = '587'
+$env:MEMORY_RECALL_EMAIL_SMTP_SECURE = '0'
+$env:MEMORY_RECALL_EMAIL_SMTP_USERNAME = '部署机密钥管理中的 SMTP 用户名'
+$env:MEMORY_RECALL_EMAIL_SMTP_PASSWORD = '部署机密钥管理中的 SMTP 专用授权码'
+$env:MEMORY_RECALL_EMAIL_FROM = 'Memorae <no-reply@example.com>'
+```
+
+Web 构建时开启入口：
+
+```powershell
+$env:VITE_MEMORY_RECALL_EMAIL_ENABLED = '1'
+```
+
+SMTP 主机、账号、专用授权码和发件人必须同时配置；587 使用 STARTTLS，465 将 `SECURE` 设为 `1`。
+发件人域名通常还需要在邮件服务商处完成域名验证和 SPF/DKIM 配置。
+
 四个服务端变量必须同时存在；缺少任一项时微信路由不会启用。当前 OAuth 回跳凭证保存在单实例
 内存中并且只能兑换一次，适合先在单台服务上跑通注册；多实例部署前应迁移到共享短期存储。
 
@@ -125,6 +149,8 @@ GET 和 SHA-256 校验，照片字节没有经过 API；Android/Web 三档真实
 - `POST /v1/auth/login`、`POST /v1/auth/logout`：PostgreSQL 模式密码登录及撤销当前短期会话。
 - `GET /v1/auth/wechat/start`、`GET /v1/auth/wechat/callback`、`POST /v1/auth/wechat/exchange`：
   配置微信网站应用后使用的扫码登录、OAuth 回调和一次性会话兑换。
+- `POST /v1/auth/email/request-code`、`POST /v1/auth/email/verify`：配置 SMTP 后使用的验证码发送、
+  注册和登录。
 - `PUT /v1/vault`、`GET /v1/vault`：保存或读取加密后的钥匙信封。
 - `PUT /v1/memories/:id`、`GET /v1/memories`：保存或列出记忆密文。
 - `PUT /v1/photos/:id`、`GET /v1/photos/:id`：仅在未配置 COS 时注册，供本地回归保存或读取原图密文。
@@ -170,7 +196,8 @@ npm.cmd run test:postgres
 ## 当前限制
 
 - 本地 JSON 模式只有一个固定测试用户和令牌；它只供开发回归。
-- PostgreSQL 模式未配置微信时只允许管理员创建受邀请账号；微信注册目前是网站端 MVP，尚无账号管理界面。
+- PostgreSQL 模式未配置微信和邮箱时只允许管理员创建受邀请账号；微信和邮箱注册目前都是网站端 MVP，
+  尚无账号管理界面。
 - 微信 OAuth 回跳凭证暂存单实例内存，多实例或进程重启会让未完成的回跳失效。
 - 未配置 COS 时照片密文暂存在 PostgreSQL JSONB 中；该回退路径不适合大文件或生产使用。
 - 服务端和 Android/Web 的三档短期签名直传直下、复合唯一键、幂等上传、摘要校验和过期清理已实现；

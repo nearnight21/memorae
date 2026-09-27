@@ -14,6 +14,7 @@ import {
   type TencentCosObjectStoreOptions,
 } from './tencentCos';
 import type { WeChatProviderOptions } from './wechatAuth';
+import { SmtpEmailSender, type EmailRegistrationOptions } from './email';
 
 function cosOptionsFromEnvironment(): TencentCosObjectStoreOptions | null {
   const values = {
@@ -53,6 +54,41 @@ function weChatOptionsFromEnvironment(): WeChatProviderOptions | undefined {
   return values as WeChatProviderOptions;
 }
 
+function emailOptionsFromEnvironment(codeSecret: string): EmailRegistrationOptions | undefined {
+  const values = {
+    host: process.env.MEMORY_RECALL_EMAIL_SMTP_HOST?.trim(),
+    port: process.env.MEMORY_RECALL_EMAIL_SMTP_PORT?.trim() || '587',
+    secure: process.env.MEMORY_RECALL_EMAIL_SMTP_SECURE?.trim() || '0',
+    username: process.env.MEMORY_RECALL_EMAIL_SMTP_USERNAME?.trim(),
+    password: process.env.MEMORY_RECALL_EMAIL_SMTP_PASSWORD,
+    from: process.env.MEMORY_RECALL_EMAIL_FROM?.trim(),
+  };
+  const configured = [values.host, values.username, values.password, values.from]
+    .filter((value) => value !== undefined && value !== '').length;
+  if (!configured) return undefined;
+  if (configured !== 4) {
+    throw new Error('邮箱 SMTP 配置必须同时设置主机、用户名、密码和发件人。');
+  }
+  const port = Number(values.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('MEMORY_RECALL_EMAIL_SMTP_PORT 必须是有效端口。');
+  }
+  if (values.secure !== '0' && values.secure !== '1') {
+    throw new Error('MEMORY_RECALL_EMAIL_SMTP_SECURE 只能是 0 或 1。');
+  }
+  return {
+    codeSecret,
+    sender: new SmtpEmailSender({
+      host: values.host!,
+      port,
+      secure: values.secure === '1',
+      username: values.username!,
+      password: values.password!,
+      from: values.from!,
+    }),
+  };
+}
+
 async function main(): Promise<void> {
   const port = Number(process.env.MEMORY_RECALL_PORT ?? 8788);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -73,7 +109,9 @@ async function main(): Promise<void> {
     if (!allowedOrigins?.length) {
       throw new Error('使用 PostgreSQL 时必须设置 MEMORY_RECALL_ALLOWED_ORIGINS。');
     }
+    const email = emailOptionsFromEnvironment(tokenPepper);
     const pool = createPostgresPool(databaseUrl);
+    const authStore = new PostgresPasswordAuthStore(pool);
     const cosOptions = cosOptionsFromEnvironment();
     const cosStore = cosOptions
       ? new PostgresCosCipherStore(pool, new TencentCosObjectStore(cosOptions))
@@ -81,12 +119,14 @@ async function main(): Promise<void> {
     const app = await buildApp({
       store: cosStore ?? new PostgresCipherStore(pool),
       photoTransfer: cosStore ?? undefined,
-      authenticator: new PasswordSessionAuthenticator(new PostgresPasswordAuthStore(pool), {
+      authenticator: new PasswordSessionAuthenticator(authStore, {
         tokenPepper,
       }),
       allowedOrigins,
       locationService,
       wechat,
+      email,
+      emailStore: authStore,
     });
     const cleanupExpiredPhotos = async () => {
       if (!cosStore) return;

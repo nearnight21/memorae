@@ -200,3 +200,71 @@ test('WeChat OAuth creates an account once and exchanges a one-time browser hand
   const account = await authStore.findAccountByLogin('wechat:unionid-001');
   assert.ok(account);
 });
+
+test('email verification creates an account and consumes a code once', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'memory-recall-email-'));
+  const authStore = new InMemoryPasswordAuthStore();
+  let sentCode = '';
+  const app = await buildApp({
+    store: new JsonCipherStore(join(directory, 'store.json')),
+    allowedOrigins: ['http://localhost:3000'],
+    authenticator: new PasswordSessionAuthenticator(authStore, {
+      tokenPepper: TOKEN_PEPPER,
+      passwordHash: TEST_PASSWORD_HASH,
+    }),
+    emailStore: authStore,
+    email: {
+      codeSecret: 'test-only-email-code-secret-at-least-32-chars',
+      sender: {
+        async sendVerificationCode(_email, code) {
+          sentCode = code;
+        },
+      },
+    },
+  });
+  const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 });
+  context.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const requestCode = await fetch(`${baseUrl}/v1/auth/email/request-code`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'New.User@example.com' }),
+  });
+  assert.equal(requestCode.status, 204);
+  assert.match(sentCode, /^\d{6}$/);
+
+  const duplicateRequest = await fetch(`${baseUrl}/v1/auth/email/request-code`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'new.user@example.com' }),
+  });
+  assert.equal(duplicateRequest.status, 429);
+
+  const invalid = await fetch(`${baseUrl}/v1/auth/email/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'new.user@example.com', code: '000000' }),
+  });
+  assert.equal(invalid.status, 401);
+
+  const verified = await fetch(`${baseUrl}/v1/auth/email/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'new.user@example.com', code: sentCode }),
+  });
+  assert.equal(verified.status, 200, await verified.clone().text());
+  const session = await verified.json() as { accessToken: string; expiresAt: string };
+  assert.match(session.accessToken, /^[A-Za-z0-9_-]+$/);
+  assert.ok(Date.parse(session.expiresAt) > Date.now());
+
+  const replay = await fetch(`${baseUrl}/v1/auth/email/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'new.user@example.com', code: sentCode }),
+  });
+  assert.equal(replay.status, 401);
+  assert.ok(await authStore.findAccountByLogin('email:new.user@example.com'));
+});

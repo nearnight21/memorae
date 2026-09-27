@@ -15,6 +15,12 @@ import {
   type WeChatProviderOptions,
 } from './wechatAuth';
 import {
+  EmailRegistrationError,
+  EmailRegistrationService,
+  type EmailRegistrationStore,
+  type EmailRegistrationOptions,
+} from './email';
+import {
   encryptedMemorySchema,
   encryptedPhotoSchema,
   idParamsSchema,
@@ -54,6 +60,9 @@ export interface BuildAppOptions {
   locationService?: LocationService;
   /** 微信网站应用 OAuth；未配置时不注册微信登录路由。 */
   wechat?: WeChatProviderOptions;
+  /** 邮箱验证码注册；未配置时不注册邮箱登录路由。 */
+  email?: EmailRegistrationOptions;
+  emailStore?: EmailRegistrationStore;
 }
 
 interface IdParams {
@@ -78,6 +87,16 @@ interface WeChatCallbackQuery {
 
 interface WeChatExchangeBody {
   code: string;
+}
+
+interface EmailCodeRequestBody {
+  email: string;
+}
+
+interface EmailCodeVerifyBody {
+  email: string;
+  code: string;
+  deviceId?: string;
 }
 
 interface PhotoVariantParams extends IdParams {
@@ -148,6 +167,24 @@ const weChatExchangeSchema = {
   required: ['code'],
   properties: {
     code: { type: 'string', minLength: 1, maxLength: 512 },
+  },
+} as const;
+
+const emailCodeRequestSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['email'],
+  properties: { email: { type: 'string', minLength: 3, maxLength: 190 } },
+} as const;
+
+const emailCodeVerifySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['email', 'code'],
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 190 },
+    code: { type: 'string', minLength: 6, maxLength: 6 },
+    deviceId: { type: 'string', maxLength: 200 },
   },
 } as const;
 
@@ -299,6 +336,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       || (pathname === '/v1/auth/wechat/start' && request.method === 'GET')
       || (pathname === '/v1/auth/wechat/callback' && request.method === 'GET')
       || (pathname === '/v1/auth/wechat/exchange' && request.method === 'POST')
+      || (pathname === '/v1/auth/email/request-code' && request.method === 'POST')
+      || (pathname === '/v1/auth/email/verify' && request.method === 'POST')
       || pathname.startsWith('/v1/location/public/')
     ) {
       return;
@@ -394,6 +433,50 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       const session = handoffs.consume(request.body.code);
       if (!session) return reply.code(401).send({ error: '微信登录凭证已失效，请重新登录。' });
       return reply.code(200).send(session);
+    });
+  }
+
+  const loginEmail = authenticator.loginEmail
+    ? authenticator.loginEmail.bind(authenticator)
+    : undefined;
+  if (
+    options.email
+    && loginEmail
+    && options.emailStore
+  ) {
+    const emailService = new EmailRegistrationService(options.emailStore, { loginEmail }, options.email);
+    app.post<{ Body: EmailCodeRequestBody }>('/v1/auth/email/request-code', {
+      schema: { body: emailCodeRequestSchema },
+    }, async (request, reply) => {
+      try {
+        await emailService.requestCode(request.body.email);
+        return reply.code(204).send();
+      } catch (error) {
+        if (error instanceof EmailRegistrationError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        request.log.error(error);
+        return reply.code(503).send({ error: '验证码邮件暂时无法发送，请稍后重试。' });
+      }
+    });
+
+    app.post<{ Body: EmailCodeVerifyBody }>('/v1/auth/email/verify', {
+      schema: { body: emailCodeVerifySchema },
+    }, async (request, reply) => {
+      try {
+        const session = await emailService.verifyCode(
+          request.body.email,
+          request.body.code,
+          request.body.deviceId ?? 'web-email',
+        );
+        return reply.code(200).send(session);
+      } catch (error) {
+        if (error instanceof EmailRegistrationError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        request.log.error(error);
+        return reply.code(503).send({ error: '邮箱登录暂时不可用，请稍后重试。' });
+      }
     });
   }
 

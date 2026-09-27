@@ -19,13 +19,15 @@ import { revokeRegisteredPhotos } from './photoRegistry';
 import type { Memory } from '../types';
 import { isAccountSessionActive, type StoredAccountSession } from '../sync/accountSession';
 import { cipherSyncStorage } from '../sync/cipherSyncStorage';
-import { MEMORY_RECALL_API_URL, WECHAT_LOGIN_ENABLED } from '../sync/config';
+import { EMAIL_LOGIN_ENABLED, MEMORY_RECALL_API_URL, WECHAT_LOGIN_ENABLED } from '../sync/config';
 import { downloadCiphertext, VaultMismatchError } from '../sync/syncActions';
 import {
   exchangeWeChatLoginCode,
   loginSyncSession,
   MemoryRecallSyncClient,
+  requestEmailVerificationCode,
   SyncRequestError,
+  verifyEmailCode,
 } from '../sync/syncClient';
 import { privateSpaceUnlockErrorMessage, unlockPrivateSpaceLocally } from './privateSpaceUnlock';
 import photoBacking from '../assets/login/photo-backing.svg';
@@ -126,6 +128,10 @@ export default function ProductGate({
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loginName, setLoginName] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [emailNotice, setEmailNotice] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [showAccountPassword, setShowAccountPassword] = useState(false);
@@ -412,6 +418,62 @@ export default function ProductGate({
     window.location.assign(url.toString());
   };
 
+  const requestEmailCode = async () => {
+    if (!MEMORY_RECALL_API_URL || busy) return;
+    setBusy(true);
+    setError('');
+    setEmailNotice('');
+    try {
+      await requestEmailVerificationCode(MEMORY_RECALL_API_URL, email.trim());
+      setEmailCodeSent(true);
+      setEmailNotice('验证码已发送，请检查邮箱。');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '验证码邮件暂时无法发送。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyEmail = async () => {
+    if (!MEMORY_RECALL_API_URL || busy) return;
+    setBusy(true);
+    setError('');
+    setEmailNotice('');
+    try {
+      const login = await verifyEmailCode(MEMORY_RECALL_API_URL, email.trim(), emailCode.trim());
+      try {
+        if (vault) await validateAccountVault(login, vault);
+      } catch (validationError) {
+        await new MemoryRecallSyncClient({
+          baseUrl: MEMORY_RECALL_API_URL,
+          token: login.accessToken,
+        }).logout().catch(() => undefined);
+        throw validationError;
+      }
+      await saveStoredAccountSession(login);
+      setAccountSession(login);
+      setEmailCode('');
+      if (vault) setPhase('locked');
+      else {
+        setPhase('locked');
+        try {
+          await restoreRemoteVault(login);
+        } catch (restoreError) {
+          setError(privateSpaceUnlockErrorMessage(restoreError));
+        }
+      }
+    } catch (verifyError) {
+      setLocalVaultMismatch(verifyError instanceof VaultMismatchError);
+      setError(
+        verifyError instanceof VaultMismatchError
+          ? privateSpaceUnlockErrorMessage(verifyError)
+          : verifyError instanceof Error ? verifyError.message : '邮箱验证失败，请重试。',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (phase === 'unlocked' && session) {
     if (unlockedRenderer) {
       return unlockedRenderer({
@@ -449,7 +511,68 @@ export default function ProductGate({
   if (phase === 'account') {
     return (
       <AuthShell titleId="account-login-title">
-        <form className="account-login-form" onSubmit={handleSubmit}>
+        <div className="account-login-form">
+            {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && (
+              <form
+                className="account-login-email"
+                aria-label="邮箱注册或登录"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void (emailCodeSent ? verifyEmail() : requestEmailCode());
+                }}
+              >
+                <p className="account-login-method-label">邮箱验证码注册 / 登录</p>
+                <label className="account-login-field" htmlFor="account-email">
+                  <span>邮箱</span>
+                  <input
+                    id="account-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      setEmailCodeSent(false);
+                      setEmailCode('');
+                      setEmailNotice('');
+                    }}
+                    autoComplete="email"
+                    placeholder="请输入邮箱地址"
+                    required
+                  />
+                </label>
+                {!emailCodeSent ? (
+                  <button className="account-login-code" type="submit" disabled={busy || !email.trim()}>
+                    {busy && <LoaderCircle className="animate-spin" size={16} aria-hidden="true" />}
+                    发送验证码
+                  </button>
+                ) : (
+                  <>
+                    <label className="account-login-field" htmlFor="account-email-code">
+                      <span>验证码</span>
+                      <input
+                        id="account-email-code"
+                        inputMode="numeric"
+                        value={emailCode}
+                        onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        autoComplete="one-time-code"
+                        placeholder="输入 6 位验证码"
+                        required
+                      />
+                    </label>
+                    <button className="account-login-code account-login-code-primary" type="submit" disabled={busy || emailCode.length !== 6}>
+                      {busy && <LoaderCircle className="animate-spin" size={16} aria-hidden="true" />}
+                      完成注册 / 登录
+                    </button>
+                    <button className="account-login-code account-login-code-secondary" type="button" onClick={() => setEmailCodeSent(false)} disabled={busy}>
+                      更换邮箱
+                    </button>
+                  </>
+                )}
+              </form>
+            )}
+            {emailNotice && <p className="account-login-notice" role="status">{emailNotice}</p>}
+            {error && <p className="account-login-error" role="alert">{error}</p>}
+            {MEMORY_RECALL_API_URL && EMAIL_LOGIN_ENABLED && <p className="account-login-divider">或使用账号密码登录</p>}
+            <form className="account-login-password-form" onSubmit={handleSubmit}>
             <label className="account-login-field" htmlFor="account-login-name">
               <span>账号</span>
               <input
@@ -487,12 +610,11 @@ export default function ProductGate({
               </span>
             </label>
 
-            {error && <p className="account-login-error" role="alert">{error}</p>}
-
             <button className="account-login-submit" type="submit" disabled={busy}>
               {busy && <LoaderCircle className="animate-spin" size={18} aria-hidden="true" />}
               {busy ? '正在登录' : '登录'}
             </button>
+            </form>
             {MEMORY_RECALL_API_URL && WECHAT_LOGIN_ENABLED && (
               <button
                 className="account-login-wechat"
@@ -503,10 +625,12 @@ export default function ProductGate({
                 微信登录 / 注册
               </button>
             )}
-            <p className="account-login-invite-note">
-              微信授权后会自动创建 Memorae 账号；私密空间密码仍只在本机设置。
-            </p>
-        </form>
+            {(WECHAT_LOGIN_ENABLED || EMAIL_LOGIN_ENABLED) && (
+              <p className="account-login-invite-note">
+                首次验证后会自动创建 Memorae 账号；私密空间密码仍只在本机设置。
+              </p>
+            )}
+        </div>
 
         {localVaultMismatch && (
           <section className="account-login-switch" aria-label="切换所忆账号">
