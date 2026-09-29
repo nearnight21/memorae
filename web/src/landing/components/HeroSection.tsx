@@ -1,6 +1,5 @@
 import type { FC } from 'react';
-import { ArrowRight, Download, Sparkles } from 'lucide-react';
-import LandingMapDemo from './LandingMapDemo';
+import { ArrowRight, Download, LockKeyhole } from 'lucide-react';
 
 export interface HeroSectionProps {
   onEnterApp: () => void;
@@ -9,39 +8,29 @@ export interface HeroSectionProps {
 export const HeroSection: FC<HeroSectionProps> = ({ onEnterApp }) => {
   return (
     <section className="hero-canvas-section" id="top">
-      {/* 极简标签 */}
-      <div className="hero-tag-pill">
-        <Sparkles size={13} style={{ color: 'var(--theme-crystal-bright)' }} />
-        <span>端到端加密的时空足迹地图 · Web 沉浸大屏 & Android 原生随行</span>
-      </div>
-
-      {/* 强对比大标题（Arc 风格） */}
+      <img className="hero-app-icon" src="/logo.png" alt="所忆应用图标" />
       <h1 className="hero-main-title">
-        你去过的地方，
-        <br />
-        不应该只剩一个地名。
+        所忆
       </h1>
-
-      {/* 副标题 */}
       <p className="hero-sub-text">
-        Memorae 将散落在各处的照片与文字，串连成生命轨迹中的时空长卷。
-        Web 网站端大画幅沉浸漫游，手机随行即刻记录。出境即密文，唯有您的钥匙能够唤醒回忆。
+        把走过的地方，变成只属于你的记忆地图。
       </p>
-
-      {/* 核心行动按钮 */}
       <div className="hero-actions-row">
         <button type="button" onClick={onEnterApp} className="btn-hero-primary">
-          <span>进入 Web 空间 (免安装)</span>
+          <span>打开 Web 空间</span>
           <ArrowRight size={15} />
         </button>
-        <a href="#download" className="btn-hero-secondary">
+        <a
+          href="https://github.com/nearnight21/memorae/releases"
+          target="_blank"
+          rel="noreferrer"
+          className="btn-hero-secondary"
+        >
           <Download size={15} />
-          <span>下载 Android 原生版</span>
+          <span>下载 Android</span>
         </a>
       </div>
-
-      {/* 大地图主体展台：真实产品地图的只读切片，可直接点击记忆气泡查看详情 */}
-      <LandingMapDemo height={640} showTimeline={false} className="hero-map-demo" />
+      <div className="hero-security-note"><LockKeyhole size={13} /> 本地加密 · 密文同步</div>
     </section>
   );
 };

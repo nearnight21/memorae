@@ -1,5 +1,5 @@
 import { useEffect, useState, type FC } from 'react';
-import { ArrowRight, Sparkles, Compass } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import { getStoredAccountSession } from '../../prototype/storage';
 import { isAccountSessionActive } from '../../sync/accountSession';
 
@@ -39,22 +39,18 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
 
         {/* 中间导航链接 */}
         <div className="navbar-center-links">
-          <a href="#features" className="nav-link-anchor">
-            核心特性
+          <a href="#what" className="nav-link-anchor">
+            这是什么
           </a>
-          <a href="#timeline" className="nav-link-anchor">
-            水晶时光轴
+          <a href="#security" className="nav-link-anchor">
+            如何保护
           </a>
-          <a href="#local-mode" className="nav-link-anchor">
-            本地模式
-          </a>
-          <a href="#download" className="nav-link-anchor">
-            多端体验
+          <a href="#developer" className="nav-link-anchor">
+            开发者的话
           </a>
         </div>
 
-        {/* 右侧进入应用按钮 */}
-        <div>
+        <div className="navbar-action-wrap">
           <button
             type="button"
             onClick={onEnterApp}

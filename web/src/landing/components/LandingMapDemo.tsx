@@ -15,9 +15,9 @@ import { DEMO_MEMORIES } from '../demo/demoMemories';
 const MapView = lazy(() => import('../../components/MapView'));
 
 export interface LandingMapDemoProps {
-  /** 是否连同底部水晶时间轴一起展示。Hero 处只展示地图，时间轴段展示完整版。 */
+  /** 是否连同底部时间轴一起展示。展示时用于演示按时间回看。 */
   showTimeline?: boolean;
-  /** 舞台高度（像素），用于 Hero 与时间轴段各自的版式。 */
+  /** 舞台高度（像素），用于各区块的版式。 */
   height?: number;
   className?: string;
 }
