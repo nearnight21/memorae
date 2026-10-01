@@ -105,12 +105,15 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat/);
   assert.match(runtimeSource, /window\.requestAnimationFrame\(step\)/);
-  assert.match(runtimeSource, /const supportsSmoothCameraFlight = true/);
+  assert.match(runtimeSource, /const isIOSWebView = \/iPad\|iPhone\|iPod\/i/);
+  assert.match(runtimeSource, /if \(animate && isIOSWebView\)/);
+  assert.match(runtimeSource, /setZoomAndCenter\(zoom, \[lng, lat\], false, 600\)/);
+  assert.match(runtimeSource, /const supportsSmoothCameraFlight = !isIOSWebView/);
   assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
   assert.match(runtimeSource, /lastCameraIdleSignature/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
-  assert.match(runtimeSource, /animateEnable: false/);
+  assert.match(runtimeSource, /animateEnable: true/);
   assert.doesNotMatch(runtimeSource, /CAMERA_FOCUS_OFFSET_X|containerToLngLat|map\.panBy/);
   assert.match(runtimeSource, /postCameraIdle/);
   assert.match(runtimeSource, /message\.type === 'setCamera'/);
@@ -327,7 +330,7 @@ test('气泡点击推进使用平滑相机动画，停稳后打开详情并在�
   assert.match(runtimeSource, /map\.on\('zoomend', \(\) => \{ if \(flightActive\) return; render\(\); postCameraIdle\(\); \}\)/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
-  assert.match(runtimeSource, /animateEnable: false/);
+  assert.match(runtimeSource, /animateEnable: true/);
   // RN 层：animate 从中立 CameraState 透传到 WebView camera DTO
   assert.match(adapterSource, /animate !== undefined \? \{ animate: camera\.animate \}/);
   // App 层：单条气泡只在需要位移或缩放时才飞行动画，等待停稳后再打开详情

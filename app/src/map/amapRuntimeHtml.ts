@@ -104,11 +104,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
-      // Keep the camera flight in the WebView for every platform. The native
-      // AMap animation path is disabled, so this interpolation stays in sync
-      // with marker rendering and preserves the bubble-to-detail transition
-      // on iOS as well as Android.
-      const supportsSmoothCameraFlight = true;
+      // WKWebView can coalesce repeated immediate WebGL camera updates. Use
+      // AMap's native timed flight on iOS, while Android keeps the WebView
+      // interpolation so marker rendering and camera events stay synchronized.
+      const isIOSWebView = /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+      const supportsSmoothCameraFlight = !isIOSWebView;
       let flightToken = 0;
       let flightActive = false;
       let lastCameraIdleSignature = null;
@@ -159,6 +159,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       };
       const setCamera = (zoom, lng, lat, animate = false) => {
         if (!map) return;
+        if (animate && isIOSWebView) {
+          cancelCameraFlight();
+          map.setZoomAndCenter(zoom, [lng, lat], false, 600);
+          return;
+        }
         if (animate && supportsSmoothCameraFlight) {
           animateCamera(zoom, lng, lat);
           return;
@@ -488,7 +493,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           return;
         }
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: false, rotateEnable: false, pitchEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: true, rotateEnable: false, pitchEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('movestart', () => { if (!flightActive) post({ type: 'cameraMoveStart' }); });
           map.on('moveend', () => { if (!flightActive) postCameraIdle(); });
