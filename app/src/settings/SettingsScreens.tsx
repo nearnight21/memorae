@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { CameraState } from '../map/MemoraeMap';
 import { androidTopInset } from '../ui/layout';
 import { cameraCoordinateLabel, cameraZoomLabel } from './settingsModel';
 import { DEVICE_UNLOCK_LABEL } from '../services/deviceUnlockLabels';
 import type { UpdateCheckResult } from './updateService';
 
-export type UtilityRoute = 'settings' | 'help' | 'about' | 'support';
+export type UtilityRoute = 'settings' | 'change-password' | 'help' | 'about' | 'support';
 
 interface PageProps {
   title: string;
@@ -102,6 +102,7 @@ export function SettingsScreen({
   deviceUnlockEnabled,
   deviceUnlockAvailable,
   onToggleDeviceUnlock,
+  onChangePassword,
   onBack,
 }: {
   profile?: 'local' | 'cloud' | null;
@@ -112,6 +113,7 @@ export function SettingsScreen({
   deviceUnlockEnabled: boolean;
   deviceUnlockAvailable: boolean;
   onToggleDeviceUnlock: () => void;
+  onChangePassword: () => void;
   onBack: () => void;
 }) {
   return (
@@ -137,8 +139,69 @@ export function SettingsScreen({
       <Text style={styles.sectionLabel}>私密空间</Text>
       <View style={styles.listSection}>
         <Row label={`${DEVICE_UNLOCK_LABEL}解锁`} detail={deviceUnlockAvailable ? (deviceUnlockEnabled ? '已开启' : '关闭') : '当前设备不可用'} onPress={deviceUnlockAvailable ? onToggleDeviceUnlock : undefined} />
+        <View style={styles.divider} />
+        <Row
+          label="修改私密空间密码"
+          detail={deviceUnlockEnabled ? `需验证一次${DEVICE_UNLOCK_LABEL}` : `请先开启${DEVICE_UNLOCK_LABEL}解锁`}
+          onPress={deviceUnlockEnabled ? onChangePassword : undefined}
+        />
       </View>
       <Text style={styles.footnote}>设备钥匙只保存在本机安全区域，私密空间密码仍是主恢复方式。</Text>
+    </Page>
+  );
+}
+
+export function ChangePasswordScreen({
+  onSubmit,
+  onBack,
+}: {
+  onSubmit: (password: string, confirmation: string) => Promise<void>;
+  onBack: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(): Promise<void> {
+    setError('');
+    if (password.length < 4) { setError('私密空间密码至少需要 4 个字符。'); return; }
+    if (password !== confirmation) { setError('两次输入的密码不一致。'); return; }
+    setBusy(true);
+    try { await onSubmit(password, confirmation); } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : '修改密码失败，请稍后重试。');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Page title="修改私密空间密码" onBack={onBack}>
+      <Text style={styles.sectionLabel}>新的私密空间密码</Text>
+      <Text style={styles.securityCopy}>已通过一次设备生物识别确认。新密码只用于重新封装本机私密空间密钥，不会改变已有记忆。</Text>
+      <View style={styles.passwordForm}>
+        <TextInput
+          accessibilityLabel="新的私密空间密码"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="至少 4 个字符"
+          secureTextEntry
+          autoCapitalize="none"
+          style={styles.passwordInput}
+        />
+        <TextInput
+          accessibilityLabel="确认新的私密空间密码"
+          value={confirmation}
+          onChangeText={setConfirmation}
+          placeholder="再次输入新密码"
+          secureTextEntry
+          autoCapitalize="none"
+          style={styles.passwordInput}
+        />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="保存新的私密空间密码" disabled={busy} onPress={() => void submit()} style={({ pressed }) => [styles.primaryButton, (pressed || busy) && styles.primaryPressed]}>
+          <Text style={styles.primaryText}>{busy ? '正在保存…' : '保存新密码'}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.footnote}>设备生物识别钥匙仍然有效，下次可以继续用它解锁；请妥善保存新的私密空间密码。</Text>
     </Page>
   );
 }
@@ -259,6 +322,10 @@ const styles = StyleSheet.create({
   chevron: { color: '#909892', fontSize: 26, lineHeight: 28 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#cfd4cf' },
   footnote: { marginTop: 14, color: '#858c87', fontSize: 12, lineHeight: 20 },
+  securityCopy: { marginBottom: 18, color: '#69736c', fontSize: 14, lineHeight: 23 },
+  passwordForm: { gap: 12 },
+  passwordInput: { minHeight: 52, paddingHorizontal: 16, borderWidth: 1, borderColor: '#cfd4cf', borderRadius: 12, backgroundColor: '#fbfaf5', color: '#39413c', fontSize: 15 },
+  errorText: { color: '#a74d3d', fontSize: 13, lineHeight: 20 },
   sheetRoot: { ...StyleSheet.absoluteFill, zIndex: 18 },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(25,29,26,0.18)' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 26, borderTopLeftRadius: 20, borderTopRightRadius: 20, backgroundColor: 'rgba(251, 247, 240, 0.98)', borderTopWidth: 1, borderColor: 'rgba(215, 201, 182, 0.6)', shadowColor: '#20251f', shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: -6 }, elevation: 12 },

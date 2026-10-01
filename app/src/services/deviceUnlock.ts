@@ -104,6 +104,23 @@ export async function unlockWithDevice(
   }
 }
 
+/** Prompts for one device authentication without creating a vault session. */
+export async function authenticateDeviceUnlock(): Promise<void> {
+  if (!SecureStore.canUseBiometricAuthentication()) {
+    throw new Error(`当前设备没有可用的${DEVICE_UNLOCK_LABEL}。`);
+  }
+  const [storedKey, storedRecord] = await Promise.all([
+    SecureStore.getItemAsync(DEVICE_KEY_NAME, secureStoreOptions),
+    getDeviceUnlockRecord(),
+  ]);
+  if (!storedKey || !storedRecord) {
+    await disableDeviceUnlock();
+    throw new Error(`请先开启本机${DEVICE_UNLOCK_LABEL}解锁。`);
+  }
+  const deviceKey = base64ToBytes(storedKey);
+  deviceKey.fill(0);
+}
+
 export async function disableDeviceUnlock(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(DEVICE_KEY_NAME, secureStoreOptions).catch(() => undefined),

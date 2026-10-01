@@ -17,6 +17,7 @@ import {
 import {
   bytesToBase64,
   createVault,
+  changeVaultPassword,
   decryptMemoryV2,
   decryptPhoto,
   destroyVaultSession,
@@ -37,6 +38,7 @@ import {
 } from './src/photos/photoVariants';
 import {
   disableDeviceUnlock,
+  authenticateDeviceUnlock,
   enableDeviceUnlock,
   hasDeviceUnlock,
   canUseDeviceUnlock,
@@ -129,6 +131,7 @@ import {
 } from './src/onboarding/onboardingTourModel';
 import {
   AboutScreen,
+  ChangePasswordScreen,
   DefaultMapEditorOverlay,
   HelpScreen,
   MoreMenuSheet,
@@ -1755,6 +1758,27 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setUtilityRoute(route);
   }
 
+  async function beginPasswordChange(): Promise<void> {
+    if (!session || !vault) throw new Error('请先解锁私密空间。');
+    setStatus(`等待一次${DEVICE_UNLOCK_LABEL}验证……`);
+    await authenticateDeviceUnlock();
+    setUtilityRoute('change-password');
+    setStatus('身份验证完成，请设置新的私密空间密码。');
+  }
+
+  async function changePrivateSpacePassword(newPassword: string, confirmation: string): Promise<void> {
+    if (!session || !vault) throw new Error('请先解锁私密空间。');
+    if (newPassword !== confirmation) throw new Error('两次输入的密码不一致。');
+    const nextVault = await changeVaultPassword(nativeCryptoPrimitives, vault, session, newPassword);
+    if (profile === 'cloud' && accountSession) {
+      await new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: accountSession.accessToken }).putVault(nextVault);
+    }
+    await saveVaultEnvelope(nextVault);
+    setVault(nextVault);
+    setUtilityRoute('settings');
+    setStatus(`私密空间密码已修改。${DEVICE_UNLOCK_LABEL}解锁仍然有效。`);
+  }
+
   function beginDefaultMapEditor(): void {
     defaultMapEditorOriginCamera.current = homeViewport.camera;
     setUtilityRoute(null);
@@ -2354,7 +2378,14 @@ export default function App({ testBootstrap }: AppProps = {}) {
           deviceUnlockEnabled={deviceUnlockEnabled}
           deviceUnlockAvailable={Boolean(session) && canUseDeviceUnlock()}
           onToggleDeviceUnlock={() => void runTask(toggleDeviceUnlock)}
+          onChangePassword={() => void runTask(beginPasswordChange)}
           onBack={() => setUtilityRoute(null)}
+        />
+      )}
+      {utilityRoute === 'change-password' && (
+        <ChangePasswordScreen
+          onSubmit={changePrivateSpacePassword}
+          onBack={() => setUtilityRoute('settings')}
         />
       )}
       {utilityRoute === 'help' && (

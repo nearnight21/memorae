@@ -209,6 +209,42 @@ export async function unlockVault(
   }
 }
 
+/**
+ * Re-wraps the existing VMK with a new password. Memory and photo ciphertexts
+ * remain unchanged; only the password KDF salt and VMK envelope change.
+ */
+export async function changeVaultPassword(
+  primitives: CryptoPrimitives,
+  envelope: VaultEnvelopeV1,
+  session: VaultSessionV1,
+  newPassword: string,
+): Promise<VaultEnvelopeV1> {
+  assertActiveSession(session);
+  assertPassword(newPassword);
+  assertVaultEnvelope(envelope);
+
+  const salt = await primitives.randomBytes(16);
+  const kdf: Argon2idParameters = {
+    name: 'Argon2id',
+    salt: bytesToBase64(salt),
+    memoryKiB: FROZEN_KDF_DEFAULTS.memoryKiB,
+    iterations: FROZEN_KDF_DEFAULTS.iterations,
+    parallelism: FROZEN_KDF_DEFAULTS.parallelism,
+    hashLength: FROZEN_KDF_DEFAULTS.hashLength,
+  };
+  const unlockKey = await deriveUnlockKey(primitives, newPassword, kdf);
+  try {
+    return {
+      ...envelope,
+      kdf,
+      wrappedVmk: await sealBytes(primitives, unlockKey, session.vmk, VMK_AAD),
+    };
+  } finally {
+    unlockKey.fill(0);
+    salt.fill(0);
+  }
+}
+
 export function assertActiveSession(session: VaultSessionV1): void {
   if (session.destroyed) {
     throw new Error('私密空间已经锁定。');

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   base64ToBytes,
   bytesToHex,
+  changeVaultPassword,
   createVault,
   decryptMemory,
   decryptMemoryV1,
@@ -225,6 +226,28 @@ test('创建、加密、锁定和重新解锁形成闭环', async () => {
     (await decryptPhoto(nodeCryptoPrimitives, restoredSession, encryptedPhoto)).bytes,
     photoBytes,
   );
+});
+
+test('已解锁状态修改密码只重新封装 VMK，旧记忆密文仍可解密', async () => {
+  const oldPassword = 'old-private-space-password';
+  const newPassword = 'new-private-space-password';
+  const { envelope, session } = await createVault(nodeCryptoPrimitives, oldPassword, TEST_KDF);
+  const encrypted = await encryptMemory(nodeCryptoPrimitives, session, {
+    id: 'password-change-memory',
+    title: '密码修改后仍然存在',
+  });
+
+  const nextEnvelope = await changeVaultPassword(nodeCryptoPrimitives, envelope, session, newPassword);
+  await assert.rejects(
+    () => unlockVault(nodeCryptoPrimitives, nextEnvelope, oldPassword),
+    VaultUnlockError,
+  );
+  const nextSession = await unlockVault(nodeCryptoPrimitives, nextEnvelope, newPassword);
+  assert.deepEqual(
+    await decryptMemory(nodeCryptoPrimitives, nextSession, encrypted),
+    { id: 'password-change-memory', title: '密码修改后仍然存在' },
+  );
+  assert.deepEqual(nextEnvelope.wrappedKeys, envelope.wrappedKeys);
 });
 
 test('加密协议冻结：Web/Mobile 默认 KDF 与信封版本不可漂移', async () => {
