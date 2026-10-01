@@ -108,6 +108,9 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /const isIOSWebView = \/iPad\|iPhone\|iPod\/i/);
   assert.match(runtimeSource, /if \(animate && isIOSWebView\)/);
   assert.match(runtimeSource, /setZoomAndCenter\(zoom, \[lng, lat\], false, 600\)/);
+  assert.match(runtimeSource, /flightActive = true/);
+  assert.match(runtimeSource, /nativeFlightTimer = window\.setTimeout/);
+  assert.match(runtimeSource, /nativeFlightTimer = null/);
   assert.match(runtimeSource, /const supportsSmoothCameraFlight = !isIOSWebView/);
   assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
   assert.match(runtimeSource, /lastCameraIdleSignature/);

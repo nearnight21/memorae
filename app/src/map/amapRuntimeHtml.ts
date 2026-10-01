@@ -111,10 +111,15 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       const supportsSmoothCameraFlight = !isIOSWebView;
       let flightToken = 0;
       let flightActive = false;
+      let nativeFlightTimer = null;
       let lastCameraIdleSignature = null;
       const cancelCameraFlight = () => {
         flightToken += 1;
         flightActive = false;
+        if (nativeFlightTimer !== null) {
+          window.clearTimeout(nativeFlightTimer);
+          nativeFlightTimer = null;
+        }
       };
       const animateCamera = (targetZoom, targetLng, targetLat, duration = 600) => {
         const center = cameraCenter();
@@ -161,7 +166,16 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         if (!map) return;
         if (animate && isIOSWebView) {
           cancelCameraFlight();
+          const token = ++flightToken;
+          flightActive = true;
           map.setZoomAndCenter(zoom, [lng, lat], false, 600);
+          nativeFlightTimer = window.setTimeout(() => {
+            if (token !== flightToken || !map) return;
+            nativeFlightTimer = null;
+            flightActive = false;
+            render();
+            postCameraIdle();
+          }, 700);
           return;
         }
         if (animate && supportsSmoothCameraFlight) {
