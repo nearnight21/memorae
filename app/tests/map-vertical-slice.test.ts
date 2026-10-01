@@ -105,7 +105,7 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat/);
   assert.match(runtimeSource, /window\.requestAnimationFrame\(step\)/);
-  assert.match(runtimeSource, /supportsSmoothCameraFlight/);
+  assert.match(runtimeSource, /const supportsSmoothCameraFlight = true/);
   assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
   assert.match(runtimeSource, /lastCameraIdleSignature/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);

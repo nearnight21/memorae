@@ -104,10 +104,11 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
-      // WKWebView on iOS can briefly clear the WebGL map surface while it is
-      // being updated every frame. Keep iOS on the immediate camera path;
-      // Android can use the smoother interpolated flight.
-      const supportsSmoothCameraFlight = !/iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+      // Keep the camera flight in the WebView for every platform. The native
+      // AMap animation path is disabled, so this interpolation stays in sync
+      // with marker rendering and preserves the bubble-to-detail transition
+      // on iOS as well as Android.
+      const supportsSmoothCameraFlight = true;
       let flightToken = 0;
       let flightActive = false;
       let lastCameraIdleSignature = null;
