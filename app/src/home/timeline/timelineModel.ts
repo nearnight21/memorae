@@ -223,7 +223,9 @@ export function resolveArcTimelineGestureMode(
 
 export function resetPullDisplayDistance(
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  // Keep this as a literal: Reanimated worklet default parameters are evaluated
+  // before the worklet closure is initialized on the UI thread.
+  activationDistance = 56,
   maximumDistance = 130,
   resistance = 0.28,
 ): number {
@@ -236,7 +238,7 @@ export function resetPullDisplayDistance(
 export function resetPullProgress(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  activationDistance = 56,
 ): number {
   'worklet';
   if (mode !== ARC_TIMELINE_GESTURE_RESET_MAP || activationDistance <= 0) return 0;
@@ -246,7 +248,7 @@ export function resetPullProgress(
 export function isResetPullArmed(
   mode: ArcTimelineGestureMode,
   translationY: number,
-  activationDistance = RESET_PULL_ACTIVATION_DISTANCE,
+  activationDistance = 56,
 ): boolean {
   'worklet';
   return mode === ARC_TIMELINE_GESTURE_RESET_MAP && translationY >= activationDistance;
