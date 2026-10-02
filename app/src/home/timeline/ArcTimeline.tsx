@@ -244,6 +244,17 @@ export default function ArcTimeline({
   );
   const currentValueRef = useRef<string | null>(selectedYear);
   const pendingSelectionIndex = useRef<number | null>(null);
+  const onCreateMemoryRef = useRef(onCreateMemory);
+  const onResetMapViewRef = useRef(onResetMapView);
+  const onQuickReturnNowRef = useRef(onQuickReturnNow);
+  const onBrowseTimelineRef = useRef(onBrowseTimeline);
+
+  useEffect(() => {
+    onCreateMemoryRef.current = onCreateMemory;
+    onResetMapViewRef.current = onResetMapView;
+    onQuickReturnNowRef.current = onQuickReturnNow;
+    onBrowseTimelineRef.current = onBrowseTimeline;
+  }, [onBrowseTimeline, onCreateMemory, onQuickReturnNow, onResetMapView]);
 
   const trackGeometry = useMemo(() => {
     const halfWidth = width / 2;
@@ -342,28 +353,28 @@ export default function ArcTimeline({
     const committed = commitTimelineSelection(currentValueRef.current, nextValue, onSelect);
     if (committed) {
       currentValueRef.current = nextValue;
-      onBrowseTimeline?.();
+      onBrowseTimelineRef.current?.();
     }
-  }, [firstYearIndex, items, onBrowseTimeline, onSelect]);
+  }, [firstYearIndex, items, onSelect]);
 
   const triggerCreateOnce = useCallback(() => {
-    onCreateMemory?.();
-  }, [onCreateMemory]);
+    onCreateMemoryRef.current?.();
+  }, []);
 
   const triggerCreateHaptic = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   }, []);
 
   const triggerResetOnce = useCallback(() => {
-    onResetMapView?.();
-  }, [onResetMapView]);
+    onResetMapViewRef.current?.();
+  }, []);
 
   const selectCurrentYear = useCallback(() => {
     pendingSelectionIndex.current = currentYearIndex;
     currentValueRef.current = currentYear;
     onSelect(currentYear);
-    onQuickReturnNow?.();
-  }, [currentYear, currentYearIndex, onQuickReturnNow, onSelect]);
+    onQuickReturnNowRef.current?.();
+  }, [currentYear, currentYearIndex, onSelect]);
 
   useAnimatedReaction(
     () => highlightedIndex.value,
@@ -602,7 +613,7 @@ export default function ArcTimeline({
       resetPullOffsetY.value = withSpring(0, SPRING_CONFIG);
       resetPullProgress.value = withTiming(0, CREATE_OVERLAY_RETURN_CONFIG);
       resetPullArmed.value = 0;
-    }), [createCommitted, createHapticTriggered, createPullArmed, createPullOffsetY, createPullProgress, dialRevealProgress, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, gestureStartIndex, isDragging, items.length, maximumDragYears, onResetMapView, resetCommitted, resetHapticTriggered, resetPullArmed, resetPullOffsetY, resetPullProgress, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, triggerCreateHaptic, triggerCreateOnce, triggerResetOnce]);
+    }), [createCommitted, createHapticTriggered, createPullArmed, createPullOffsetY, createPullProgress, dialRevealProgress, dragOffsetYears, edgeDirection, edgeScrollOffset, firstYearIndex, gestureMode, gestureStartIndex, isDragging, items.length, maximumDragYears, resetCommitted, resetHapticTriggered, resetPullArmed, resetPullOffsetY, resetPullProgress, releaseCommitted, releaseProgress, releaseTargetIndex, scrollIndex, triggerCreateHaptic, triggerCreateOnce, triggerResetOnce]);
 
   const doubleTapGesture = useMemo(() => Gesture.Tap()
     .numberOfTaps(2)
