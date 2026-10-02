@@ -105,18 +105,12 @@ test('WebView 地图切片只通过消息发送地图数据，并接收低频事
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat/);
   assert.match(runtimeSource, /window\.requestAnimationFrame\(step\)/);
-  assert.match(runtimeSource, /const isIOSWebView = \/iPad\|iPhone\|iPod\/i/);
-  assert.match(runtimeSource, /if \(animate && isIOSWebView\)/);
-  assert.match(runtimeSource, /setZoomAndCenter\(zoom, \[lng, lat\], false, 600\)/);
   assert.match(runtimeSource, /flightActive = true/);
-  assert.match(runtimeSource, /nativeFlightTimer = window\.setTimeout/);
-  assert.match(runtimeSource, /nativeFlightTimer = null/);
-  assert.match(runtimeSource, /const supportsSmoothCameraFlight = !isIOSWebView/);
-  assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
+  assert.match(runtimeSource, /if \(animate\) \{/);
   assert.match(runtimeSource, /lastCameraIdleSignature/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
-  assert.match(runtimeSource, /animateEnable: true/);
+  assert.match(runtimeSource, /animateEnable: false/);
   assert.doesNotMatch(runtimeSource, /CAMERA_FOCUS_OFFSET_X|containerToLngLat|map\.panBy/);
   assert.match(runtimeSource, /postCameraIdle/);
   assert.match(runtimeSource, /message\.type === 'setCamera'/);
@@ -328,19 +322,20 @@ test('气泡点击推进使用平滑相机动画，停稳后打开详情并在�
   assert.match(runtimeSource, /const setCamera = \(zoom, lng, lat, animate = false\)/);
   assert.match(runtimeSource, /const animateCamera = \(targetZoom, targetLng, targetLat, duration = 600\)/);
   assert.match(runtimeSource, /if \(token !== flightToken \|\| !map\) return/);
-  assert.match(runtimeSource, /if \(animate && supportsSmoothCameraFlight\)/);
+  assert.match(runtimeSource, /if \(animate\) \{/);
   assert.match(runtimeSource, /const signature = \[lat\.toFixed\(6\), lng\.toFixed\(6\)/);
   assert.match(runtimeSource, /map\.on\('zoomend', \(\) => \{ if \(flightActive\) return; render\(\); postCameraIdle\(\); \}\)/);
   assert.match(runtimeSource, /setCamera\(nextZoom, centerLng, centerLat, true\)/);
   assert.match(runtimeSource, /setCamera\(zoom, message\.lng, message\.lat, Boolean\(message\.animate\)\)/);
-  assert.match(runtimeSource, /animateEnable: true/);
+  assert.match(runtimeSource, /animateEnable: false/);
   // RN 层：animate 从中立 CameraState 透传到 WebView camera DTO
   assert.match(adapterSource, /animate !== undefined \? \{ animate: camera\.animate \}/);
   // App 层：单条气泡只在需要位移或缩放时才飞行动画，等待停稳后再打开详情
   assert.match(appSource, /pendingOpenMemoryRef/);
   assert.match(appSource, /animate: true/);
   assert.match(appSource, /zoomDelta > 0\.05/);
-  assert.match(appSource, /if \(pendingOpenMemoryRef\.current === memory\)/);
+  assert.match(appSource, /pendingOpenMemoryRef\.current = \{ memory, target \}/);
+  assert.match(appSource, /const arrived = Math\.abs\(camera\.latitude - pending\.target\.latitude\)/);
   // App 层：收起详情时用同一套飞行动画反向回到点击前记录的展开视角
   assert.match(appSource, /detailReturnCameraRef\.current = \{ \.\.\.homeViewport\.camera \}/);
   assert.match(appSource, /function restoreDetailCamera\(\): void \{/);

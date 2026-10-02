@@ -104,22 +104,14 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
         });
       };
       const cameraCenter = () => map?.getCenter?.() || null;
-      // WKWebView can coalesce repeated immediate WebGL camera updates. Use
-      // AMap's native timed flight on iOS, while Android keeps the WebView
-      // interpolation so marker rendering and camera events stay synchronized.
-      const isIOSWebView = /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
-      const supportsSmoothCameraFlight = !isIOSWebView;
+      // Both platforms use the same camera frames and completion signal.
+      // A wall-clock timeout cannot prove that the map has reached its target.
       let flightToken = 0;
       let flightActive = false;
-      let nativeFlightTimer = null;
       let lastCameraIdleSignature = null;
       const cancelCameraFlight = () => {
         flightToken += 1;
         flightActive = false;
-        if (nativeFlightTimer !== null) {
-          window.clearTimeout(nativeFlightTimer);
-          nativeFlightTimer = null;
-        }
       };
       const animateCamera = (targetZoom, targetLng, targetLat, duration = 600) => {
         const center = cameraCenter();
@@ -164,21 +156,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
       };
       const setCamera = (zoom, lng, lat, animate = false) => {
         if (!map) return;
-        if (animate && isIOSWebView) {
-          cancelCameraFlight();
-          const token = ++flightToken;
-          flightActive = true;
-          map.setZoomAndCenter(zoom, [lng, lat], false, 600);
-          nativeFlightTimer = window.setTimeout(() => {
-            if (token !== flightToken || !map) return;
-            nativeFlightTimer = null;
-            flightActive = false;
-            render();
-            postCameraIdle();
-          }, 700);
-          return;
-        }
-        if (animate && supportsSmoothCameraFlight) {
+        if (animate) {
           animateCamera(zoom, lng, lat);
           return;
         }
@@ -507,7 +485,7 @@ export function buildAmapRuntimeHtml(apiKey: string, securityJsCode: string): st
           return;
         }
         try {
-          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: true, rotateEnable: false, pitchEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
+          map = new AMap.Map('map', { center: [104.1954, 35.8617], zoom: 3.5, zooms: [3.5, 14], viewMode: '3D', animateEnable: false, rotateEnable: false, pitchEnable: false, mapStyle: ${mapStyle}, features: ['bg', 'road', 'point'], touchZoomCenter: 1 });
           map.on('click', (event) => { const p = event?.lnglat; if (p) post({ type: 'mapPressed', lat: p.getLat(), lng: p.getLng() }); });
           map.on('movestart', () => { if (!flightActive) post({ type: 'cameraMoveStart' }); });
           map.on('moveend', () => { if (!flightActive) postCameraIdle(); });

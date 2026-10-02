@@ -325,7 +325,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const [isMapMoving, setIsMapMoving] = useState(false);
   const locationPickerOriginCamera = useRef<CameraState | null>(null);
   const defaultMapEditorOriginCamera = useRef<CameraState | null>(null);
-  const pendingOpenMemoryRef = useRef<MemoryV2 | null>(null);
+  const pendingOpenMemoryRef = useRef<{ memory: MemoryV2; target: CameraState } | null>(null);
   const detailReturnCameraRef = useRef<CameraState | null>(null);
   const detailLoadId = useRef(0);
   const detailPhotoPerformance = useRef(new Map<number, {
@@ -1695,34 +1695,38 @@ export default function App({ testBootstrap }: AppProps = {}) {
       if (needsCameraFlight) {
         // 等待地图缩放飞行动画完全结束停稳后再翻开手账详情卡片
         detailReturnCameraRef.current = { ...homeViewport.camera };
-        pendingOpenMemoryRef.current = memory;
-        setHomeCameraTarget({
+        const target: CameraState = {
           latitude: memoryLocation.lat!,
           longitude: memoryLocation.lng!,
           zoom: targetZoom,
           animate: true,
-        });
-        setTimeout(() => {
-          if (pendingOpenMemoryRef.current === memory) {
-            pendingOpenMemoryRef.current = null;
-            void runTask(async () => { openMemory(memory); });
-          }
-        }, 750);
+        };
+        pendingOpenMemoryRef.current = { memory, target };
+        setHomeCameraTarget(target);
         return;
       }
     }
+    pendingOpenMemoryRef.current = null;
     void runTask(async () => { openMemory(memory); });
   }
 
   function handleHomeCameraIdle(event: MapCameraIdleEvent): void {
+    const pending = pendingOpenMemoryRef.current;
+    if (pending) {
+      const { camera } = event;
+      // Ignore stale/intermediate idle messages until all target components match.
+      const arrived = Math.abs(camera.latitude - pending.target.latitude) < 0.000001
+        && Math.abs(camera.longitude - pending.target.longitude) < 0.000001
+        && Math.abs(camera.zoom - pending.target.zoom) < 0.001;
+      if (!arrived) return;
+    }
     setIsMapMoving(false);
     setHomeViewport(event);
     setHomeCameraTarget(null);
     setLocationCameraTarget(null);
-    if (pendingOpenMemoryRef.current) {
-      const memoryToOpen = pendingOpenMemoryRef.current;
+    if (pending) {
       pendingOpenMemoryRef.current = null;
-      void runTask(async () => { openMemory(memoryToOpen); });
+      void runTask(async () => { openMemory(pending.memory); });
     }
   }
 
