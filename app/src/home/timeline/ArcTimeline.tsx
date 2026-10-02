@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { BlurMask, Canvas, Circle, Group, LinearGradient, Mask, Path, Rect, useClock, vec } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
@@ -838,7 +838,9 @@ export default function ArcTimeline({
             accessibilityLabel="中心年份按钮"
             accessibilityRole="adjustable"
             accessibilityValue={{ text: items[safeDisplayIndex]?.label === '现在' ? '现在' : `${items[safeDisplayIndex]?.label ?? ''} 年` }}
-            hitSlop={{ top: 20, bottom: 24, left: 32, right: 32 }}
+            // Keep the visual button and 82dp pull distance unchanged. On iOS,
+            // avoid expanding the touch target toward the Reachability edge.
+            hitSlop={{ top: 20, bottom: Platform.OS === 'ios' ? 0 : 24, left: 32, right: 32 }}
             onAccessibilityAction={({ nativeEvent }) => {
               if (nativeEvent.actionName === 'increment') animateFromAccessibility(safeDisplayIndex + 1);
               if (nativeEvent.actionName === 'decrement') animateFromAccessibility(safeDisplayIndex - 1);

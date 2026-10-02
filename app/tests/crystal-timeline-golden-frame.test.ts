@@ -187,6 +187,7 @@ test('正式中心年份按钮以互斥手势承载回到现在、上拉创建�
 
   assert.match(timeline, /Gesture\.Tap\(\)[\s\S]*\.numberOfTaps\(2\)/);
   assert.match(timeline, /Gesture\.Exclusive\(doubleTapGesture, panGesture\)/);
+  assert.match(timeline, /Platform\.OS === 'ios' \? 0 : 24/);
   assert.match(timeline, /const currentYear = String\(new Date\(\)\.getFullYear\(\)\)/);
   assert.match(timeline, /withSpring\(currentYearTargetIndex, SPRING_CONFIG\)/);
   assert.match(timeline, /onSelect\(currentYear\)/);
