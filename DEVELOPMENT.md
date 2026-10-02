@@ -20,7 +20,7 @@
   `app/docs/AMAP-NATIVE-RENDERER-PHASE-3-ACCEPTANCE.md` 作为归档。
 - Home 默认地图 Camera 使用中国全景视图 `zoom=3.5`；正式时间轴继续使用单一 Pan 手势，
   横向浏览年份、上拉新建记忆、下拉回到全景，并通过 `homeCameraTarget` 重置 Camera，
-  不改变年份、地区筛选或 Marker 数据。下拉动作的 60dp 激活阈值与 0.24 最大遮罩透明度
+  不改变年份、地区筛选或 Marker 数据。下拉动作的 56dp 激活阈值与 0.24 最大遮罩透明度
   已有自动化测试覆盖，Android 真机连续手势验收仍需另行执行。
 - App 首页右上角提供 `•••` 更多入口，包含设置、帮助和关于。设置支持在地图上保存本机默认
   Camera、恢复中国全景默认视图；时间轴下拉复位使用该默认 Camera。帮助可重播首次启动引导，

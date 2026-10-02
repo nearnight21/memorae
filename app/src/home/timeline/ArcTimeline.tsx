@@ -842,7 +842,7 @@ export default function ArcTimeline({
             accessibilityLabel="中心年份按钮"
             accessibilityRole="adjustable"
             accessibilityValue={{ text: items[safeDisplayIndex]?.label === '现在' ? '现在' : `${items[safeDisplayIndex]?.label ?? ''} 年` }}
-            // Keep the visual button and 82dp pull distance unchanged. On iOS,
+            // Keep the visual button position unchanged. On iOS,
             // avoid expanding the touch target toward the Reachability edge.
             hitSlop={{ top: 20, bottom: Platform.OS === 'ios' ? 0 : 24, left: 32, right: 32 }}
             onAccessibilityAction={({ nativeEvent }) => {
