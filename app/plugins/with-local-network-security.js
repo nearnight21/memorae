@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
+const withIosSystemGestureDeferral = require('./with-ios-system-gesture-deferral');
 
 const NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
@@ -20,6 +21,8 @@ const DEBUG_NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
 `;
 
 module.exports = function withLocalNetworkSecurity(config) {
+  config = withIosSystemGestureDeferral(config);
+
   config = withAndroidManifest(config, (manifestConfig) => {
     const application = manifestConfig.modResults.manifest.application?.[0];
     if (!application) {

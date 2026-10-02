@@ -118,10 +118,6 @@ const DIAL_COLLAPSE_CONFIG = {
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 } as const;
-// Let iOS claim the touch before its bottom-edge gesture can win the race.
-// The worklet still waits for the 10dp intent threshold before choosing a mode,
-// so this does not change the visible pull distance or timeline interaction.
-const PAN_MIN_DISTANCE = Platform.OS === 'ios' ? 1 : CREATE_PULL_INTENT_THRESHOLD;
 const FLASH_DURATION_MS = 3230;
 const FLASH_PEAK_RATIO = 0.175;
 
@@ -432,7 +428,7 @@ export default function ArcTimeline({
   });
 
   const panGesture = useMemo(() => Gesture.Pan()
-    .minDistance(PAN_MIN_DISTANCE)
+    .minDistance(CREATE_PULL_INTENT_THRESHOLD)
     .onStart(() => {
       cancelAnimation(dialRevealProgress);
       dialRevealProgress.value = withTiming(1, DIAL_REVEAL_CONFIG);
