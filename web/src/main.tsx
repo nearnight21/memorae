@@ -18,6 +18,7 @@ import { resolveWebRootRoute, navigateToApp, navigateToLanding, type WebRootRout
 import './index.css';
 
 const LandingPage = lazy(() => import('./landing/LandingPage.tsx'));
+const DesktopDemoPage = lazy(() => import('./landing/DesktopDemoPage.tsx'));
 const CrystalTimelineMapPrototypePage = lazy(
   () => import('./prototype/CrystalTimelineMapPrototypePage.tsx'),
 );
@@ -146,6 +147,8 @@ function RootApp() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RootApp />
+    {developerParams.get('landing-desktop-demo') === '1' ? (
+      <Suspense fallback={null}><DesktopDemoPage /></Suspense>
+    ) : <RootApp />}
   </StrictMode>,
 );

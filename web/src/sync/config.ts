@@ -9,3 +9,10 @@ export const MEMORY_RECALL_API_URL = (
 
 export const WECHAT_LOGIN_ENABLED = import.meta.env?.VITE_MEMORY_RECALL_WECHAT_ENABLED === '1';
 export const EMAIL_LOGIN_ENABLED = import.meta.env?.VITE_MEMORY_RECALL_EMAIL_ENABLED === '1';
+
+export const DEMO_API_URL = (
+  import.meta.env?.VITE_MEMORY_RECALL_DEMO_API_URL?.trim()
+  || (isProductionBuild ? window.location.origin : '')
+).replace(/\/+$/, '');
+export const DEMO_ACCESS_TOKEN = import.meta.env?.VITE_MEMORY_RECALL_DEMO_TOKEN?.trim() ?? '';
+export const DEMO_SPACE_PASSWORD = import.meta.env?.VITE_MEMORY_RECALL_DEMO_SPACE_PASSWORD ?? '';

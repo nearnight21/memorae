@@ -16,6 +16,16 @@ import {
 import type { WeChatProviderOptions } from './wechatAuth';
 import { SmtpEmailSender, type EmailRegistrationOptions } from './email';
 
+function demoOptionsFromEnvironment(): { accountId: string; token: string } | undefined {
+  const accountId = process.env.MEMORY_RECALL_DEMO_ACCOUNT_ID?.trim();
+  const token = process.env.MEMORY_RECALL_DEMO_TOKEN?.trim();
+  if (!accountId && !token) return undefined;
+  if (!accountId || !token) {
+    throw new Error('Demo 只读接口必须同时设置 MEMORY_RECALL_DEMO_ACCOUNT_ID 和 MEMORY_RECALL_DEMO_TOKEN。');
+  }
+  return { accountId, token };
+}
+
 function cosOptionsFromEnvironment(): TencentCosObjectStoreOptions | null {
   const values = {
     bucket: process.env.MEMORY_RECALL_COS_BUCKET,
@@ -127,6 +137,7 @@ async function main(): Promise<void> {
       wechat,
       email,
       emailStore: authStore,
+      demo: demoOptionsFromEnvironment(),
     });
     const cleanupExpiredPhotos = async () => {
       if (!cosStore) return;

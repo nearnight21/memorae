@@ -1,7 +1,8 @@
-import { lazy, Suspense, useState, type CSSProperties, type FC } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type FC } from 'react';
 import { MapPin } from 'lucide-react';
 import type { Memory } from '../../types';
 import { DEMO_MEMORIES } from '../demo/demoMemories';
+import { isRemoteDemoConfigured, loadDemoMemories } from '../demo/loadDemoMemories';
 
 /**
  * 真实产品地图的只读落地页切片。
@@ -28,6 +29,22 @@ export const LandingMapDemo: FC<LandingMapDemoProps> = ({
   className,
 }) => {
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [memories, setMemories] = useState<Memory[]>(DEMO_MEMORIES);
+  const [demoStatus, setDemoStatus] = useState<'local' | 'loading' | 'remote'>('local');
+
+  useEffect(() => {
+    if (!isRemoteDemoConfigured()) return;
+    let cancelled = false;
+    setDemoStatus('loading');
+    void loadDemoMemories().then((next) => {
+      if (cancelled) return;
+      setMemories(next);
+      setDemoStatus('remote');
+    }).catch(() => {
+      if (!cancelled) setDemoStatus('local');
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const style: CSSProperties = { height };
 
@@ -40,12 +57,12 @@ export const LandingMapDemo: FC<LandingMapDemoProps> = ({
         fallback={(
           <div className="landing-map-demo-skeleton" aria-hidden="true">
             <MapPin size={22} strokeWidth={1.6} />
-            <span>正在载入交互地图…</span>
+          <span>{demoStatus === 'loading' ? '正在载入 Demo 记忆…' : '正在载入交互地图…'}</span>
           </div>
         )}
       >
         <MapView
-          memories={DEMO_MEMORIES}
+          memories={memories}
           selectedMemory={selectedMemory}
           onSelectMemory={setSelectedMemory}
           onCloseMemory={() => setSelectedMemory(null)}

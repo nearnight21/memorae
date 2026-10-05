@@ -63,6 +63,7 @@ export interface BuildAppOptions {
   /** 邮箱验证码注册；未配置时不注册邮箱登录路由。 */
   email?: EmailRegistrationOptions;
   emailStore?: EmailRegistrationStore;
+  demo?: { accountId: string; token: string };
 }
 
 interface IdParams {
@@ -345,6 +346,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       || (pathname === '/v1/auth/email/request-code' && request.method === 'POST')
       || (pathname === '/v1/auth/email/verify' && request.method === 'POST')
       || pathname.startsWith('/v1/location/public/')
+      || (pathname === '/v1/demo/vault' && request.method === 'GET')
+      || (pathname === '/v1/demo/memories' && request.method === 'GET')
     ) {
       return;
     }
@@ -354,6 +357,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.code(401).send({ error: '访问令牌无效或已过期。' });
     }
     request.accountId = identity.accountId;
+  });
+
+  const demoAuthorized = (request: FastifyRequest): boolean => {
+    const token = bearerToken(request);
+    return Boolean(options.demo && token && token === options.demo.token);
+  };
+
+  app.get('/v1/demo/vault', async (request, reply) => {
+    if (!demoAuthorized(request)) return reply.code(401).send({ error: 'Demo 访问令牌无效。' });
+    const vault = await options.store.getVault(options.demo!.accountId);
+    if (!vault) return reply.code(404).send({ error: 'Demo 私密空间尚未初始化。' });
+    return vault;
+  });
+
+  app.get('/v1/demo/memories', async (request, reply): Promise<MemoryListResponse> => {
+    if (!demoAuthorized(request)) return reply.code(401).send({ error: 'Demo 访问令牌无效。' }) as never;
+    return { items: await options.store.listMemories(options.demo!.accountId) };
   });
 
   if (authenticator.login) {

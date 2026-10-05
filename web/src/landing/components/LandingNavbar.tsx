@@ -43,7 +43,7 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
             这是什么
           </a>
           <a href="#security" className="nav-link-anchor">
-            如何保护
+            照片去哪了
           </a>
           <a href="#developer" className="nav-link-anchor">
             开发者的话

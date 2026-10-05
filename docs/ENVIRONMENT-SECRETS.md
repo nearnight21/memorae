@@ -23,6 +23,9 @@
 | `VITE_MEMORY_RECALL_API_URL` | 可选；留空为纯离线 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 密文同步 API 根地址。 |
 | `VITE_MEMORY_RECALL_WECHAT_ENABLED` | 可选，默认关闭；`1` 开启 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 显示微信登录/注册入口；Server 仍必须同时配置微信密钥。 |
 | `VITE_MEMORY_RECALL_EMAIL_ENABLED` | 可选，默认关闭；`1` 开启 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 显示邮箱验证码注册/登录入口；Server 仍必须同时配置 SMTP。 |
+| `VITE_MEMORY_RECALL_DEMO_API_URL` | 可选；留空跟随 Web 当前来源 | 公开配置 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 落地页 Demo 只读接口地址。 |
+| `VITE_MEMORY_RECALL_DEMO_TOKEN` | 与 Demo 接口成组 | 公开 Demo 凭据 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 只能读取指定 Demo 账号密文的公开令牌。 |
+| `VITE_MEMORY_RECALL_DEMO_SPACE_PASSWORD` | 与 Demo 接口成组 | 公开 Demo 凭据 | `web/.env.local` | GitHub Variable | Web 部署构建变量 | 仅用于公开 Demo 私密空间解密；不得复用于真实账号。 |
 | `VITE_MEMORY_RECALL_AMAP_JS_API_KEY` | 仅 JS API 测试页需要 | 客户端凭据 | `web/.env.local` | 需要该测试时的受限 Variable/Secret | Web 构建变量 | 高德 Web JS API Key，会进入产物。 |
 | `VITE_MEMORY_RECALL_AMAP_JS_SECURITY_CODE` | 与上项成对 | 客户端凭据 | `web/.env.local` | 同上 | Web 构建变量 | 高德 securityJsCode，会进入产物。 |
 | `DISABLE_HMR` | 可选，默认不关闭 | 本地配置 | 启动 Vite 前的 shell 环境 | 不需要 | 不需要 | 关闭 HMR 和文件监听；不是浏览器变量。 |
@@ -79,6 +82,8 @@ JSON 模式固定监听 `127.0.0.1`；`MEMORY_RECALL_LISTEN_HOST` 只影响 Post
 | `MEMORY_RECALL_DATABASE_URL` | PostgreSQL 模式必需 | Secret | 临时本地数据库凭据 | 临时 service Secret | 生产密钥管理 | PostgreSQL 连接串。 |
 | `MEMORY_RECALL_SESSION_TOKEN_PEPPER` | PostgreSQL 模式必需，至少 32 字符 | Secret | 仓库外本地环境 | 测试 Secret | 生产密钥管理 | 会话令牌摘要 pepper。 |
 | `MEMORY_RECALL_ALLOWED_ORIGINS` | PostgreSQL 模式必需 | 配置 | 本地测试 origins | job env | 部署环境变量 | 允许的 Web 来源列表。 |
+| `MEMORY_RECALL_DEMO_ACCOUNT_ID` | Demo 只读接口可选；需与 token 成组 | 配置 | 仓库外本地环境 | 不参与普通 CI | 生产部署环境变量 | 被公开只读接口暴露的专用 Demo 账号 UUID。 |
+| `MEMORY_RECALL_DEMO_TOKEN` | Demo 只读接口可选；需与 account ID 成组 | 公开 Demo 凭据 | 仓库外本地环境 | 不参与普通 CI | 生产部署环境变量 | 落地页使用的只读令牌；禁止授予写权限。 |
 | `MEMORY_RECALL_WECHAT_APP_ID` | 微信注册可选 | Secret 元数据 | 仓库外本地环境 | 不参与普通 CI | 微信开放平台配置 | 网站应用 AppID。 |
 | `MEMORY_RECALL_WECHAT_APP_SECRET` | 与上项成组 | Secret | 仓库外本地环境 | 不参与普通 CI | 生产密钥管理 | 网站应用 AppSecret，仅由 Server 使用。 |
 | `MEMORY_RECALL_WECHAT_CALLBACK_URL` | 与微信配置成组 | 配置 | 本地 localhost 回调 | 不参与普通 CI | 生产部署环境变量 | 微信 OAuth 回调地址。 |
