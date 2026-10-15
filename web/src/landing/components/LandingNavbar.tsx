@@ -30,7 +30,7 @@ export const LandingNavbar: FC<LandingNavbarProps> = ({ onEnterApp }) => {
 
   return (
     <header className="landing-navbar-wrapper">
-      <nav className="landing-navbar">
+      <nav className="landing-navbar" aria-label="所忆主导航">
         {/* 左侧 Logo */}
         <a href="#top" className="navbar-brand-group">
           <img src="/favicon.png" alt="所忆 Logo" className="brand-logo-img" />

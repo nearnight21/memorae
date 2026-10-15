@@ -52,13 +52,18 @@ $sshArgs = @('-i', $SshKey, '-o', 'BatchMode=yes', $target)
 
 if ($Force -or $PSCmdlet.ShouldProcess($target, 'Deploy Web dist while preserving /thinkpad')) {
   & ssh @sshArgs "set -e; test -d '$RemoteRoot'; test -d '$RemoteRoot/thinkpad'; mkdir '$remoteStage'"
+  if ($LASTEXITCODE -ne 0) { throw "Remote staging failed with exit code $LASTEXITCODE" }
   & scp -i $SshKey -r (Join-Path $resolvedDist '*') "$target`:$remoteStage/"
+  if ($LASTEXITCODE -ne 0) { throw "Web upload failed with exit code $LASTEXITCODE" }
 
   $remoteScript = @'
 set -e
 shopt -s nullglob
 stage="$1"
 root="$2"
+# Windows 临时目录通过 scp 上传后可能变成 0700；发布前显式允许 Caddy 读取公开资源。
+find "$stage" -type d -exec chmod 755 {} +
+find "$stage" -type f -exec chmod 644 {} +
 for item in "$stage"/* "$stage"/.[!.]*; do
   [ -e "$item" ] || continue
   base="$(basename "$item")"
@@ -79,5 +84,6 @@ test -f "$root/thinkpad/index.html"
   if ($LASTEXITCODE -ne 0) { throw "Remote deployment failed with exit code $LASTEXITCODE" }
 
   & ssh @sshArgs 'set -e; curl -fsS -o /dev/null https://memorae.cn/; curl -fsS -o /dev/null https://memorae.cn/thinkpad/; curl -fsS -o /dev/null https://memorae.cn/health'
+  if ($LASTEXITCODE -ne 0) { throw "Production health check failed with exit code $LASTEXITCODE" }
   Write-Host "Deployment succeeded and verified: https://memorae.cn/, https://memorae.cn/thinkpad/, https://memorae.cn/health"
 }
