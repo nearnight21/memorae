@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { KeyRound, LoaderCircle, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, ShieldCheck } from 'lucide-react';
 import App from '../App';
-import MapView from '../components/MapView';
 import { createVault, decryptMemoryV2, destroyVaultSession, type VaultEnvelopeV1, type VaultSessionV1 } from '../crypto';
 import { TOPIC_RECORD_ID } from '../memory/topic';
 import {
@@ -30,11 +29,9 @@ import {
   verifyEmailCode,
 } from '../sync/syncClient';
 import { privateSpaceUnlockErrorMessage, unlockPrivateSpaceLocally } from './privateSpaceUnlock';
-import photoBacking from '../assets/login/photo-backing.svg';
-import timeNodeCurrent from '../assets/login/time-node-current.svg';
-import timeNodeSmall from '../assets/login/time-node-small.svg';
-import timePath from '../assets/login/time-path.svg';
+import { navigateToLanding } from '../landing/landingRouting';
 import travelPhoto from '../assets/login/travel-photo.png';
+import erhaiPhoto from '../assets/login/erhai-photo.webp';
 import './product-gate.css';
 
 type GatePhase = 'booting' | 'account' | 'setup' | 'locked' | 'unlocked';
@@ -57,13 +54,6 @@ interface AuthShellProps {
   children: ReactNode;
 }
 
-const AUTH_TIMELINE = [
-  { year: '2007', left: '17.8%', top: '73.4%', current: false },
-  { year: '2012', left: '40.7%', top: '57.2%', current: false },
-  { year: '2018', left: '63.8%', top: '44.4%', current: true },
-  { year: '2026', left: '93.4%', top: '11.1%', current: false },
-];
-
 function clearWeChatCallbackQuery(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('wechat_code');
@@ -74,44 +64,46 @@ function clearWeChatCallbackQuery(): void {
 function AuthShell({ titleId, children }: AuthShellProps) {
   return (
     <main className="account-login-page">
-      <div className="account-login-map" aria-hidden="true">
-        <MapView
-          memories={[]}
-          selectedMemory={null}
-          onSelectMemory={() => undefined}
-          onCloseMemory={() => undefined}
-          signedOutBackdrop
-        />
-      </div>
-      <div className="account-login-map-wash" aria-hidden="true" />
-
-      <figure className="account-login-photo" aria-label="2018 年 7 月 21 日的旅行照片">
-        <img className="account-login-photo-backing" src={photoBacking} alt="" />
-        <div className="account-login-photo-emulsion">
-          <img src={travelPhoto} alt="夕阳下的街道、行人与车辆" />
+      <button className="account-back-home" type="button" onClick={navigateToLanding}>
+        <ArrowLeft size={17} aria-hidden="true" /> 返回首页
+      </button>
+      <span className="account-coordinate account-coordinate-north" aria-hidden="true">△ 36°N, 120°E</span>
+      <span className="account-coordinate account-coordinate-south" aria-hidden="true">25°N / 100°E</span>
+      <div className="account-login-layout">
+        <div className="account-login-visual" aria-hidden="true">
+          <svg className="account-login-route" viewBox="0 0 560 740" fill="none">
+            <path d="M270 -40C100 30 110 145 225 170S515 265 400 365S100 435 150 545S405 595 425 760" stroke="#b8a892" strokeWidth="1.3" strokeDasharray="4 6" />
+            <g className="account-route-waypoints" fill="#d49a47">
+              <circle cx="185" cy="154" r="5" /><circle cx="424" cy="291" r="5" />
+              <circle cx="145" cy="526" r="5" /><circle cx="348" cy="650" r="5" />
+            </g>
+            <g className="account-route-years" fill="#95836c">
+              <text x="202" y="143" transform="rotate(22 202 143)">2012</text>
+              <text x="437" y="271" transform="rotate(66 437 271)">2018</text>
+              <text x="104" y="555" transform="rotate(54 104 555)">2024</text>
+              <text x="359" y="682" transform="rotate(34 359 682)">2026</text>
+            </g>
+          </svg>
+          <figure className="account-polaroid account-polaroid-street">
+            <span className="account-photo-pin" />
+            <img src={travelPhoto} alt="" width="270" height="300" />
+            <figcaption>暮色里的街巷 <time dateTime="2018-07-21">2018.07</time></figcaption>
+          </figure>
+          <figure className="account-polaroid account-polaroid-lake">
+            <span className="account-photo-pin" />
+            <img src={erhaiPhoto} alt="" width="270" height="300" />
+            <figcaption>Erhai <span>把风景，留给以后</span></figcaption>
+          </figure>
+          <p className="account-visual-caption">走过的地方，都是可以回去的时光。</p>
         </div>
-        <time dateTime="2018-07-21">2018.07.21</time>
-        <span className="account-login-photo-curl" aria-hidden="true" />
-      </figure>
-
-      <div className="account-login-timeline" aria-hidden="true">
-        <img className="account-login-time-path" src={timePath} alt="" />
-        {AUTH_TIMELINE.map(({ year, left, top, current }) => (
-          <span key={year} className="account-login-time-node" style={{ left, top }}>
-            <img src={current ? timeNodeCurrent : timeNodeSmall} alt="" />
-            <b className={year === '2026' ? 'is-leading' : undefined}>{year}</b>
-          </span>
-        ))}
+        <section className="account-login-content account-card" aria-labelledby={titleId}>
+          <header className="account-login-brand">
+            <span className="account-security-badge"><LockKeyhole size={13} aria-hidden="true" /> 本地加密 · 密文同步</span>
+            <div className="account-brand-title"><h1 id={titleId}>所忆</h1><p>Memorae</p></div>
+          </header>
+          {children}
+        </section>
       </div>
-
-      <div className="account-login-form-wash" aria-hidden="true" />
-      <section className="account-login-content" aria-labelledby={titleId}>
-        <header className="account-login-brand">
-          <h1 id={titleId}>所忆</h1>
-          <p>Memorae</p>
-        </header>
-        {children}
-      </section>
     </main>
   );
 }
@@ -511,7 +503,7 @@ export default function ProductGate({
         <section className="account-login-loading" role="status" aria-live="polite">
           <LoaderCircle className="animate-spin" size={22} aria-hidden="true" />
           <div>
-            <h2 id="account-login-loading-title">正在打开所忆</h2>
+            <h2>正在打开所忆</h2>
             <p>正在读取这台设备上的账号会话和加密信息</p>
           </div>
         </section>
@@ -651,14 +643,15 @@ export default function ProductGate({
                   aria-label={showAccountPassword ? '隐藏密码' : '显示密码'}
                   aria-pressed={showAccountPassword}
                 >
-                  {showAccountPassword ? '隐藏' : '显示'}
+                  {showAccountPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
               </span>
             </label>
 
             <button className="account-login-submit" type="submit" disabled={busy}>
               {busy && <LoaderCircle className="animate-spin" size={18} aria-hidden="true" />}
-              {busy ? '正在登录' : '登录'}
+              <span>{busy ? '正在登录' : '进入记忆空间'}</span>
+              {!busy && <ArrowRight size={17} aria-hidden="true" />}
             </button>
             </form>
             {MEMORY_RECALL_API_URL && WECHAT_LOGIN_ENABLED && (
@@ -736,7 +729,7 @@ export default function ProductGate({
                 aria-label={showPrivateSpacePassword ? '隐藏私密空间密码' : '显示私密空间密码'}
                 aria-pressed={showPrivateSpacePassword}
               >
-                {showPrivateSpacePassword ? '隐藏' : '显示'}
+                {showPrivateSpacePassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
               </button>
             </span>
           </label>
@@ -754,39 +747,55 @@ export default function ProductGate({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#17140f] px-5 py-10 text-[#F0E7D5]">
-      <section className="w-full max-w-md rounded-[28px] border border-[#8D7145]/35 bg-[#211D17] p-8 shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
-        <div className="flex items-center gap-4">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#A88446]/45 bg-[#2B251C] text-[#D3B06B]">
-            {phase === 'setup' ? <KeyRound /> : <LockKeyhole />}
-          </span>
-          <div>
-            <p className="text-[11px] tracking-[0.2em] text-[#A88C5C]">所忆 · 私密空间</p>
-            <h1 className="mt-1 font-editorial-serif text-3xl">建立你的记忆空间</h1>
-          </div>
+    <AuthShell titleId="private-space-setup-title">
+      <form className="account-login-form account-login-setup-form" onSubmit={handleSubmit}>
+        <div className="account-login-unlock-intro">
+          <h2><KeyRound size={16} aria-hidden="true" /> 建立你的记忆空间</h2>
+          <p>记忆和照片会先在这台设备加密。密码不会上传，也无法由服务器重置。</p>
         </div>
-        <p className="mt-6 text-sm leading-7 text-[#BDB3A1]">
-          记忆和照片会先在这台设备加密。密码不会上传，也无法由服务器重置。
-        </p>
-        {error && <p className="mt-4 rounded-xl border border-red-700/35 bg-red-950/25 px-4 py-3 text-sm text-red-200">{error}</p>}
-        <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
-          <label className="block text-xs text-[#B9AA91]">
-            私密空间密码
-            <input className="mt-2 w-full rounded-xl border border-[#6E5A39] bg-[#15120E] px-4 py-3 text-[#F6EEDC] outline-none focus:border-[#C39D59]" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required />
-          </label>
-          <label className="block text-xs text-[#B9AA91]">
-            再次输入密码
-            <input className="mt-2 w-full rounded-xl border border-[#6E5A39] bg-[#15120E] px-4 py-3 text-[#F6EEDC] outline-none focus:border-[#C39D59]" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" required />
-          </label>
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#C29A54] px-4 py-3 font-semibold text-[#17130D] transition-colors hover:bg-[#D5B36F] disabled:opacity-55" type="submit" disabled={busy}>
-            {busy ? <LoaderCircle className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
-            {busy ? '正在处理' : '创建并进入所忆'}
-          </button>
-        </form>
+        <label className="account-login-field" htmlFor="private-space-setup-password">
+          <span>私密空间密码</span>
+          <span className="account-login-password-row">
+            <input
+              id="private-space-setup-password"
+              type={showPrivateSpacePassword ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              placeholder="至少 8 个字符"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPrivateSpacePassword((visible) => !visible)}
+              aria-label={showPrivateSpacePassword ? '隐藏私密空间密码' : '显示私密空间密码'}
+              aria-pressed={showPrivateSpacePassword}
+            >
+              {showPrivateSpacePassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+            </button>
+          </span>
+        </label>
+        <label className="account-login-field" htmlFor="private-space-setup-confirmation">
+          <span>再次输入密码</span>
+          <input
+            id="private-space-setup-confirmation"
+            type="password"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            autoComplete="new-password"
+            placeholder="再次输入私密空间密码"
+            required
+          />
+        </label>
+        {error && <p className="account-login-error" role="alert">{error}</p>}
+        <button className="account-login-submit" type="submit" disabled={busy}>
+          {busy ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <ShieldCheck size={18} aria-hidden="true" />}
+          {busy ? '正在处理' : '创建并进入所忆'}
+        </button>
         {import.meta.env.DEV && (
-          <a className="mt-7 block text-center text-[11px] text-[#7E725F] hover:text-[#B89A68]" href="?dev-vault=1">开发人员：打开密文验证工具</a>
+          <a className="account-developer-link" href="?dev-vault=1">开发人员：打开密文验证工具</a>
         )}
-      </section>
-    </main>
+      </form>
+    </AuthShell>
   );
 }
