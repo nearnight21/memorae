@@ -38,6 +38,15 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "允许“所忆”读取所选照片的拍摄日期和地点。",
+          "savePhotosPermission": false,
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["photo"]
+        }
+      ],
       "expo-document-picker",
       "expo-sharing",
       "./plugins/with-ephemeral-test-build",

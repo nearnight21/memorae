@@ -305,7 +305,7 @@ test('正式 App 只把有效地点坐标送入本地地图，不把正文或照
   assert.match(source, /memory\.location/);
   assert.match(source, /MemoryMapThumbnail/);
   assert.match(source, /memoriesToMapMarkers/);
-  assert.match(source, /firstPhotoCoordinates/);
+  assert.match(source, /readSelectedPhotoMetadata/);
   assert.match(source, /mobileLocationClient\.convertGps/);
   assert.match(source, /provider: 'amap'/);
   assert.match(source, /handleMarkerPress/);

@@ -5,6 +5,87 @@ export interface PhotoCoordinates {
 
 type ExifRecord = Record<string, unknown>;
 
+export interface PhotoMetadata {
+  date: string | null;
+  coordinates: PhotoCoordinates | null;
+}
+
+export interface PhotoLibraryMetadata {
+  exif?: object | null;
+  creationTime?: number | null;
+  location?: { latitude: number; longitude: number } | null;
+}
+
+export interface SelectedPhotoAsset {
+  assetId?: string | null;
+  exif?: ExifRecord | null;
+}
+
+function exifRecord(value: unknown): ExifRecord | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as ExifRecord
+    : null;
+}
+
+function calendarDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})[:-](\d{2})[:-](\d{2})(?:$|[T\s])/.exec(value.trim());
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const date = new Date(`${year}-${month}-${day}T00:00:00Z`);
+  if (!Number(year) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== `${year}-${month}-${day}`) {
+    return null;
+  }
+  return `${year}-${month}-${day}`;
+}
+
+export function photoDateFromExif(exif: ExifRecord | null | undefined): string | null {
+  if (!exif) return null;
+  const records = [exif, exifRecord(exif['{Exif}'] ?? exif.Exif ?? exif.exif), exifRecord(exif['{TIFF}'] ?? exif.TIFF)];
+  // 优先采用拍摄时间；直接保留照片当地日期，避免 UTC 换算跨日。
+  for (const tag of ['DateTimeOriginal', 'DateTimeDigitized', 'DateTime']) {
+    for (const record of records) {
+      const date = calendarDate(record?.[tag]);
+      if (date) return date;
+    }
+  }
+  return null;
+}
+
+export function photoDateFromTimestamp(timestamp: number | null | undefined): string | null {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) return null;
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return null;
+  return calendarDate(`${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
+}
+
+export async function readSelectedPhotoMetadata(
+  assets: readonly SelectedPhotoAsset[],
+  readLibraryMetadata: (assetId: string) => Promise<PhotoLibraryMetadata | null>,
+): Promise<PhotoMetadata> {
+  let date: string | null = null;
+  let coordinates: PhotoCoordinates | null = null;
+  for (const asset of assets) {
+    const exifDate = photoDateFromExif(asset.exif);
+    const exifCoordinates = photoCoordinatesFromExif(asset.exif);
+    let library: PhotoLibraryMetadata | null = null;
+    if (asset.assetId && ((!date && !exifDate) || (!coordinates && !exifCoordinates))) {
+      try {
+        library = await readLibraryMetadata(asset.assetId);
+      } catch {
+        // 权限拒绝、云端照片或外部文件不应阻断选图，继续使用可读的 EXIF。
+      }
+    }
+    const libraryExif = exifRecord(library?.exif);
+    date ??= exifDate ?? photoDateFromExif(libraryExif) ?? photoDateFromTimestamp(library?.creationTime);
+    coordinates ??= exifCoordinates
+      ?? photoCoordinatesFromExif(library?.location)
+      ?? photoCoordinatesFromExif(libraryExif);
+    if (date && coordinates) break;
+  }
+  return { date, coordinates };
+}
+
 function finiteNumber(value: unknown): number | null {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value !== 'string' || !value.trim()) return null;

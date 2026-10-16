@@ -98,18 +98,21 @@ import MemoryPhotoManageOverlay, { type PhotoManageItem } from './src/edit/Memor
 import MemoryActionsSheet from './src/edit/MemoryActionsSheet';
 import MemoryDeleteConfirmSheet from './src/edit/MemoryDeleteConfirmSheet';
 import {
+  applyPhotoMetadataToDraft,
   buildCreatedMemory,
   buildEditedMemory,
   createDeleteTombstone,
   mergePhotoManageSelection,
   removedPhotoIds,
+  type PhotoMetadataDraft,
 } from './src/edit/editLifecycle';
 import LocationPicker from './src/location/LocationPicker';
 import { LocalAmapLocationClient, MobileLocationClient, normalizeLocationResult } from './src/location/locationClient';
 import type { MemoryLocationV2 } from './src/memory/memoryV2';
 import type { MemoryPhotoV1 } from './src/memory/memoryV1';
 import type { EphemeralTestBootstrap } from './src/testing/ephemeralTestRuntime';
-import { firstPhotoCoordinates, type PhotoCoordinates } from './src/photos/photoMetadata';
+import { photoDateFromTimestamp, readSelectedPhotoMetadata, type PhotoCoordinates } from './src/photos/photoMetadata';
+import { createPhotoLibraryMetadataReader } from './src/photos/photoLibraryMetadata';
 import InteractiveOnboardingTour from './src/onboarding/InteractiveOnboardingTour';
 import {
   handleDetailClosed,
@@ -171,18 +174,16 @@ interface PendingPhoto {
 
 interface PendingPhotoSelection {
   photos: PendingPhoto[];
+  date: string | null;
   coordinates: PhotoCoordinates | null;
 }
 
-interface EditDraftState {
-  kind: 'create' | 'edit';
+interface EditDraftState extends PhotoMetadataDraft {
   original: MemoryV2 | null;
   baseVersion: number | null;
   title: string;
-  date: string;
   pastSelf: string;
   presentSelf: string;
-  location: MemoryLocationV2 | null;
   photos: MemoryPhotoV1[];
   pendingPhotos: PendingPhoto[];
   topicIds: string[];
@@ -203,7 +204,7 @@ const AUTH_API_URL = process.env.EXPO_PUBLIC_MEMORY_RECALL_API_URL?.trim() || 'h
 const EMAIL_REGISTER_ENABLED = process.env.EXPO_PUBLIC_MEMORY_RECALL_EMAIL_ENABLED === '1';
 
 function todayValue(): string {
-  return new Date().toISOString().slice(0, 10);
+  return photoDateFromTimestamp(Date.now())!;
 }
 
 function errorMessage(error: unknown): string {
@@ -965,10 +966,8 @@ export default function App({ testBootstrap }: AppProps = {}) {
         height: asset.height,
       });
     }
-    return {
-      photos,
-      coordinates: firstPhotoCoordinates(result.assets.map((asset) => asset.exif)),
-    };
+    const metadata = await readSelectedPhotoMetadata(result.assets, createPhotoLibraryMetadataReader());
+    return { photos, ...metadata };
   }
 
   async function resolvePhotoLocation(coordinates: PhotoCoordinates): Promise<MemoryLocationV2> {
@@ -1076,6 +1075,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     if (editDraft) { setDraftVisible(true); return; }
     setEditDraft({
       kind: 'create', original: null, baseVersion: null, title: '', date: todayValue(),
+      dateSource: 'default',
       pastSelf: '', presentSelf: '', location: null, photos: [], pendingPhotos: [],
       topicIds: selectedTopicId ? [selectedTopicId] : [],
     });
@@ -1084,6 +1084,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   async function beginCreateMemory(): Promise<void> {
+    if (!session || session.destroyed) return;
     if (selectedTopicId && !onboardingMode) { beginTopicRecord(); return; }
     if (editDraft?.kind === 'create' && !draftVisible) {
       setDraftVisible(true);
@@ -1092,6 +1093,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
     }
     if (editDraft) return;
     const selection = await pickPendingPhotos();
+    if (session.destroyed) return;
     if (!selection || selection.photos.length === 0) {
       if (onboardingMode) {
         setTourState((current) => handlePhotoPickerCancelled(current));
@@ -1102,12 +1104,14 @@ export default function App({ testBootstrap }: AppProps = {}) {
     const photoLocation = selection.coordinates
       ? await resolvePhotoLocation(selection.coordinates)
       : null;
+    if (session.destroyed) return;
     setEditDraft({
       kind: 'create',
       original: null,
       baseVersion: null,
       title: '',
-      date: todayValue(),
+      date: selection.date ?? todayValue(),
+      dateSource: selection.date ? 'photo' : 'default',
       pastSelf: '',
       presentSelf: '',
       location: photoLocation,
@@ -1135,7 +1139,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       ? `已从照片读取地点：${photoLocation.name}。`
       : selection.coordinates
         ? `已选择 ${selection.photos.length} 张照片，未能解析地点。`
-        : `已选择 ${selection.photos.length} 张照片（未包含地点信息），请继续编辑。`);
+        : `已选择 ${selection.photos.length} 张照片，未读到地点，可手动选择。`);
   }
 
   async function encryptPendingPhoto(activeSession: VaultSessionV1, pending: PendingPhoto): Promise<MemoryPhotoV1> {
@@ -1238,6 +1242,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       baseVersion: current.version,
       title: selectedMemory.title,
       date: selectedMemory.date,
+      dateSource: 'manual',
       pastSelf: selectedMemory.pastSelf,
       presentSelf: selectedMemory.presentSelf,
       location: selectedMemory.location ? { ...selectedMemory.location } : null,
@@ -1302,15 +1307,19 @@ export default function App({ testBootstrap }: AppProps = {}) {
   }
 
   async function addDraftPhotos(): Promise<PhotoManageItem[]> {
+    if (!session || session.destroyed) return [];
     const selection = await pickPendingPhotos();
-    if (!selection) return [];
+    if (!selection || session.destroyed) return [];
     for (const photo of selection.photos) {
       editPendingPhotoPool.current.set(editPhotoKey(photo), photo);
     }
-    if (editDraft?.kind === 'create' && !editDraft.location && selection.coordinates) {
-      const photoLocation = await resolvePhotoLocation(selection.coordinates);
-      setEditDraft((current) => current?.kind === 'create' && !current.location
-        ? { ...current, location: photoLocation }
+    if (editDraft?.kind === 'create') {
+      const photoLocation = !editDraft.location && selection.coordinates
+        ? await resolvePhotoLocation(selection.coordinates)
+        : null;
+      if (session.destroyed) return [];
+      setEditDraft((current) => current
+        ? applyPhotoMetadataToDraft(current, selection.date, photoLocation)
         : current);
     }
     return selection.photos.map((photo) => ({
@@ -2374,7 +2383,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
             onCreate={createDraftTopic}
             disabled={busy || Boolean(topicLoadError)}
           />}
-          onChange={(field, value) => setEditDraft((current) => current ? { ...current, [field]: value } : current)}
+          onChange={(field, value) => setEditDraft((current) => current
+            ? { ...current, [field]: value, ...(field === 'date' ? { dateSource: 'manual' as const } : {}) }
+            : current)}
           onLocation={openEditLocation}
           onManagePhotos={() => setPhotoManageVisible(true)}
           onCancel={cancelEdit}

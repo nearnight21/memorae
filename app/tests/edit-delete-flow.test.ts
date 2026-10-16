@@ -4,11 +4,13 @@ import test from 'node:test';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 import {
+  applyPhotoMetadataToDraft,
   buildCreatedMemory,
   buildEditedMemory,
   createDeleteTombstone,
   mergePhotoManageSelection,
   removedPhotoIds,
+  type PhotoMetadataDraft,
 } from '../src/edit/editLifecycle';
 import {
   daysInMonth,
@@ -16,7 +18,7 @@ import {
   localizedDateSummary,
   parseDateParts,
 } from '../src/edit/datePickerModel';
-import { firstPhotoCoordinates, photoCoordinatesFromExif } from '../src/photos/photoMetadata';
+import { firstPhotoCoordinates, photoCoordinatesFromExif, photoDateFromExif, photoDateFromTimestamp, readSelectedPhotoMetadata } from '../src/photos/photoMetadata';
 
 const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
 const appSourceFile = ts.createSourceFile(
@@ -104,6 +106,72 @@ test('读取带方向的 EXIF 度分秒，并选择第一张有定位的照片',
   assert.ok(coordinates);
   assert.ok(Math.abs(coordinates.lat - -33.858333333333334) < 1e-10);
   assert.ok(Math.abs(coordinates.lng - 151.20833333333334) < 1e-10);
+});
+
+test('拍摄日期优先使用 DateTimeOriginal，保留拍摄当地日期并拒绝无效日历值', () => {
+  assert.equal(photoDateFromExif({ DateTimeOriginal: '2024:02:29 00:15:00', DateTime: '2026:10:16 12:00:00' }), '2024-02-29');
+  assert.equal(photoDateFromExif({ '{Exif}': { DateTimeOriginal: '2020:12:31 23:59:59' } }), '2020-12-31');
+  assert.equal(photoDateFromExif({ DateTimeOriginal: '2025:02:29 10:00:00', DateTimeDigitized: '2025:03:01 10:00:00' }), '2025-03-01');
+  assert.equal(photoDateFromExif({ '{TIFF}': { DateTime: '2026-10-15T23:30:00-08:00' } }), '2026-10-15');
+  for (const value of ['0000:01:01', '2026:00:10', '2026:13:10', '2026:04:31', '', 'unknown']) {
+    assert.equal(photoDateFromExif({ DateTimeOriginal: value }), null);
+  }
+  assert.equal(photoDateFromExif(null), null);
+  assert.equal(photoDateFromTimestamp(0), null);
+  assert.equal(photoDateFromTimestamp(Number.NaN), null);
+  assert.equal(photoDateFromTimestamp(new Date(2024, 1, 29, 0, 15).getTime()), '2024-02-29');
+});
+
+test('EXIF 完整时不查询相册，缺少 GPS 时仅查询当前所选照片并补齐定位', async () => {
+  const calls: string[] = [];
+  const metadata = await readSelectedPhotoMetadata([
+    { assetId: 'selected-1', exif: { DateTimeOriginal: '2024:02:29 00:15:00' } },
+    { assetId: 'unused-2' },
+  ], async (assetId) => {
+    calls.push(assetId);
+    return { creationTime: new Date(2026, 9, 16).getTime(), location: { latitude: 31.25, longitude: 121.5 } };
+  });
+  assert.deepEqual(calls, ['selected-1']);
+  assert.deepEqual(metadata, { date: '2024-02-29', coordinates: { lat: 31.25, lng: 121.5 } });
+
+  assert.deepEqual(await readSelectedPhotoMetadata([
+    { assetId: 'complete', exif: { DateTimeOriginal: '2024:02:29 00:15:00', GPSLatitude: 31.25, GPSLongitude: 121.5 } },
+  ], async () => assert.fail('完整 EXIF 不应请求额外权限或读取相册')), metadata);
+});
+
+test('相册 EXIF 缺少拍摄时间时使用相册创建时间，且不使用文件修改时间', async () => {
+  assert.deepEqual(await readSelectedPhotoMetadata([{ assetId: 'selected-1' }], async () => ({
+    creationTime: new Date(2020, 11, 31, 23, 59).getTime(),
+    exif: { GPSLatitude: 31.25, GPSLongitude: 121.5 },
+  })), { date: '2020-12-31', coordinates: { lat: 31.25, lng: 121.5 } });
+});
+
+test('相册拒绝权限、照片已删除或外部文件无 ID 时仍可继续选图', async () => {
+  const calls: string[] = [];
+  const metadata = await readSelectedPhotoMetadata([
+    { exif: { DateTimeOriginal: '2020:12:31 23:59:59' } },
+    { assetId: 'denied' },
+    { exif: { GPSLatitude: 31.25, GPSLongitude: 121.5 } },
+  ], async (assetId) => {
+    calls.push(assetId);
+    throw new Error('权限不足或资源已删除');
+  });
+  assert.deepEqual(calls, ['denied']);
+  assert.deepEqual(metadata, { date: '2020-12-31', coordinates: { lat: 31.25, lng: 121.5 } });
+  assert.deepEqual(await readSelectedPhotoMetadata([{ assetId: 'denied' }], async () => null), { date: null, coordinates: null });
+});
+
+test('追加照片只填充新建草稿的默认日期和空地点，保留手工修改及已有记忆', () => {
+  const draft: PhotoMetadataDraft = { kind: 'create', date: '2026-10-16', dateSource: 'default', location: null };
+  const location = { name: '照片地点', mx: 50, my: 50, lat: 31.25, lng: 121.5 };
+  const filled = applyPhotoMetadataToDraft(draft, '2024-02-29', location);
+  assert.deepEqual(filled, { ...draft, date: '2024-02-29', dateSource: 'photo', location });
+  assert.equal(draft.location, null);
+  assert.deepEqual(applyPhotoMetadataToDraft(filled, '2020-12-31', null), filled);
+  const manual: PhotoMetadataDraft = { ...filled, date: '2023-01-01', dateSource: 'manual' };
+  assert.deepEqual(applyPhotoMetadataToDraft(manual, '2020-12-31', null), manual);
+  const existing: PhotoMetadataDraft = { ...draft, kind: 'edit' };
+  assert.equal(applyPhotoMetadataToDraft(existing, '2020-12-31', location), existing);
 });
 
 test('新建草稿与编辑使用同一组可编辑字段生成 MemoryV2', () => {
@@ -204,19 +272,25 @@ test('新建和编辑共用草稿保存及并行照片加密路径', () => {
   assert.doesNotMatch(saveDraft, /for \(const spec of PHOTO_VARIANT_SPECS\)/);
 });
 
-test('正式新建入口使用无限额系统多选并读取 EXIF GPS 后进入共享编辑页', () => {
+test('正式新建入口读取照片日期和 GPS，回填共享编辑页并声明 Android 照片位置权限', () => {
   const picker = sourceForAppFunction('pickPendingPhotos');
   const beginCreate = sourceForAppFunction('beginCreateMemory');
   const resolveLocation = sourceForAppFunction('resolvePhotoLocation');
   assert.match(picker, /allowsMultipleSelection: true/);
   assert.match(picker, /selectionLimit: 0/);
   assert.match(picker, /exif: true/);
-  assert.match(picker, /firstPhotoCoordinates/);
+  assert.match(picker, /readSelectedPhotoMetadata\(result.assets, createPhotoLibraryMetadataReader\(\)\)/);
+  assert.match(beginCreate, /date: selection.date \?\? todayValue\(\)/);
   assert.match(beginCreate, /kind: 'create'/);
   assert.match(beginCreate, /setDraftVisible\(true\)/);
   assert.match(resolveLocation, /convertGps\(coordinates\)/);
   assert.match(resolveLocation, /normalizeLocationResult\(reverse\)/);
   assert.doesNotMatch(appSource, /<Modal visible=\{composerVisible\}/);
+  const config = JSON.parse(readFileSync(resolve(process.cwd(), 'app.json'), 'utf8'));
+  const mediaLibrary = config.expo.plugins.find((plugin: unknown) => Array.isArray(plugin) && plugin[0] === 'expo-media-library');
+  assert.equal(mediaLibrary?.[1].isAccessMediaLocationEnabled, true);
+  assert.deepEqual(mediaLibrary?.[1].granularPermissions, ['photo']);
+  assert.equal(mediaLibrary?.[1].savePhotosPermission, false);
 });
 
 test('详情浏览优先读取 preview，缺失时回退 thumbnail', () => {

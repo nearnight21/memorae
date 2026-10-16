@@ -18,6 +18,26 @@ export interface EditableMemoryValues {
   topicIds?: string[];
 }
 
+export interface PhotoMetadataDraft {
+  kind: 'create' | 'edit';
+  date: string;
+  dateSource: 'default' | 'photo' | 'manual';
+  location: MemoryV2['location'];
+}
+
+export function applyPhotoMetadataToDraft<T extends PhotoMetadataDraft>(
+  draft: T,
+  date: string | null,
+  location: MemoryV2['location'],
+): T {
+  if (draft.kind !== 'create') return draft;
+  return {
+    ...draft,
+    ...(draft.dateSource === 'default' && date ? { date, dateSource: 'photo' as const } : {}),
+    location: draft.location ?? location,
+  };
+}
+
 export function buildCreatedMemory(
   values: EditableMemoryValues,
   photos: MemoryPhotoV1[],
