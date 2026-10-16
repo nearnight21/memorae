@@ -196,6 +196,7 @@ body:has(.account-login-page) { min-width: 0; }
 .account-login-invite-note { margin: 20px 0 0; color: #8a907f; font-size: 11px; line-height: 1.9; text-align: center; }
 .account-login-unlock-intro h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--auth-primary); font: 22px/1.5 var(--auth-serif); font-weight: 400; }
 .account-login-unlock-intro p { margin: 10px 0 0; color: var(--auth-muted); font-size: 12px; line-height: 1.9; }
+.account-login-unlock-intro .account-login-current-account { display: inline-block; max-width: 100%; padding: 4px 10px; border-radius: 12px; background: #1e4d480d; color: var(--auth-primary); font-size: 11px; overflow-wrap: anywhere; }
 .account-login-unlock-intro + .account-login-field { margin-top: 24px; }
 .account-login-loading { display: flex; align-items: center; gap: 14px; min-height: 120px; margin-top: 26px; color: var(--auth-muted); }
 .account-login-loading > svg { flex-shrink: 0; color: var(--auth-primary); }
@@ -207,6 +208,18 @@ body:has(.account-login-page) { min-width: 0; }
 .account-login-switch p { margin: 0; }
 .account-login-switch div { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .account-login-switch button { padding: 9px 12px; border: 1px solid #d5b4a7; border-radius: 999px; background: #f8eee5; color: #8a4039; font: inherit; cursor: pointer; }
+.account-unlock-footer-actions { margin-top: 20px; padding-top: 16px; border-top: 1px dashed var(--auth-line); text-align: center; }
+.account-switch-trigger { min-height: 36px; padding: 5px 8px; border: 0; background: transparent; color: var(--auth-muted); font: 12px/1.8 var(--auth-sans); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.account-switch-trigger:hover:not(:disabled) { color: var(--auth-primary); }
+.account-login-switch-confirm { margin-top: 12px; padding: 14px; border: 1px solid #d4b98780; border-radius: 14px; background: #faf4e8; color: #686252; font: 12px/1.9 var(--auth-sans); text-align: left; }
+.account-login-switch-confirm p { margin: 0; }
+.account-login-switch-confirm p + p { margin-top: 8px; }
+.account-login-switch-confirm .account-switch-warning { color: #8a4039; }
+.account-switch-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.account-switch-buttons button { min-height: 38px; padding: 7px 13px; border: 1px solid #c4b79f; border-radius: 999px; background: #fffaf1; color: var(--auth-primary); font: inherit; cursor: pointer; }
+.account-switch-buttons button:hover:not(:disabled) { background: #efe6d5; }
+.account-switch-buttons button:last-child { border-color: transparent; background: transparent; color: var(--auth-muted); }
+.account-switch-trigger:focus-visible, .account-switch-buttons button:focus-visible { outline: 2px solid var(--auth-primary); outline-offset: 3px; }
 
 @media (max-width: 1100px) {
   .account-login-page { padding: 100px 36px 60px; }

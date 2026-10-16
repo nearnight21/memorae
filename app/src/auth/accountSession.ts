@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 export interface MobileAccountSession {
   accessToken: string;
   expiresAt: string;
+  /** 仅供本机显示，不作为鉴权或同步依据。兼容没有该字段的旧会话。 */
+  loginName?: string;
 }
 
 const ACCOUNT_SESSION_KEY = 'memory-recall.account-session.v1';

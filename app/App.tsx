@@ -60,6 +60,7 @@ import {
 } from './src/services/performanceDiagnostics';
 import { loginSyncSession, MemoryRecallSyncClient, PhotoVariantNotFoundError, requestEmailVerificationCode, SyncRequestError, verifyEmailCode } from './src/sync/syncClient';
 import AuthEntryScreen, { type AuthEntryPhase } from './src/auth/AuthEntryScreen';
+import { clearPrivateSpaceForExit } from './src/auth/privateSpaceExit';
 import {
   clearStoredAccountSession,
   getStoredAccountSession,
@@ -335,6 +336,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
   const thumbnailLoadId = useRef(0);
   const memoriesRef = useRef<MemoryV2[]>([]);
   const accountUploadQueue = useRef<Promise<void> | null>(null);
+  const accountDownloadQueue = useRef<Promise<unknown> | null>(null);
   const pendingAccountUploadPlan = useRef<UploadPlan>({ memoryIds: [], photoRefs: [] });
   const activeAccountUploadPlan = useRef<UploadPlan | null>(null);
   const uploadPlanWriteQueue = useRef(Promise.resolve());
@@ -575,11 +577,11 @@ export default function App({ testBootstrap }: AppProps = {}) {
   async function submitAccountLogin(): Promise<void> {
     if (accountLoginName.trim().length < 3) throw new Error('请输入账号。');
     if (accountLoginPassword.length < 8) throw new Error('账号密码至少需要 8 个字符。');
-    const login = await loginSyncSession(AUTH_API_URL, {
+    const login = { ...await loginSyncSession(AUTH_API_URL, {
       loginName: accountLoginName.trim(),
       password: accountLoginPassword,
       deviceId: 'android-mobile',
-    });
+    }), loginName: accountLoginName.trim() };
     const remoteVault = await readRemoteVault(login);
     await saveStoredAccountSession(login);
     await saveAppProfile('cloud');
@@ -611,7 +613,10 @@ export default function App({ testBootstrap }: AppProps = {}) {
     if (!/^\d{6}$/.test(registerCode.trim())) throw new Error('请输入 6 位验证码。');
     if (registerPassword.length < 8) throw new Error('登录密码至少需要 8 个字符。');
     if (registerPassword !== registerPasswordConfirmation) throw new Error('两次输入的登录密码不一致。');
-    const login = await verifyEmailCode(AUTH_API_URL, registerEmail.trim(), registerCode.trim(), registerPassword);
+    const login = {
+      ...await verifyEmailCode(AUTH_API_URL, registerEmail.trim(), registerCode.trim(), registerPassword),
+      loginName: registerEmail.trim(),
+    };
     const remoteVault = await readRemoteVault(login);
     await saveStoredAccountSession(login);
     await saveAppProfile('cloud');
@@ -798,6 +803,7 @@ export default function App({ testBootstrap }: AppProps = {}) {
       readyResolve?.();
     }) : Promise.resolve();
 
+    accountDownloadQueue.current = syncPromise;
     await memoryReady;
     setStatus(`${message}${migratedCount > 0 ? ` 已将 ${migratedCount} 条旧记忆升级为 MemoryV2。` : ''}正在后台同步远端照片。诊断：${latestLocalDiagnostics}`);
     void syncPromise.then(() => {
@@ -2011,6 +2017,62 @@ export default function App({ testBootstrap }: AppProps = {}) {
     setStatus(`下载完成：${result.memories} 条记忆密文，${result.photos} 份照片密文。`);
   }
 
+  async function handleSwitchAccountFromGate(): Promise<void> {
+    if (mode !== 'locked' && mode !== 'setup') return;
+    const exitingProfile = profile === 'local' ? 'local' : 'cloud';
+    const exitingAccount = accountSession;
+    setAuthError('');
+    // 复用锁定时的密钥、照片和界面内存清理；清理失败仍留在门控页。
+    lock();
+    try {
+      // 已锁定的空间仍可能有上一轮后台任务，先等它们落盘再清空。
+      await accountUploadQueue.current?.catch(() => undefined);
+      await accountDownloadQueue.current?.catch(() => undefined);
+      await uploadPlanWriteQueue.current.catch(() => undefined);
+      await topicWriteQueue.current.catch(() => undefined);
+      await clearPrivateSpaceForExit(exitingProfile, {
+        disableDeviceUnlock: async () => {
+          await disableDeviceUnlock();
+          setDeviceUnlockEnabled(false);
+        },
+        clearEncryptedContent,
+        clearStoredAccountSession,
+      });
+      if (exitingProfile === 'cloud' && exitingAccount) {
+        void new MemoryRecallSyncClient({ baseUrl: AUTH_API_URL, token: exitingAccount.accessToken })
+          .logout().catch(() => undefined);
+      }
+      pendingAccountUploadPlan.current = { memoryIds: [], photoRefs: [] };
+      accountDownloadQueue.current = null;
+      activeAccountUploadPlan.current = null;
+      pendingAccountUploadMessages.current = [];
+      setVault(null);
+      setAccountSession(null);
+      setDeviceUnlockEnabled(false);
+      setPassword('');
+      setPasswordConfirmation('');
+      setAccountLoginName('');
+      setAccountLoginPassword('');
+      setRegisterEmail('');
+      setRegisterCode('');
+      setRegisterCodeSent(false);
+      setRegisterPassword('');
+      setRegisterPasswordConfirmation('');
+      setShowPrivatePassword(false);
+      setShowAccountPassword(false);
+      setShowRegisterPassword(false);
+      setSyncToken('');
+      setSyncSessionExpiresAt(null);
+      setSyncLoginName('');
+      setSyncLoginPassword('');
+      setMode(exitingProfile === 'local' ? 'select' : 'account');
+      setStatus(exitingProfile === 'local' ? '本地私密空间已重置，请重新选择模式。' : '已退出当前账号，请重新登录。');
+    } catch (error) {
+      setAuthError('退出未完成，请重试。若仍有本机数据，请先保留当前空间。');
+      setStatus(`退出未完成：${errorMessage(error)}`);
+    }
+  }
+
   function confirmClear(): void {
     Alert.alert(
       '清空本机原型？',
@@ -2110,6 +2172,9 @@ export default function App({ testBootstrap }: AppProps = {}) {
           onSubmit={() => void runTask(submitAuthEntry)}
           biometricUnlockEnabled={deviceUnlockEnabled}
           onBiometricUnlock={() => void runTask(quickUnlock)}
+          currentAccountLabel={profile === 'cloud' && typeof accountSession?.loginName === 'string' ? accountSession.loginName : null}
+          isLocalSpace={profile === 'local'}
+          onSwitchAccount={() => void runTask(handleSwitchAccountFromGate)}
           onSelectLocal={() => void runTask(async () => {
             await saveAppProfile('local');
             await saveLocationNetworkConsent();

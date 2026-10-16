@@ -1,6 +1,53 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { clearPrivateSpaceForExit } from '../src/auth/privateSpaceExit';
+
+test('云端账号退出按顺序清除设备凭证、本机密文和账号登录态', async () => {
+  const events: string[] = [];
+  const state = { deviceKey: true, vault: true, photos: true, account: true, remoteVault: true };
+  await clearPrivateSpaceForExit('cloud', {
+    disableDeviceUnlock: async () => { events.push('device'); state.deviceKey = false; },
+    clearEncryptedContent: async () => { events.push('content'); state.vault = false; state.photos = false; },
+    clearStoredAccountSession: async () => { events.push('account'); state.account = false; },
+  });
+  assert.deepEqual(events, ['device', 'content', 'account']);
+  assert.deepEqual(state, { deviceKey: false, vault: false, photos: false, account: false, remoteVault: true });
+});
+
+test('重置本地空间不退出独立云端账号', async () => {
+  let clearedLocal = false;
+  let clearedAccount = false;
+  await clearPrivateSpaceForExit('local', {
+    disableDeviceUnlock: async () => undefined,
+    clearEncryptedContent: async () => { clearedLocal = true; },
+    clearStoredAccountSession: async () => { clearedAccount = true; },
+  });
+  assert.equal(clearedLocal, true);
+  assert.equal(clearedAccount, false);
+});
+
+test('设备凭证清理失败时保留密文与账号，允许重试', async () => {
+  let contentCleared = false;
+  let accountCleared = false;
+  await assert.rejects(clearPrivateSpaceForExit('cloud', {
+    disableDeviceUnlock: async () => { throw new Error('设备存储暂不可用'); },
+    clearEncryptedContent: async () => { contentCleared = true; },
+    clearStoredAccountSession: async () => { accountCleared = true; },
+  }), /设备存储暂不可用/);
+  assert.equal(contentCleared, false);
+  assert.equal(accountCleared, false);
+});
+
+test('本机密文清理失败时不会提前丢弃账号会话', async () => {
+  let accountCleared = false;
+  await assert.rejects(clearPrivateSpaceForExit('cloud', {
+    disableDeviceUnlock: async () => undefined,
+    clearEncryptedContent: async () => { throw new Error('数据库暂不可用'); },
+    clearStoredAccountSession: async () => { accountCleared = true; },
+  }), /数据库暂不可用/);
+  assert.equal(accountCleared, false);
+});
 
 test('AuthEntryScreen 摒弃低清拉伸切图，使用 Skia 矢量时光轴与真实拍立得纸感', () => {
   const source = readFileSync(new URL('../src/auth/AuthEntryScreen.tsx', import.meta.url), 'utf8');

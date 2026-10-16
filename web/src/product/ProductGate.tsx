@@ -137,6 +137,7 @@ export default function ProductGate({
   const [clearLocalArmed, setClearLocalArmed] = useState(false);
 
   useEffect(() => {
+    setBusy(true);
     void Promise.all([getVaultEnvelope(), getStoredAccountSession()])
       .then(async ([storedVault, storedAccount]) => {
         setVault(storedVault);
@@ -193,8 +194,13 @@ export default function ProductGate({
       .catch((bootError) => {
         setError(bootError instanceof Error ? bootError.message : '无法打开所忆。');
         setPhase(MEMORY_RECALL_API_URL ? 'account' : 'setup');
-      });
+      })
+      .finally(() => setBusy(false));
   }, []);
+
+  useEffect(() => {
+    setClearLocalArmed(false);
+  }, [phase, password, confirmation, loginName, accountPassword, authMode]);
 
   const restoreRemoteVault = async (
     activeAccount: StoredAccountSession,
@@ -291,11 +297,11 @@ export default function ProductGate({
     setError('');
     try {
       if (phase === 'account') {
-        const login = await loginSyncSession(MEMORY_RECALL_API_URL, {
+        const login = { ...await loginSyncSession(MEMORY_RECALL_API_URL, {
           loginName: loginName.trim(),
           password: accountPassword,
           deviceId: 'web-product',
-        });
+        }), loginName: loginName.trim() };
         try {
           if (vault) await validateAccountVault(login, vault);
         } catch (validationError) {
@@ -358,6 +364,7 @@ export default function ProductGate({
   };
 
   const clearLocalSpaceForAccountSwitch = async () => {
+    if (busy) return;
     if (!clearLocalArmed) {
       setClearLocalArmed(true);
       return;
@@ -368,6 +375,13 @@ export default function ProductGate({
       revokeRegisteredPhotos();
       await clearPrototypeDatabase();
       await clearStoredAccountSession();
+      if (MEMORY_RECALL_API_URL && accountSession) {
+        // 撤销旧会话不阻塞本机退出，离线时仍可回到登录页。
+        void new MemoryRecallSyncClient({
+          baseUrl: MEMORY_RECALL_API_URL,
+          token: accountSession.accessToken,
+        }).logout().catch(() => undefined);
+      }
       setVault(null);
       setSession(null);
       setAccountSession(null);
@@ -375,11 +389,20 @@ export default function ProductGate({
       setPassword('');
       setConfirmation('');
       setAccountPassword('');
+      setLoginName('');
+      setEmail('');
+      setEmailCode('');
+      setEmailCodeSent(false);
+      setEmailNotice('');
+      setRegisterPassword('');
+      setRegisterPasswordConfirmation('');
+      setAuthMode('login');
+      setShowAccountPassword(false);
       setShowPrivateSpacePassword(false);
       setError('');
       setLocalVaultMismatch(false);
       setClearLocalArmed(false);
-      setPhase('account');
+      setPhase(MEMORY_RECALL_API_URL ? 'account' : 'setup');
     } catch (clearError) {
       setError(clearError instanceof Error ? clearError.message : '本机数据清除失败，请重试。');
     } finally {
@@ -443,7 +466,10 @@ export default function ProductGate({
     setError('');
     setEmailNotice('');
     try {
-      const login = await verifyEmailCode(MEMORY_RECALL_API_URL, email.trim(), emailCode.trim(), registerPassword);
+      const login = {
+        ...await verifyEmailCode(MEMORY_RECALL_API_URL, email.trim(), emailCode.trim(), registerPassword),
+        loginName: email.trim(),
+      };
       try {
         if (vault) await validateAccountVault(login, vault);
       } catch (validationError) {
@@ -476,6 +502,43 @@ export default function ProductGate({
       setBusy(false);
     }
   };
+
+  function renderCurrentAccount() {
+    if (!accountSession) return null;
+    const label = typeof accountSession.loginName === 'string' ? accountSession.loginName.trim() : '';
+    return <p className="account-login-current-account">{label ? `当前账号：${label}` : '已登录当前账号'}</p>;
+  }
+
+  function renderAccountSwitch() {
+    if (!MEMORY_RECALL_API_URL) return null;
+    return (
+      <div className="account-unlock-footer-actions">
+        <button
+          type="button"
+          className="account-switch-trigger"
+          disabled={busy}
+          aria-expanded={clearLocalArmed}
+          aria-controls="account-switch-confirm"
+          onClick={() => setClearLocalArmed((armed) => !armed)}
+        >
+          {phase === 'locked' ? '忘记密码或切换其他账号？' : '切换其他账号'}
+        </button>
+        {clearLocalArmed && (
+          <section className="account-login-switch-confirm" id="account-switch-confirm" aria-label="确认切换账号">
+            {phase === 'locked' && <p>私密空间密码无法由服务器找回或重置。</p>}
+            <p>切换账号会清除这台设备上的私密空间和本机数据，再返回账号登录页。云端已同步的记忆不受影响。</p>
+            <p className="account-switch-warning">尚未同步的本机内容将无法恢复。若还需要这些内容，请取消切换。</p>
+            <div className="account-switch-buttons">
+              <button type="button" onClick={() => void clearLocalSpaceForAccountSwitch()} disabled={busy}>
+                {busy ? '正在退出…' : '确认退出并切换账号'}
+              </button>
+              <button type="button" onClick={() => setClearLocalArmed(false)} disabled={busy}>取消</button>
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
 
   if (phase === 'unlocked' && session) {
     if (unlockedRenderer) {
@@ -687,7 +750,7 @@ export default function ProductGate({
 
         {localVaultMismatch && (
           <section className="account-login-switch" aria-label="切换所忆账号">
-            <p>这台设备保存的是另一个账号的私密空间。切换只会清除本机数据，不会删除云端记忆。</p>
+            <p>这台设备保存的是另一个账号的私密空间。切换会清除本机数据，尚未同步的内容将无法恢复；云端已同步的记忆不受影响。</p>
             <div>
               <button type="button" onClick={() => void clearLocalSpaceForAccountSwitch()} disabled={busy}>
                 {clearLocalArmed ? '再次点击确认清除' : '清除本机数据并切换'}
@@ -709,6 +772,7 @@ export default function ProductGate({
           <div className="account-login-unlock-intro">
             <h2>私密空间</h2>
             <p>输入密码以解锁加密记忆</p>
+            {renderCurrentAccount()}
           </div>
 
           <label className="account-login-field" htmlFor="private-space-password">
@@ -742,6 +806,7 @@ export default function ProductGate({
           </button>
           <p className="account-login-invite-note">密码仅在本机验证，不会上传</p>
         </form>
+        {renderAccountSwitch()}
       </AuthShell>
     );
   }
@@ -752,6 +817,7 @@ export default function ProductGate({
         <div className="account-login-unlock-intro">
           <h2><KeyRound size={16} aria-hidden="true" /> 建立你的记忆空间</h2>
           <p>记忆和照片会先在这台设备加密。密码不会上传，也无法由服务器重置。</p>
+          {renderCurrentAccount()}
         </div>
         <label className="account-login-field" htmlFor="private-space-setup-password">
           <span>私密空间密码</span>
@@ -796,6 +862,7 @@ export default function ProductGate({
           <a className="account-developer-link" href="?dev-vault=1">开发人员：打开密文验证工具</a>
         )}
       </form>
+      {renderAccountSwitch()}
     </AuthShell>
   );
 }

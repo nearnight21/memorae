@@ -55,6 +55,9 @@ interface AuthEntryScreenProps {
   onSubmit: () => void;
   onBiometricUnlock?: () => void;
   biometricUnlockEnabled?: boolean;
+  currentAccountLabel?: string | null;
+  isLocalSpace?: boolean;
+  onSwitchAccount?: () => void;
   onSelectLocal: () => void;
   onSelectCloud: () => void;
 }
@@ -310,6 +313,9 @@ export default function AuthEntryScreen({
   onSubmit,
   onBiometricUnlock,
   biometricUnlockEnabled,
+  currentAccountLabel,
+  isLocalSpace = false,
+  onSwitchAccount,
   onSelectLocal,
   onSelectCloud,
 }: AuthEntryScreenProps) {
@@ -317,7 +323,13 @@ export default function AuthEntryScreen({
   const topInset = useAppTopInset();
   const [noticeMode, setNoticeMode] = useState<'none' | 'local' | 'cloud'>('none');
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const [confirmingSwitch, setConfirmingSwitch] = useState(false);
   const biometricTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    setConfirmingSwitch(false);
+    if (phase !== 'locked') biometricTriggeredRef.current = false;
+  }, [phase, privatePassword, privatePasswordConfirmation]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -328,6 +340,7 @@ export default function AuthEntryScreen({
 
   useEffect(() => {
     if (!appActive) return;
+    if (busy || confirmingSwitch) return;
     if (phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock && !biometricTriggeredRef.current) {
       biometricTriggeredRef.current = true;
       const timer = setTimeout(() => {
@@ -335,7 +348,7 @@ export default function AuthEntryScreen({
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [appActive, phase, biometricUnlockEnabled, onBiometricUnlock]);
+  }, [appActive, phase, biometricUnlockEnabled, onBiometricUnlock, busy, confirmingSwitch]);
 
   return (
     <View style={[styles.safeArea, { paddingTop: topInset }]}>
@@ -602,10 +615,11 @@ export default function AuthEntryScreen({
               <>
                 <View style={styles.formHeader}>
                   <View style={styles.statusPill}>
-                    <Text style={styles.statusPillText}>账号已就绪</Text>
+                    <Text style={styles.statusPillText}>{isLocalSpace ? '本地私密空间' : '账号已就绪'}</Text>
                   </View>
                   <Text style={styles.title}>解锁私密空间</Text>
                   <Text style={styles.subtitle}>输入您的私密空间密码以解密本地记忆</Text>
+                  {currentAccountLabel ? <Text style={styles.accountLabel}>当前账号：{currentAccountLabel}</Text> : null}
                 </View>
                 <View style={styles.formGapSmall} />
                 <PasswordField
@@ -622,6 +636,8 @@ export default function AuthEntryScreen({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`点击使用${DEVICE_UNLOCK_LABEL}解锁`}
+                    accessibilityState={{ disabled: busy }}
+                    disabled={busy}
                     onPress={() => {
                       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       onBiometricUnlock();
@@ -648,6 +664,7 @@ export default function AuthEntryScreen({
                   </View>
                   <Text style={styles.title}>建立私密空间</Text>
                   <Text style={styles.subtitle}>设置仅在本机解密使用的密码，至少 4 个字符且不可重置</Text>
+                  {currentAccountLabel ? <Text style={styles.accountLabel}>当前账号：{currentAccountLabel}</Text> : null}
                 </View>
                 <View style={styles.formGapSmall} />
                 <PasswordField
@@ -670,6 +687,58 @@ export default function AuthEntryScreen({
                 <SecurityBadge text="零知识端到端加密体系 · 密码遗失后数据将永久封存" />
               </>
             )}
+            {(phase === 'locked' || phase === 'setup') && onSwitchAccount ? (
+              <View style={styles.switchFooter}>
+                {!confirmingSwitch ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy, expanded: false }}
+                    disabled={busy}
+                    onPress={() => setConfirmingSwitch(true)}
+                    style={styles.textLinkButton}
+                  >
+                    <Text style={styles.textLinkButtonText}>
+                      {isLocalSpace ? (phase === 'setup' ? '返回重新选择模式' : '忘记密码 / 重置本地空间') : '忘记密码 / 切换其他账号'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <View style={styles.switchConfirm}>
+                    <Text style={styles.switchTitle}>{isLocalSpace ? '重置本地私密空间？' : '退出并切换账号？'}</Text>
+                    <Text style={styles.switchBody}>私密空间密码无法由服务器找回或重置。</Text>
+                    {phase === 'locked' && biometricUnlockEnabled && onBiometricUnlock ? (
+                      <Text style={styles.switchBody}>如果还可以使用{DEVICE_UNLOCK_LABEL}，可先取消，再通过设备验证解锁。</Text>
+                    ) : null}
+                    <Text style={styles.switchBody}>
+                      {isLocalSpace
+                        ? '本地模式没有云端副本。重置会删除此本地空间的记忆、照片和设备解锁凭证，再返回模式选择。'
+                        : '切换会清除当前云端空间的本机数据和设备解锁凭证，再返回账号登录页。云端已同步的记忆不受影响。'}
+                    </Text>
+                    <Text style={styles.switchWarning}>
+                      {isLocalSpace ? '未导出备份的数据将无法恢复。若仍需要这些内容，请取消。' : '尚未同步的本机内容将无法恢复。若仍需要这些内容，请取消。'}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: busy }}
+                      disabled={busy}
+                      onPress={onSwitchAccount}
+                      style={[styles.switchConfirmButton, busy && styles.primaryButtonBusy]}
+                    >
+                      <Text style={styles.switchConfirmText}>{busy ? '正在退出…' : isLocalSpace ? '确认重置本地空间' : '确认退出并切换账号'}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="取消切换或重置"
+                      accessibilityState={{ disabled: busy }}
+                      disabled={busy}
+                      onPress={() => setConfirmingSwitch(false)}
+                      style={styles.secondaryButton}
+                    >
+                      <Text style={styles.secondaryButtonText}>取消</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -846,6 +915,14 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: '600',
   },
+  accountLabel: { alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(167,107,62,0.08)', color: '#75695c', fontSize: 11, lineHeight: 17, flexShrink: 1 },
+  switchFooter: { marginTop: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(167,107,62,0.22)' },
+  switchConfirm: { padding: 14, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(167,107,62,0.3)', backgroundColor: '#fcf5e9' },
+  switchTitle: { color: '#754f31', fontSize: 14, fontWeight: '600', lineHeight: 21 },
+  switchBody: { marginTop: 8, color: '#75695c', fontSize: 12, lineHeight: 19 },
+  switchWarning: { marginTop: 8, color: '#91483d', fontSize: 12, lineHeight: 19 },
+  switchConfirmButton: { minHeight: 44, marginTop: 14, paddingVertical: 10, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#ccb597', backgroundColor: '#f5e8d4' },
+  switchConfirmText: { color: '#754f31', fontSize: 13, lineHeight: 20, fontWeight: '600', textAlign: 'center' },
   formGap: {
     height: 4,
   },

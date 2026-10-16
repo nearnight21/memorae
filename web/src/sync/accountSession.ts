@@ -1,6 +1,8 @@
 export interface StoredAccountSession {
   accessToken: string;
   expiresAt: string;
+  /** 仅供本机显示；旧会话可缺省，不参与服务端认证。 */
+  loginName?: string;
 }
 
 const SESSION_EXPIRY_SKEW_MS = 30_000;
